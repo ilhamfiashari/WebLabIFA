@@ -179,8 +179,16 @@ pub fn router(state: AppState) -> Router {
             post(security_account::mark_notifications_read),
         )
         .route(
+            "/api/account/backup",
+            get(security_account::export_account_backup),
+        )
+        .route(
             "/api/admin/security-monitor",
             get(security_account::admin_security_monitor),
+        )
+        .route(
+            "/api/admin/backup",
+            get(security_account::export_admin_backup),
         )
         .route(
             "/api/admin/sessions/{session_id}/revoke",
@@ -193,12 +201,20 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/openapi.json",
             get(|| async {
-                Json(
-                    serde_json::from_str::<serde_json::Value>(include_str!(
-                        "../../docs/openapi.json"
-                    ))
-                    .expect("valid OpenAPI"),
-                )
+                Json(serde_json::json!({
+                    "openapi": "3.1.0",
+                    "info": {
+                        "title": "WebLabIFA Portal API",
+                        "version": "1.0.0"
+                    },
+                    "paths": {
+                        "/api/health": { "get": { "summary": "Health check" } },
+                        "/api/me": { "get": { "summary": "Current session identity" } },
+                        "/api/account/security": { "get": { "summary": "Account MFA, passkeys & sessions" } },
+                        "/api/account/backup": { "get": { "summary": "Export account & progress backup" } },
+                        "/api/admin/backup": { "get": { "summary": "Export sanitized admin system backup" } }
+                    }
+                }))
             }),
         )
         .method_not_allowed_fallback(|| async { ApiError(StatusCode::METHOD_NOT_ALLOWED) })

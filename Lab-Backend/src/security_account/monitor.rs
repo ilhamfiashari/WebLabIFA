@@ -163,6 +163,93 @@ pub async fn admin_ack_anomaly(
     Ok(Json(json!({ "acknowledged": true, "id": anomaly_id })))
 }
 
+#[derive(Serialize, FromRow)]
+struct ClassBackupRow {
+    id: String,
+    name: String,
+    course: String,
+    semester: String,
+    leaderboard_enabled: bool,
+    active: bool,
+}
+
+#[derive(Serialize, FromRow)]
+struct UserBackupRow {
+    id: Uuid,
+    name: String,
+    email: String,
+    active: bool,
+}
+
+#[derive(Serialize, FromRow)]
+struct ModuleBackupRow {
+    lab_id: String,
+    track: String,
+    owasp_code: Option<String>,
+    status: String,
+    version: String,
+}
+
+pub async fn export_admin_backup(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let actor = identity(&state, &jar).await?;
+    require_role(&actor, "admin")?;
+
+    let classes: Vec<ClassBackupRow> = sqlx::query_as(
+        "SELECT id, name, course, semester, leaderboard_enabled, active FROM classes ORDER BY id",
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let users: Vec<UserBackupRow> =
+        sqlx::query_as("SELECT id, name, email, active FROM users ORDER BY email")
+            .fetch_all(&state.pool)
+            .await?;
+
+    let modules: Vec<ModuleBackupRow> = sqlx::query_as(
+        "SELECT lab_id, track, owasp_code, status, version FROM lab_modules ORDER BY lab_id",
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let anomalies: Vec<SecurityAnomalyRow> = sqlx::query_as(
+        "SELECT sa.id, sa.user_id, sa.actor_email, u.name AS user_name, sa.kind, sa.severity, sa.summary, sa.ip_address, sa.device_label, sa.location_label, sa.acknowledged, sa.created_at FROM security_anomalies sa LEFT JOIN users u ON u.id=sa.user_id ORDER BY sa.created_at DESC LIMIT 200",
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let telemetry = extract_telemetry(&headers);
+    record_activity(
+        &state.pool,
+        Some(actor.id),
+        Some(&actor.email),
+        None,
+        "admin_backup_exported",
+        Some("/lab/admin/audit"),
+        &telemetry,
+        false,
+        "Mengunduh cadangan sistem portal WebLabIFA (JSON)",
+    )
+    .await;
+
+    Ok(Json(json!({
+        "schema": "weblabifa.admin_backup.v1",
+        "exported_at": Utc::now(),
+        "exported_by": actor.email,
+        "backup_policy": {
+            "hash_algorithm": "Argon2id",
+            "excludes_secrets": true,
+        },
+        "classes": classes,
+        "users": users,
+        "lab_modules": modules,
+        "security_anomalies": anomalies,
+    })))
+}
+
 fn deterministic_seed_uuid(key: &str) -> Uuid {
     let hash = Sha256::digest(key.as_bytes());
     let mut bytes = [0u8; 16];
