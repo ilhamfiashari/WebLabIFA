@@ -48,7 +48,7 @@ export function allowedPath(role: string, path: string) {
   if (role === 'admin') return ['', '/pengguna', '/kelas', '/katalog', '/audit', '/pengaturan'].some(p => path === `/lab/admin${p}`)
   if (role === 'dosen') {
     return (
-      ['/lab/dosen', '/lab/dosen/web', '/lab/dosen/iot', '/lab/dosen/kelas', '/lab/dosen/leaderboard', '/lab/dosen/penugasan', '/lab/dosen/progres', '/lab/dosen/panduan'].includes(path) ||
+      ['/lab/dosen', '/lab/dosen/web', '/lab/dosen/iot', '/lab/dosen/kelas', '/lab/dosen/leaderboard', '/lab/dosen/penugasan', '/lab/dosen/progres', '/lab/dosen/panduan', '/lab/dosen/pengaturan'].includes(path) ||
       new RegExp(`^/lab/dosen/web/[a-zA-Z0-9_-]{1,32}(/[a-zA-Z0-9_-]{1,64})?$`).test(path) ||
       new RegExp(`^/lab/dosen/iot/[a-zA-Z0-9_-]{1,64}$`).test(path) ||
       new RegExp(`^/lab/dosen/latihan${id}$`).test(path) ||
@@ -56,7 +56,7 @@ export function allowedPath(role: string, path: string) {
     )
   }
   return (
-    ['/lab', '/lab/pencapaian', '/lab/peringkat', '/lab/web', '/lab/iot', '/lab/tugas', '/lab/progres', '/lab/riwayat', '/lab/panduan'].includes(path) ||
+    ['/lab', '/lab/pencapaian', '/lab/peringkat', '/lab/web', '/lab/iot', '/lab/tugas', '/lab/progres', '/lab/riwayat', '/lab/panduan', '/lab/pengaturan'].includes(path) ||
     new RegExp(`^/lab/latihan${id}$`).test(path) ||
     new RegExp(`^/lab/web/[a-zA-Z0-9_-]{1,32}(/[a-zA-Z0-9_-]{1,64})?$`).test(path) ||
     new RegExp(`^/lab/iot/[a-zA-Z0-9_-]{1,64}$`).test(path) ||

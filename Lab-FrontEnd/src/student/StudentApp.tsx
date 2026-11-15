@@ -13,6 +13,7 @@ import {
   House,
   Lock,
   Play,
+  Settings,
   ShieldAlert,
   Star,
   Target,
@@ -28,6 +29,7 @@ import { Badge, Kpi, LoadState, NavLink, PageHead, SessionCard, TrackTabs } from
 import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../shared/charts/AnimatedCharts'
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
+import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { IotCatalogPage, LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
 import { LeaderboardSection } from '../lecturer/LeaderboardSection'
 import { LabWorkspace } from '../simulator/LabWorkspace'
@@ -43,6 +45,7 @@ const PAGES: NavPage[] = [
   { key: 'riwayat', path: '/lab/riwayat', label: 'Riwayat', icon: History },
   { key: 'latihan', path: '/lab/latihan', label: 'Latihan', icon: BookOpenCheck },
   { key: 'panduan', path: '/lab/panduan', label: 'Panduan', icon: BookOpen },
+  { key: 'pengaturan', path: '/lab/pengaturan', label: 'Pengaturan', icon: Settings },
 ]
 
 interface Props {
@@ -70,6 +73,7 @@ export function StudentApp(props: Props) {
       riwayat: tr.nav.student.riwayat,
       latihan: tr.nav.student.latihan,
       panduan: tr.nav.student.panduan,
+      pengaturan: tr.nav.student.pengaturan,
     }
     return { ...p, label: labelMap[p.key] ?? p.label }
   })
@@ -96,9 +100,11 @@ export function StudentApp(props: Props) {
                   ? 'riwayat'
                   : path.startsWith('/lab/panduan')
                     ? 'panduan'
-                    : path.startsWith('/lab/latihan')
-                      ? 'latihan'
-                      : 'beranda'
+                    : path.startsWith('/lab/pengaturan')
+                      ? 'pengaturan'
+                      : path.startsWith('/lab/latihan')
+                        ? 'latihan'
+                        : 'beranda'
 
   const dashQ = useQuery({
     queryKey: ['student-dashboard'],
@@ -127,7 +133,21 @@ export function StudentApp(props: Props) {
       : undefined
 
   return (
-    <Shell {...props} pages={pages} active={active} go={go} theme={theme} setTheme={setTheme} crumb={legacyDetail?.exercise.title}>
+    <Shell
+      {...props}
+      pages={pages}
+      active={active}
+      go={go}
+      theme={theme}
+      setTheme={setTheme}
+      crumb={legacyDetail?.exercise.title}
+      accountExtra={(close) => (
+        <button type="button" role="menuitem" onClick={() => { close(); go('/lab/pengaturan') }}>
+          <Settings size={15} aria-hidden="true" />
+          {tr.nav.student.pengaturan}
+        </button>
+      )}
+    >
       {sessionMatch ? (
         <LabWorkspace sessionId={sessionMatch} csrf={props.user.csrf_token} theme={theme} go={go} />
       ) : path.startsWith('/lab/web') ? (
@@ -148,6 +168,14 @@ export function StudentApp(props: Props) {
         <StudentHistoryPage go={go} />
       ) : active === 'panduan' ? (
         <PanduanPage role="mahasiswa" />
+      ) : active === 'pengaturan' ? (
+        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+          <PageHead
+            title="Pengaturan Keamanan Akun"
+            description="Kelola MFA, Passkeys, Authenticator App (TOTP), Backup Codes, email notifikasi, dan sesi perangkat aktif."
+          />
+          <SecuritySettingsPage user={props.user} />
+        </div>
       ) : path === '/lab/pencapaian' ? (
         dashQ.data ? (
           <StudentProgressPage dashQ={dashQ} go={go} />

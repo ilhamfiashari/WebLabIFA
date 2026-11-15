@@ -32,6 +32,7 @@ export const TRANSLATIONS = {
         riwayat: 'Riwayat',
         latihan: 'Latihan',
         panduan: 'Panduan',
+        pengaturan: 'Pengaturan',
       },
       lecturer: {
         beranda: 'Beranda',
@@ -43,6 +44,7 @@ export const TRANSLATIONS = {
         progres: 'Progres & Nilai',
         latihan: 'Bank latihan',
         panduan: 'Panduan',
+        pengaturan: 'Pengaturan',
       },
       admin: {
         beranda: 'Beranda',
@@ -246,6 +248,7 @@ export const TRANSLATIONS = {
         riwayat: 'History',
         latihan: 'Practice',
         panduan: 'Guide',
+        pengaturan: 'Settings',
       },
       lecturer: {
         beranda: 'Home',
@@ -257,6 +260,7 @@ export const TRANSLATIONS = {
         progres: 'Progress & Grades',
         latihan: 'Exercise Bank',
         panduan: 'Guide',
+        pengaturan: 'Settings',
       },
       admin: {
         beranda: 'Home',
