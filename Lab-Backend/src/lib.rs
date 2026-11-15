@@ -2,6 +2,7 @@ pub mod config;
 pub mod latihan;
 pub mod oidc;
 pub mod portal;
+pub mod security_account;
 pub mod seed;
 pub mod simulator;
 pub mod simulator_catalog;
@@ -12,7 +13,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use chrono::{DateTime, Utc};
@@ -120,6 +121,74 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/admin/catalog/{lab_id}/status",
             post(portal::admin_update_module_status),
+        )
+        .route(
+            "/api/account/security",
+            get(security_account::get_security_settings),
+        )
+        .route(
+            "/api/account/security/preferences",
+            post(security_account::update_email_preferences),
+        )
+        .route(
+            "/api/account/security/totp/enroll",
+            post(security_account::enroll_totp),
+        )
+        .route(
+            "/api/account/security/totp/verify",
+            post(security_account::verify_and_enable_totp),
+        )
+        .route(
+            "/api/account/security/totp/disable",
+            post(security_account::disable_totp),
+        )
+        .route(
+            "/api/account/security/backup-codes/regenerate",
+            post(security_account::regenerate_backup_codes),
+        )
+        .route(
+            "/api/account/security/mfa/verify",
+            post(security_account::verify_mfa_challenge),
+        )
+        .route(
+            "/api/account/security/passkeys/challenge",
+            post(security_account::challenge_passkey),
+        )
+        .route(
+            "/api/account/security/passkeys",
+            post(security_account::register_passkey),
+        )
+        .route(
+            "/api/account/security/passkeys/{passkey_id}",
+            delete(security_account::delete_passkey),
+        )
+        .route(
+            "/api/account/sessions/{session_id}/revoke",
+            post(security_account::revoke_my_session),
+        )
+        .route(
+            "/api/account/presence",
+            post(security_account::update_presence),
+        )
+        .route(
+            "/api/notifications",
+            get(security_account::list_notifications),
+        )
+        .route(
+            "/api/notifications/read",
+            post(security_account::mark_notifications_read),
+        )
+        .route(
+            "/api/admin/security-monitor",
+            get(security_account::admin_security_monitor),
+        )
+        .route(
+            "/api/admin/sessions/{session_id}/revoke",
+            post(security_account::admin_revoke_session),
+        )
+        .route(
+            "/api/admin/anomalies/{anomaly_id}/ack",
+            post(security_account::admin_ack_anomaly),
         )
         .route(
             "/api/openapi.json",
@@ -318,9 +387,11 @@ struct Transaction {
 async fn callback(
     State(state): State<AppState>,
     jar: CookieJar,
+    headers: HeaderMap,
     Query(query): Query<Callback>,
 ) -> Response {
-    let result = complete_login(&state, &jar, query).await;
+    let telemetry = security_account::extract_telemetry(&headers);
+    let result = complete_login(&state, &jar, &headers, query).await;
     let jar = jar.add(cookie(
         &state.config,
         state.config.transaction_cookie(),
@@ -343,6 +414,7 @@ async fn callback(
         }
         Err(status) => {
             tracing::info!(event = "login_rejected", reason = status);
+            security_account::record_rejected_login_anomaly(&state.pool, status, &telemetry).await;
             (jar, Redirect::to(&format!("/login?status={status}"))).into_response()
         }
     }
@@ -351,6 +423,7 @@ async fn callback(
 async fn complete_login(
     state: &AppState,
     jar: &CookieJar,
+    headers: &HeaderMap,
     query: Callback,
 ) -> Result<String, &'static str> {
     let oidc = state.oidc.as_ref().ok_or("temporary")?;
@@ -476,10 +549,34 @@ async fn complete_login(
             .await
             .map_err(|_| "temporary")?;
     }
+    let telemetry = security_account::extract_telemetry(headers);
+    let session_id = Uuid::new_v4();
+    let initial_path = home_route(&role);
     let token = random_token();
-    sqlx::query("INSERT INTO sessions (token_hash,user_id,csrf_token,expires_at,active_role) VALUES ($1,$2,$3,now()+interval '8 hours',$4)")
-        .bind(hash(&token)).bind(user.0).bind(random_token()).bind(role).execute(&mut *tx).await.map_err(|_| "temporary")?;
+    sqlx::query("INSERT INTO sessions (token_hash,session_id,user_id,csrf_token,expires_at,active_role,ip_address,user_agent,device_label,location_label,current_path) VALUES ($1,$2,$3,$4,now()+interval '8 hours',$5,$6,$7,$8,$9,$10)")
+        .bind(hash(&token))
+        .bind(session_id)
+        .bind(user.0)
+        .bind(random_token())
+        .bind(&role)
+        .bind(&telemetry.ip_address)
+        .bind(&telemetry.user_agent)
+        .bind(&telemetry.device_label)
+        .bind(&telemetry.location_label)
+        .bind(initial_path)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| "temporary")?;
     tx.commit().await.map_err(|_| "temporary")?;
+    security_account::evaluate_login_anomalies(
+        &state.pool,
+        user.0,
+        &email,
+        session_id,
+        &role,
+        &telemetry,
+    )
+    .await;
     Ok(token)
 }
 
@@ -606,6 +703,8 @@ async fn switch_context(
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
+    security_account::record_context_switch_event(&state.pool, &actor, &request.role, &headers)
+        .await;
     Ok((
         jar.add(cookie(
             &state.config,

@@ -511,6 +511,15 @@ pub async fn create_assignment(
     .execute(&state.pool)
     .await?;
 
+    crate::security_account::notify_class_students_assignment(
+        &state.pool,
+        &req.class_id,
+        req.title.trim(),
+        &req.lab_id,
+        req.due_in_days,
+    )
+    .await;
+
     Ok(Json(
         json!({ "id": id, "class_id": req.class_id, "title": req.title.trim() }),
     ))
@@ -554,6 +563,14 @@ pub async fn add_session_feedback(
         .bind(req.comment.trim())
         .execute(&state.pool)
         .await?;
+
+    crate::security_account::notify_student_feedback(
+        &state.pool,
+        row.user_id,
+        &row.lab_id,
+        req.comment.trim(),
+    )
+    .await;
 
     Ok(Json(json!({ "id": id, "comment": req.comment.trim() })))
 }

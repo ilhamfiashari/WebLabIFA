@@ -4,10 +4,9 @@ Pengguna telah menyetujui perluasan akses mahasiswa pada 15 November 2026. `ALLO
 
 | Identitas Google terverifikasi | Grant awal | Konteks sesi baru |
 | --- | --- | --- |
-| firman.ashari@if.itera.ac.id | Dosen, Admin | Dosen |
-| ilhamfirman39@gmail.com | Dosen, Admin | Dosen |
-| Sembilan digit ASCII dengan posisi 4–6 `140`, domain student.itera.ac.id | Mahasiswa | Mahasiswa |
-| Alamat persis pada `STUDENT_EMAILS` (akun uji, mis. Gmail) | Mahasiswa | Mahasiswa |
+| Email terdaftar di `ALLOWED_EMAILS` | Dosen, Admin | Dosen |
+| Sembilan digit ASCII dengan posisi 4–6 `140`, domain institusi terkonfigurasi | Mahasiswa | Mahasiswa |
+| Alamat persis pada `STUDENT_EMAILS` (akun uji terdaftar di env) | Mahasiswa | Mahasiswa |
 | Akun lain atau nonaktif | Ditolak | Tidak ada sesi |
 
 `STUDENT_EMAILS` (dipisah koma, maksimal 10) menambahkan akun Mahasiswa di luar pola NIM, misalnya akun uji pribadi. Alamat dicocokkan persis tanpa claim Workspace, tidak boleh tumpang tindih dengan `ALLOWED_EMAILS`, dan tidak pernah mendapat grant Dosen/Admin. Isi nilainya di `.env` server; jangan di-commit.
