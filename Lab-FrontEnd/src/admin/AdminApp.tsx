@@ -6,7 +6,9 @@ import {
 } from 'lucide-react'
 import type { Identity } from '../api'
 import { useI18n } from '../shared/i18n'
+import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { simApi, type AdminDashboardResponse } from '../simulator/api'
+import { AdminSecurityMonitorPanel } from './SecurityMonitorPanel'
 import {
   AUDIT, AUDIT_DAILY, CLASSES, HEAT, HEAT_DAYS, HEAT_SLOTS, MODULES, NOTIFICATIONS, OWASP, RANGES, ROLE_TOTALS, STATUS_TOTALS, USERS,
   activitySeries, kpis, owaspCoverage, type AccessStatus, type AuditKind, type PubStatus, type RangeKey, type Role, type Track, type User,
@@ -376,7 +378,7 @@ function CatalogPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
   </>
 }
 
-function AuditPage({ live }: { live?: AdminDashboardResponse }) {
+function AuditPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string }) {
   const kinds: AuditKind[] = ['Akses', 'Akun', 'Kelas', 'Publikasi', 'Sesi']
   const [kind, setKind] = useState<'all' | AuditKind>('all')
   const [result, setResult] = useState<'all' | 'Berhasil' | 'Ditolak'>('all')
@@ -389,6 +391,7 @@ function AuditPage({ live }: { live?: AdminDashboardResponse }) {
   }
   return <>
     <PageHead page="audit" live={Boolean(live)} actions={<button type="button" className="btn-outline" onClick={exportCsv}><Download size={17} aria-hidden="true" />Unduh CSV</button>} />
+    <AdminSecurityMonitorPanel csrf={csrf} />
     {live && live.audit_logs.length > 0 ? (
       <section className="card table-card">
         <header className="table-head"><h2>Log Audit Langsung Basis Data</h2></header>
@@ -426,7 +429,8 @@ function AuditPage({ live }: { live?: AdminDashboardResponse }) {
 function SettingsPage({ theme, setTheme, user }: { theme: Theme; setTheme: (t: Theme) => void; user: Identity }) {
   return <>
     <PageHead page="pengaturan" />
-    <div className="grid-2">
+    <SecuritySettingsPage user={user} />
+    <div className="grid-2" style={{ marginTop: 18 }}>
       <section className="card" aria-labelledby="session-policy">
         <header className="card-head"><div><h2 id="session-policy">Kebijakan sesi</h2><p>Konfigurasi server · baca saja</p></div></header>
         <dl className="detail-list">
@@ -497,7 +501,7 @@ export function AdminApp({ user, onLogout, loggingOut, onSwitchRole, switching, 
     {page.key === 'pengguna' && <UsersPage live={live} csrf={user.csrf_token} />}
     {page.key === 'kelas' && <ClassesPage live={live} csrf={user.csrf_token} />}
     {page.key === 'katalog' && <CatalogPage live={live} csrf={user.csrf_token} />}
-    {page.key === 'audit' && <AuditPage live={live} />}
+    {page.key === 'audit' && <AuditPage live={live} csrf={user.csrf_token} />}
     {page.key === 'pengaturan' && <SettingsPage theme={theme} setTheme={setTheme} user={user} />}
   </Shell>
 }

@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRightLeft, Bell, Check, ChevronDown, Globe, LogOut, Menu, Monitor, Moon, PanelLeft, Sun, X, type LucideIcon } from 'lucide-react'
 import type { Identity } from '../api'
 import { useI18n } from '../shared/i18n'
+import { simApi } from '../simulator/api'
 import { roleName, store, type Theme } from './hooks'
 import { Logo, NavLink, Popover } from './ui'
 import './portal.css'
@@ -30,6 +32,7 @@ export interface ShellProps {
 /** Kerangka sidebar + topbar yang dipakai Admin, Dosen, dan Mahasiswa. */
 export function Shell({ user, pages, active, go, crumb, theme, setTheme, onLogout, loggingOut, onSwitchRole, switching, notifications, accountExtra, error, children }: ShellProps) {
   const { lang, setLang, tr } = useI18n()
+  const qc = useQueryClient()
   const [collapsed, setCollapsed] = useState(() => store.get('ifa-sidebar') === 'collapsed')
   const [mobileNav, setMobileNav] = useState(false)
   const [readNotes, setReadNotes] = useState(false)
@@ -40,8 +43,25 @@ export function Shell({ user, pages, active, go, crumb, theme, setTheme, onLogou
   const otherRoles = (user.allowed_roles ?? []).filter(r => r !== user.role)
   const initials = user.name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || role[0]
   const firstName = user.name.split(/\s+/)[0] || user.name
+  const currentPathname = typeof window !== 'undefined' ? window.location.pathname : page.path
   useEffect(() => { document.title = `${crumb ?? page.label} · ${role} · IFA Lab` }, [page, crumb, role])
   useEffect(() => { store.set('ifa-sidebar', collapsed ? 'collapsed' : 'open') }, [collapsed])
+  useEffect(() => {
+    void simApi.updatePresence(user.csrf_token, currentPathname).catch(() => {})
+  }, [currentPathname, user.csrf_token])
+  const liveNotesQ = useQuery({
+    queryKey: ['portal-notifications', user.id],
+    queryFn: () => simApi.getNotifications(),
+    retry: false,
+    refetchInterval: 60000,
+  })
+  const liveNotes: Note[] = (liveNotesQ.data?.items ?? []).map(n => ({
+    id: n.id,
+    title: n.subject,
+    detail: `${n.body_preview} → ${n.recipient_email}`,
+    when: new Date(n.created_at).toLocaleString('id-ID'),
+  }))
+  const activeNotes = liveNotes.length > 0 ? liveNotes : (notifications ?? [])
   const navigate = (to: string) => { setMobileNav(false); go(to) }
   const themes = [
     ['light', tr.shell.themeLight, Sun],
@@ -51,7 +71,13 @@ export function Shell({ user, pages, active, go, crumb, theme, setTheme, onLogou
   const current = themes.find(t => t[0] === theme) ?? themes[0]
   const ThemeIcon = current[2]
   const themeLabel = theme === 'system' ? tr.shell.themeSysShort : current[1]
-  const unread = notifications?.length && !readNotes ? notifications.length : 0
+  const unread = liveNotesQ.data ? (readNotes ? 0 : liveNotesQ.data.unread) : (activeNotes.length && !readNotes ? activeNotes.length : 0)
+  const handleMarkRead = () => {
+    setReadNotes(true)
+    if (liveNotesQ.data?.unread) {
+      void simApi.markNotificationsRead(user.csrf_token).then(() => qc.invalidateQueries({ queryKey: ['portal-notifications', user.id] })).catch(() => {})
+    }
+  }
 
   return <div className={`portal role-${user.role} ${collapsed ? 'is-collapsed' : ''} ${mobileNav ? 'nav-open' : ''}`}>
     <aside className="sidebar">
@@ -76,10 +102,10 @@ export function Shell({ user, pages, active, go, crumb, theme, setTheme, onLogou
           {crumb ? <><NavLink to={page.path} go={navigate}>{page.label}</NavLink><span aria-hidden="true">/</span><span aria-current="page">{crumb}</span></> : <span aria-current="page">{page.label}</span>}
         </nav>
         <div className="topbar-tools">
-          {notifications && <Popover label={`${tr.shell.notifications}${unread ? `, ${unread}` : ''}`} className="icon-only" trigger={<><Bell size={18} aria-hidden="true" />{unread > 0 && <span className="dot-count">{unread}</span>}</>}>
-            {() => <div className="notes"><header><strong>{tr.shell.notifications}</strong><button type="button" className="text-btn" onClick={() => setReadNotes(true)} disabled={!unread}>{tr.shell.markRead}</button></header>
-              {notifications.length ? <ul>{notifications.map(n => <li key={n.id} className={readNotes ? '' : 'unread'}><p className="strong">{n.title}</p><p>{n.detail}</p><small>{n.when}</small></li>)}</ul> : <p className="notes-empty">{tr.shell.noNotes}</p>}</div>}
-          </Popover>}
+          <Popover label={`${tr.shell.notifications}${unread ? `, ${unread}` : ''}`} className="icon-only" trigger={<><Bell size={18} aria-hidden="true" />{unread > 0 && <span className="dot-count">{unread}</span>}</>}>
+            {() => <div className="notes"><header><strong>{tr.shell.notifications}</strong><button type="button" className="text-btn" onClick={handleMarkRead} disabled={!unread}>{tr.shell.markRead}</button></header>
+              {activeNotes.length ? <ul>{activeNotes.map(n => <li key={n.id} className={unread > 0 ? 'unread' : ''}><p className="strong">{n.title}</p><p>{n.detail}</p><small>{n.when}</small></li>)}</ul> : <p className="notes-empty">{tr.shell.noNotes}</p>}</div>}
+          </Popover>
           <Popover label={tr.shell.language} className="hide-sm" trigger={<><Globe size={18} aria-hidden="true" /><span>{lang.toUpperCase()}</span><ChevronDown size={15} aria-hidden="true" /></>}>
             {close => <div className="menu" role="menu">
               <button type="button" role="menuitemradio" aria-checked={lang === 'id'} onClick={() => { setLang('id'); close() }}>

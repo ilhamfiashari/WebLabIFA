@@ -17,6 +17,7 @@ import {
   Lock,
   MessageSquare,
   Search,
+  Settings,
   ShieldAlert,
   Trophy,
   Users,
@@ -31,6 +32,7 @@ import { Badge, Drawer, Kpi, LoadState, NavLink, PageHead, Select, SessionCard, 
 import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../shared/charts/AnimatedCharts'
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
+import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { IotCatalogPage, LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
 import { LabWorkspace } from '../simulator/LabWorkspace'
 import { simApi, type InstructorDashboardResponse, type LevelId } from '../simulator/api'
@@ -46,6 +48,7 @@ const PAGES: NavPage[] = [
   { key: 'progres', path: '/lab/dosen/progres', label: 'Progres & Nilai', icon: BarChart3 },
   { key: 'latihan', path: '/lab/dosen/latihan', label: 'Bank latihan', icon: BookOpenCheck },
   { key: 'panduan', path: '/lab/dosen/panduan', label: 'Panduan', icon: BookOpen },
+  { key: 'pengaturan', path: '/lab/dosen/pengaturan', label: 'Pengaturan', icon: Settings },
 ]
 
 interface Props {
@@ -81,6 +84,7 @@ export function LecturerApp(props: Props) {
       progres: tr.nav.lecturer.progres,
       latihan: tr.nav.lecturer.latihan,
       panduan: tr.nav.lecturer.panduan,
+      pengaturan: tr.nav.lecturer.pengaturan,
     }
     return { ...p, label: labelMap[p.key] ?? p.label }
   })
@@ -119,7 +123,9 @@ export function LecturerApp(props: Props) {
                 ? 'progres'
                 : path.startsWith('/lab/dosen/panduan')
                   ? 'panduan'
-                  : 'beranda'
+                  : path.startsWith('/lab/dosen/pengaturan')
+                    ? 'pengaturan'
+                    : 'beranda'
 
   const data = catalogQ.data
   const detail =
@@ -135,7 +141,21 @@ export function LecturerApp(props: Props) {
   )
 
   return (
-    <Shell {...props} pages={pages} active={active} go={go} theme={theme} setTheme={setTheme} crumb={detail?.exercise.title}>
+    <Shell
+      {...props}
+      pages={pages}
+      active={active}
+      go={go}
+      theme={theme}
+      setTheme={setTheme}
+      crumb={detail?.exercise.title}
+      accountExtra={(close) => (
+        <button type="button" role="menuitem" onClick={() => { close(); go('/lab/dosen/pengaturan') }}>
+          <Settings size={15} aria-hidden="true" />
+          {tr.nav.lecturer.pengaturan}
+        </button>
+      )}
+    >
       {simSessionId ? (
         <LabWorkspace
           sessionId={simSessionId}
@@ -179,6 +199,14 @@ export function LecturerApp(props: Props) {
         )
       ) : active === 'panduan' ? (
         <PanduanPage role="dosen" />
+      ) : active === 'pengaturan' ? (
+        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+          <PageHead
+            title="Pengaturan Keamanan Akun"
+            description="Kelola MFA, Passkeys, Authenticator App (TOTP), Backup Codes, email notifikasi, dan sesi perangkat aktif."
+          />
+          <SecuritySettingsPage user={props.user} />
+        </div>
       ) : active === 'latihan' ? (
         !data ? (
           <LoadState error={catalogQ.isError} onRetry={() => void catalogQ.refetch()} />

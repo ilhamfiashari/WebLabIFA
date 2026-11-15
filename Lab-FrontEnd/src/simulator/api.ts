@@ -464,6 +464,111 @@ async function postJson<T>(url: string, csrf: string, body: unknown): Promise<T>
   return response.json() as Promise<T>
 }
 
+async function deleteJson<T>(url: string, csrf: string): Promise<T> {
+  const response = await fetch(url, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { 'x-csrf-token': csrf },
+  })
+  if (!response.ok) throw new ApiError(response.status)
+  return response.json() as Promise<T>
+}
+
+export interface AccountPasskey {
+  id: string
+  credential_id: string
+  device_name: string
+  transports: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface ActiveSessionRow {
+  session_id: string
+  active_role: string
+  ip_address: string | null
+  device_label: string | null
+  location_label: string | null
+  current_path: string | null
+  mfa_verified: boolean
+  created_at: string
+  last_seen_at: string
+  expires_at: string
+  is_current?: boolean
+  user_id?: string
+  user_name?: string
+  email?: string
+}
+
+export interface EmailNotificationRow {
+  id: string
+  recipient_email: string
+  category: 'assignment' | 'feedback' | 'security_alert' | 'system'
+  subject: string
+  body_preview: string
+  status: string
+  created_at: string
+  sent_at: string | null
+  read_at: string | null
+}
+
+export interface UserActivityLogRow {
+  id: string
+  user_id: string | null
+  actor_email: string | null
+  user_name: string | null
+  action: string
+  route_path: string | null
+  ip_address: string | null
+  device_label: string | null
+  location_label: string | null
+  anomaly_flag: boolean
+  detail: string
+  created_at: string
+}
+
+export interface SecurityAnomalyRow {
+  id: string
+  user_id: string | null
+  actor_email: string | null
+  user_name: string | null
+  kind: string
+  severity: 'low' | 'medium' | 'high'
+  summary: string
+  ip_address: string | null
+  device_label: string | null
+  location_label: string | null
+  acknowledged: boolean
+  created_at: string
+}
+
+export interface AccountSecurityResponse {
+  primary_email: string
+  secondary_email: string | null
+  notify_assignments: boolean
+  notify_feedback: boolean
+  notify_security_alerts: boolean
+  mfa_enabled: boolean
+  totp_verified: boolean
+  backup_codes_remaining: number
+  passkeys: AccountPasskey[]
+  sessions: ActiveSessionRow[]
+  notifications: EmailNotificationRow[]
+  recent_activity: UserActivityLogRow[]
+}
+
+export interface AdminSecurityMonitorResponse {
+  summary: {
+    active_sessions: number
+    unacknowledged_anomalies: number
+    mfa_enabled_users: number
+    emails_sent_total: number
+  }
+  active_sessions: ActiveSessionRow[]
+  activity_logs: UserActivityLogRow[]
+  anomalies: SecurityAnomalyRow[]
+}
+
 export const simApi = {
   getCatalog(params?: { q?: string; track?: string; category?: string }) {
     const sp = new URLSearchParams()
@@ -640,6 +745,117 @@ export const simApi = {
       `/api/admin/catalog/${encodeURIComponent(labId)}/status`,
       csrf,
       { status },
+    )
+  },
+  getSecuritySettings() {
+    return getJson<AccountSecurityResponse>('/api/account/security')
+  },
+  updateEmailPrefs(
+    csrf: string,
+    body: {
+      secondary_email: string | null
+      notify_assignments: boolean
+      notify_feedback: boolean
+      notify_security_alerts: boolean
+    },
+  ) {
+    return postJson<{ ok: boolean; secondary_email: string | null }>(
+      '/api/account/security/preferences',
+      csrf,
+      body,
+    )
+  },
+  enrollTotp(csrf: string) {
+    return postJson<{ secret: string; otpauth_uri: string; issuer: string; account: string }>(
+      '/api/account/security/totp/enroll',
+      csrf,
+      {},
+    )
+  },
+  verifyTotpEnable(csrf: string, code: string) {
+    return postJson<{ mfa_enabled: boolean; totp_verified: boolean }>(
+      '/api/account/security/totp/verify',
+      csrf,
+      { code },
+    )
+  },
+  disableTotp(csrf: string) {
+    return postJson<{ mfa_enabled: boolean; totp_verified: boolean }>(
+      '/api/account/security/totp/disable',
+      csrf,
+      {},
+    )
+  },
+  regenerateBackupCodes(csrf: string) {
+    return postJson<{ codes: string[]; remaining: number }>(
+      '/api/account/security/backup-codes/regenerate',
+      csrf,
+      {},
+    )
+  },
+  verifyMfaCode(csrf: string, code: string) {
+    return postJson<{ verified: boolean; method: string }>(
+      '/api/account/security/mfa/verify',
+      csrf,
+      { code },
+    )
+  },
+  challengePasskey(csrf: string) {
+    return postJson<{
+      challenge: string
+      rp_name: string
+      user_id: string
+      user_name: string
+      user_display_name: string
+    }>('/api/account/security/passkeys/challenge', csrf, {})
+  },
+  registerPasskey(
+    csrf: string,
+    body: { credential_id: string; device_name: string; transports?: string },
+  ) {
+    return postJson<{ id: string; device_name: string }>(
+      '/api/account/security/passkeys',
+      csrf,
+      body,
+    )
+  },
+  deletePasskey(csrf: string, passkeyId: string) {
+    return deleteJson<{ deleted: boolean }>(
+      `/api/account/security/passkeys/${encodeURIComponent(passkeyId)}`,
+      csrf,
+    )
+  },
+  revokeMySession(csrf: string, sessionId: string) {
+    return postJson<{ revoked: boolean }>(
+      `/api/account/sessions/${encodeURIComponent(sessionId)}/revoke`,
+      csrf,
+      {},
+    )
+  },
+  updatePresence(csrf: string, path: string) {
+    return postJson<{ ok: boolean; path: string }>('/api/account/presence', csrf, { path })
+  },
+  getNotifications() {
+    return getJson<{ items: EmailNotificationRow[]; unread: number }>('/api/notifications')
+  },
+  markNotificationsRead(csrf: string, id?: string) {
+    return postJson<{ ok: boolean }>('/api/notifications/read', csrf, { id: id ?? null })
+  },
+  getAdminSecurityMonitor() {
+    return getJson<AdminSecurityMonitorResponse>('/api/admin/security-monitor')
+  },
+  adminRevokeSession(csrf: string, sessionId: string) {
+    return postJson<{ revoked: boolean; session_id: string }>(
+      `/api/admin/sessions/${encodeURIComponent(sessionId)}/revoke`,
+      csrf,
+      {},
+    )
+  },
+  adminAckAnomaly(csrf: string, anomalyId: string) {
+    return postJson<{ acknowledged: boolean; id: string }>(
+      `/api/admin/anomalies/${encodeURIComponent(anomalyId)}/ack`,
+      csrf,
+      {},
     )
   },
 }

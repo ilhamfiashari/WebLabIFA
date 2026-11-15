@@ -141,7 +141,7 @@
 .text-btn { background: none; border: 0; color: var(--brand); font-size: 13px; font-weight: 500; min-height: 32px; }
 
 /* Konten */
-.content { padding: 24px 32px 48px; display: grid; gap: 20px; align-content: start; outline: none; max-width: 1480px; width: 100%; }
+.content { padding: 24px 32px 48px; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 20px; align-content: start; outline: none; max-width: 1480px; width: 100%; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding-bottom: 4px; }
 .page-title { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .page-head h1 { font-size: 30px; font-weight: 700; letter-spacing: -.8px; }
