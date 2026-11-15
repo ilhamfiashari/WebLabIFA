@@ -5,6 +5,32 @@ const admin = { id: '00000000-0000-0000-0000-0000000000a1', name: 'Rani Admin', 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/me', route => route.fulfill({ json: admin }))
   await page.route('**/api/dashboard/admin', route => route.fulfill({ json: null }))
+  await page.route('**/api/notifications', route => route.fulfill({ json: { items: [], unread: 0 } }))
+  await page.route('**/api/account/presence', route => route.fulfill({ json: { ok: true, path: '/lab/admin' } }))
+  await page.route('**/api/account/security', route => route.fulfill({
+    json: {
+      primary_email: admin.email,
+      secondary_email: null,
+      notify_assignments: true,
+      notify_feedback: true,
+      notify_security_alerts: true,
+      mfa_enabled: false,
+      totp_verified: false,
+      backup_codes_remaining: 0,
+      passkeys: [],
+      sessions: [],
+      notifications: [],
+      recent_activity: [],
+    },
+  }))
+  await page.route('**/api/admin/security-monitor', route => route.fulfill({
+    json: {
+      summary: { active_sessions: 0, unacknowledged_anomalies: 0, mfa_enabled_users: 0, emails_sent_total: 0 },
+      active_sessions: [],
+      activity_logs: [],
+      anomalies: [],
+    },
+  }))
 })
 
 const pages = [
