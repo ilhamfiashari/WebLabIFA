@@ -21,3 +21,5 @@ rust-audit.json
 secrets.json
 semgrep.json
 **/bom.json
+docs/
+.vite/

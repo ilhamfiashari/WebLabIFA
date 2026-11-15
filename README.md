@@ -66,7 +66,6 @@ WebLabIFA/
 │   ├── dast/                       # Konfigurasi pemindaian DAST (OWASP ZAP)
 │   └── .secrets.baseline           # Baseline deteksi kredensial agar repo bebas rahasia
 │
-├── docs/                           # Dokumentasi kebijakan akses, arsitektur, dan panduan deploy
 ├── .github/workflows/              # Pipeline CI/CD, SAST, SCA, container scan, dan DAST
 ├── compose.yaml                    # Orkestrasi container penuh untuk pengembangan lokal
 └── README.md
