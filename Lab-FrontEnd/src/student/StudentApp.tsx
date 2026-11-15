@@ -24,6 +24,7 @@ import { BarChart, ChartCard, HBarList, LineChart } from '../admin/charts'
 import { RANKS, badges, getStudentCatalog, levelName, nextOpen, rankOf, summary, type Catalog } from '../latihan/api'
 import { ExercisePlayer, LevelMap } from '../latihan/components'
 import { Shell, type NavPage } from '../portal/Shell'
+import { Pagination } from '../portal/Pagination'
 import { store, usePath, useTheme } from '../portal/hooks'
 import { Badge, Kpi, LoadState, NavLink, PageHead, SessionCard, TrackTabs } from '../portal/ui'
 import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../shared/charts/AnimatedCharts'
@@ -580,6 +581,7 @@ function StudentAssignmentsPage({
   csrf: string
   go: (to: string) => void
 }) {
+  const [assignPage, setAssignPage] = useState(1)
   const startMut = useMutation({
     mutationFn: ({ labId, levelId }: { labId: string; levelId: LevelId }) => simApi.startSession(csrf, labId, levelId),
     onSuccess: (res) => go(`/lab/sesi/${res.session_id}`),
@@ -588,6 +590,8 @@ function StudentAssignmentsPage({
   if (dashQ.isLoading || dashQ.isError || !dashQ.data) {
     return <LoadState error={dashQ.isError} onRetry={() => void dashQ.refetch()} />
   }
+
+  const pagedAssignments = dashQ.data.assignments.slice((assignPage - 1) * 10, assignPage * 10)
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -607,7 +611,7 @@ function StudentAssignmentsPage({
               </tr>
             </thead>
             <tbody>
-              {dashQ.data.assignments.map((a) => (
+              {pagedAssignments.map((a) => (
                 <tr key={a.id}>
                   <td>
                     <strong>{a.title}</strong>
@@ -643,6 +647,7 @@ function StudentAssignmentsPage({
             </tbody>
           </table>
         </div>
+        <Pagination totalItems={dashQ.data.assignments.length} page={assignPage} pageSize={10} onPageChange={setAssignPage} />
       </section>
     </div>
   )
@@ -710,6 +715,7 @@ function StudentProgressPage({
 }
 
 function StudentHistoryPage({ go }: { go: (to: string) => void }) {
+  const [histPage, setHistPage] = useState(1)
   const histQ = useQuery({
     queryKey: ['student-history'],
     queryFn: () => simApi.getStudentHistory(),
@@ -718,6 +724,8 @@ function StudentHistoryPage({ go }: { go: (to: string) => void }) {
   if (histQ.isLoading || histQ.isError || !histQ.data) {
     return <LoadState error={histQ.isError} onRetry={() => void histQ.refetch()} />
   }
+
+  const pagedItems = histQ.data.items.slice((histPage - 1) * 10, histPage * 10)
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -740,7 +748,7 @@ function StudentHistoryPage({ go }: { go: (to: string) => void }) {
               </tr>
             </thead>
             <tbody>
-              {histQ.data.items.map((item) => (
+              {pagedItems.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <strong>{item.lab_title}</strong>
@@ -779,6 +787,7 @@ function StudentHistoryPage({ go }: { go: (to: string) => void }) {
             </tbody>
           </table>
         </div>
+        <Pagination totalItems={histQ.data.items.length} page={histPage} pageSize={10} onPageChange={setHistPage} />
       </section>
     </div>
   )
@@ -942,9 +951,11 @@ function Exercises({ catalog, go }: { catalog: Catalog; go: (to: string) => void
 }
 
 function Achievements({ catalog, go }: { catalog: Catalog; go: (to: string) => void }) {
+  const [donePage, setDonePage] = useState(1)
   const s = summary(catalog)
   const list = badges(catalog)
   const done = catalog.tracks.flatMap((t) => t.exercises.filter((e) => e.status === 'selesai').map((e) => ({ t, e })))
+  const pagedDone = done.slice((donePage - 1) * 10, donePage * 10)
   return (
     <>
       <PageHead title="Pencapaian" description="XP, peringkat, dan lencana dihitung dari latihan yang tersimpan di server." />
@@ -1010,7 +1021,7 @@ function Achievements({ catalog, go }: { catalog: Catalog; go: (to: string) => v
               </tr>
             </thead>
             <tbody>
-              {done.map(({ t, e }) => (
+              {pagedDone.map(({ t, e }) => (
                 <tr key={e.id}>
                   <td>
                     <NavLink to={`/lab/latihan/${e.id}`} go={go} className="table-link">
@@ -1034,6 +1045,7 @@ function Achievements({ catalog, go }: { catalog: Catalog; go: (to: string) => v
             </tbody>
           </table>
         </div>
+        <Pagination totalItems={done.length} page={donePage} pageSize={10} onPageChange={setDonePage} />
       </section>
     </>
   )

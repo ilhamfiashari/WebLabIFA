@@ -551,6 +551,7 @@ export interface AccountSecurityResponse {
   mfa_enabled: boolean
   totp_verified: boolean
   backup_codes_remaining: number
+  backup_hash_algorithm?: string
   passkeys: AccountPasskey[]
   sessions: ActiveSessionRow[]
   notifications: EmailNotificationRow[]
@@ -857,5 +858,11 @@ export const simApi = {
       csrf,
       {},
     )
+  },
+  exportAccountBackup() {
+    return getJson<Record<string, unknown>>('/api/account/backup')
+  },
+  exportAdminBackup() {
+    return getJson<Record<string, unknown>>('/api/admin/backup')
   },
 }

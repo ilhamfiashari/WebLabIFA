@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import type { Identity } from '../../api'
+import { Pagination } from '../../portal/Pagination'
 import { Badge, Kpi, LoadState } from '../../portal/ui'
 import { simApi } from '../../simulator/api'
 import { useI18n } from '../i18n'
@@ -54,6 +55,10 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
 
   const [generatedCodes, setGeneratedCodes] = useState<string[] | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [backupMsg, setBackupMsg] = useState('')
+  const [passkeyPage, setPasskeyPage] = useState(1)
+  const [sessionPage, setSessionPage] = useState(1)
+  const [notifPage, setNotifPage] = useState(1)
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['account-security'] })
 
@@ -199,6 +204,28 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
     onSuccess: refresh,
   })
 
+  const accountBackupMut = useMutation({
+    mutationFn: () => simApi.exportAccountBackup(),
+    onSuccess: (payload) => {
+      const jsonText = JSON.stringify(payload, null, 2)
+      const url = URL.createObjectURL(new Blob([jsonText], { type: 'application/json;charset=utf-8' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weblabifa-backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setBackupMsg(
+        lang === 'en'
+          ? 'Account & progress backup downloaded (.json).'
+          : 'Cadangan data akun & progres belajar berhasil diunduh (.json).',
+      )
+      refresh()
+    },
+    onError: () => {
+      setBackupMsg(lang === 'en' ? 'Unable to download account backup.' : 'Gagal mengunduh cadangan akun.')
+    },
+  })
+
   if (!data) {
     return <LoadState error={secQ.isError} onRetry={() => void secQ.refetch()} />
   }
@@ -208,8 +235,17 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
   const effFeed = notifyFeed ?? data.notify_feedback
   const effSec = notifySec ?? data.notify_security_alerts
 
+  const dateLocale = lang === 'en' ? 'en-US' : 'id-ID'
+  const pagedPasskeys = data.passkeys.slice((passkeyPage - 1) * 10, passkeyPage * 10)
+  const pagedSessions = data.sessions.slice((sessionPage - 1) * 10, sessionPage * 10)
+  const pagedNotifications = data.notifications.slice((notifPage - 1) * 10, notifPage * 10)
+
   const downloadBackupCodes = (codes: string[]) => {
-    const content = `WebLabIFA MFA Backup Codes (${data.primary_email})\nSimpan di tempat aman. Setiap kode hanya dapat dipakai satu kali.\n\n${codes.join('\n')}\n`
+    const header =
+      lang === 'en'
+        ? `WebLabIFA MFA Backup Codes (${data.primary_email})\nKeep in a safe place. Each code works once.`
+        : `Kode Cadangan MFA WebLabIFA (${data.primary_email})\nSimpan di tempat aman. Setiap kode hanya bisa dipakai satu kali.`
+    const content = `${header}\n\n${codes.join('\n')}\n`
     const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
@@ -222,27 +258,39 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
     <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
       <div className="kpi-grid" style={{ minWidth: 0 }}>
         <Kpi
-          label={lang === 'en' ? 'MFA Protection' : 'Status MFA'}
-          value={data.mfa_enabled ? (lang === 'en' ? 'Enabled' : 'Aktif') : lang === 'en' ? 'Not Set' : 'Belum Aktif'}
-          note={data.totp_verified ? 'Authenticator App TOTP aktif' : 'Aktifkan TOTP atau Passkey'}
+          label={lang === 'en' ? 'MFA Status' : 'Perlindungan MFA'}
+          value={data.mfa_enabled ? (lang === 'en' ? 'Enabled' : 'Aktif') : lang === 'en' ? 'Off' : 'Belum Aktif'}
+          note={
+            data.totp_verified
+              ? lang === 'en'
+                ? 'Authenticator App is active'
+                : 'Aplikasi Authenticator aktif'
+              : lang === 'en'
+                ? 'Turn on Authenticator or Passkey'
+                : 'Aktifkan Authenticator atau Passkey'
+          }
           icon={ShieldCheck}
         />
         <Kpi
           label="Passkeys"
           value={data.passkeys.length}
-          note={lang === 'en' ? 'Registered security keys' : 'Perangkat FIDO2 / WebAuthn'}
+          note={lang === 'en' ? 'Saved biometric or security keys' : 'Kunci perangkat (sidik jari / kunci fisik)'}
           icon={Fingerprint}
         />
         <Kpi
-          label="Backup Codes"
+          label={lang === 'en' ? 'Backup Codes' : 'Kode Cadangan'}
           value={`${data.backup_codes_remaining} / 8`}
-          note={lang === 'en' ? 'Single-use recovery codes' : 'Kode cadangan tersisa'}
+          note={
+            lang === 'en'
+              ? `Protected with ${data.backup_hash_algorithm ?? 'Argon2id'}`
+              : `Dilindungi dengan ${data.backup_hash_algorithm ?? 'Argon2id'}`
+          }
           icon={KeyRound}
         />
         <Kpi
-          label={lang === 'en' ? 'Active Sessions' : 'Sesi Aktif'}
+          label={lang === 'en' ? 'Active Logins' : 'Perangkat Masuk'}
           value={data.sessions.length}
-          note={lang === 'en' ? 'Tracked device & IP' : 'Terpantau perangkat & IP'}
+          note={lang === 'en' ? 'Signed-in browsers & locations' : 'Perangkat & lokasi yang sedang login'}
           icon={Laptop}
         />
       </div>
@@ -266,20 +314,19 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
             <div>
               <label className="field-label">{lang === 'en' ? 'Primary Google Email' : 'Email Utama (OIDC)'}</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap', minWidth: 0 }}>
-                <input className="input" readOnly value={data.primary_email} style={{ flex: '1 1 180px', minWidth: 0, width: '100%', boxSizing: 'border-box' }} />
+                <input className="input" readOnly value={data.primary_email} style={{ flex: '1 1 200px', minWidth: 0 }} />
                 <Badge tone="good">{lang === 'en' ? 'Verified' : 'Terverifikasi'}</Badge>
               </div>
             </div>
             <div>
               <label className="field-label" htmlFor="secondary-email-input">
-                {lang === 'en' ? 'Secondary / Notification Email' : 'Email Cadangan / Tujuan Notifikasi'}
+                {lang === 'en' ? 'Secondary / Notification Email' : 'Email Tambahan / Tujuan Notifikasi'}
               </label>
               <input
                 id="secondary-email-input"
                 className="input"
                 type="email"
                 placeholder="cadangan@student.itera.ac.id"
-                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
                 value={effSecondary}
                 onChange={(e) => setSecondaryEmail(e.target.value)}
               />
@@ -287,15 +334,15 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
             <div style={{ display: 'grid', gap: 8 }}>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
                 <input type="checkbox" checked={effAssign} onChange={(e) => setNotifyAssign(e.target.checked)} />
-                {lang === 'en' ? 'Email notifications when lecturer publishes new assignments' : 'Notifikasi email saat dosen menerbitkan tugas baru'}
+                {lang === 'en' ? 'Email notifications when lecturer publishes new assignments' : 'Kirim email saat dosen membagikan tugas baru'}
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
                 <input type="checkbox" checked={effFeed} onChange={(e) => setNotifyFeed(e.target.checked)} />
-                {lang === 'en' ? 'Email notifications for lecturer session feedback & grades' : 'Notifikasi email saat ada umpan balik & nilai dosen'}
+                {lang === 'en' ? 'Email notifications for lecturer session feedback & grades' : 'Kirim email saat ada catatan atau nilai dari dosen'}
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
                 <input type="checkbox" checked={effSec} onChange={(e) => setNotifySec(e.target.checked)} />
-                {lang === 'en' ? 'Security alerts on new device, location, or login anomaly' : 'Peringatan keamanan saat login perangkat/lokasi baru atau anomali'}
+                {lang === 'en' ? 'Security alerts on new device, location, or login anomaly' : 'Kirim peringatan keamanan jika ada login mencurigakan'}
               </label>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -306,7 +353,9 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                 onClick={() => prefsMut.mutate()}
               >
                 <Check size={15} />
-                {prefsMut.isPending ? 'Menyimpan…' : lang === 'en' ? 'Save Email Settings' : 'Simpan Pengaturan Email'}
+                {prefsMut.isPending
+                  ? lang === 'en' ? 'Saving…' : 'Menyimpan…'
+                  : lang === 'en' ? 'Save Email Settings' : 'Simpan Pengaturan Email'}
               </button>
               {prefsMsg ? <small className="subtle-note">{prefsMsg}</small> : null}
             </div>
@@ -346,7 +395,10 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                       className="btn-outline"
                       onClick={() => copyText(totpEnroll.secret, 'totp-secret')}
                     >
-                      <Copy size={14} /> {copiedKey === 'totp-secret' ? 'Tersalin!' : 'Salin Secret'}
+                      <Copy size={14} />
+                      {copiedKey === 'totp-secret'
+                        ? lang === 'en' ? 'Copied!' : 'Tersalin!'
+                        : lang === 'en' ? 'Copy Secret' : 'Salin Secret'}
                     </button>
                     <button
                       type="button"
@@ -382,25 +434,24 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                     </div>
                   ) : null}
                   <div style={{ display: 'grid', gap: 6, minWidth: 0, flex: '1 1 200px' }}>
-                    <small style={{ color: 'var(--muted)' }}>
+                    <small style={{ color: 'var(--ink-2)' }}>
                       {lang === 'en'
                         ? 'Open Google Authenticator, Microsoft Authenticator, or Bitwarden and scan the QR code, or enter this Base32 key manually:'
-                        : 'Buka Google Authenticator, Microsoft Authenticator, atau Bitwarden lalu pindai QR code di samping, atau masukkan kunci Base32 berikut secara manual:'}
+                        : 'Buka Google Authenticator, Microsoft Authenticator, atau Bitwarden lalu pindai QR code di samping, atau ketik kunci Base32 ini secara manual:'}
                     </small>
                     <code style={{ wordBreak: 'break-all', fontSize: '0.85rem' }}>{totpEnroll.secret}</code>
-                    <small style={{ wordBreak: 'break-all', color: 'var(--muted)', fontSize: '0.75rem' }}>
+                    <small style={{ wordBreak: 'break-all', color: 'var(--ink-3)', fontSize: '0.75rem' }}>
                       {totpEnroll.otpauth_uri}
                     </small>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="input-row">
                   <input
                     className="input"
-                    placeholder={lang === 'en' ? 'Enter 6-digit TOTP code' : 'Masukkan 6 digit kode TOTP'}
-                    aria-label="Kode verifikasi TOTP"
+                    placeholder={lang === 'en' ? 'Enter 6-digit code' : 'Masukkan kode 6 digit'}
+                    aria-label={lang === 'en' ? 'TOTP verification code' : 'Kode verifikasi TOTP'}
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value)}
-                    style={{ maxWidth: 220 }}
                   />
                   <button
                     type="button"
@@ -432,20 +483,20 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                     disabled={disableTotpMut.isPending}
                     onClick={() => disableTotpMut.mutate()}
                   >
-                    Nonaktifkan TOTP
+                    {lang === 'en' ? 'Disable TOTP' : 'Matikan Authenticator'}
                   </button>
                 ) : null}
               </div>
             )}
 
             {data.mfa_enabled ? (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid var(--line)' }}>
+              <div className="input-row" style={{ paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                 <input
                   className="input"
-                  placeholder="Verifikasi sesi dengan TOTP atau Backup Code"
+                  placeholder={lang === 'en' ? 'TOTP or Backup Code' : 'Kode TOTP atau Kode Cadangan'}
+                  aria-label={lang === 'en' ? 'MFA verification code' : 'Kode verifikasi sesi MFA'}
                   value={mfaVerifyCode}
                   onChange={(e) => setMfaVerifyCode(e.target.value)}
-                  style={{ maxWidth: 260 }}
                 />
                 <button
                   type="button"
@@ -453,7 +504,7 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                   disabled={verifyMfaMut.isPending || !mfaVerifyCode.trim()}
                   onClick={() => verifyMfaMut.mutate()}
                 >
-                  Uji / Verifikasi Sesi MFA
+                  {lang === 'en' ? 'Verify MFA Session' : 'Verifikasi Sesi MFA'}
                 </button>
               </div>
             ) : null}
@@ -477,14 +528,13 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
             </div>
           </header>
           <div style={{ display: 'grid', gap: 12 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="input-row">
               <input
                 className="input"
-                aria-label="Nama perangkat Passkey"
-                placeholder="Mis. MacBook Touch ID"
+                aria-label={lang === 'en' ? 'Passkey device name' : 'Nama perangkat Passkey'}
+                placeholder={lang === 'en' ? 'e.g. MacBook Touch ID' : 'Contoh: MacBook Touch ID'}
                 value={passkeyName}
                 onChange={(e) => setPasskeyName(e.target.value)}
-                style={{ flex: '1 1 200px' }}
               />
               <button
                 type="button"
@@ -493,40 +543,43 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                 onClick={() => addPasskeyMut.mutate()}
               >
                 <Fingerprint size={15} />
-                {addPasskeyMut.isPending ? 'Mendaftarkan…' : lang === 'en' ? 'Add Passkey' : 'Tambah Passkey'}
+                {addPasskeyMut.isPending
+                  ? lang === 'en' ? 'Registering…' : 'Mendaftarkan…'
+                  : lang === 'en' ? 'Add Passkey' : 'Tambah Passkey'}
               </button>
             </div>
             {passkeyMsg ? <small className="subtle-note">{passkeyMsg}</small> : null}
             {data.passkeys.length ? (
-              <div className="table-wrap">
+              <div className="table-wrap compact">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Perangkat</th>
-                      <th>Transport</th>
-                      <th>Terdaftar</th>
-                      <th>Aksi</th>
+                      <th>{lang === 'en' ? 'Device' : 'Perangkat'}</th>
+                      <th>{lang === 'en' ? 'Method' : 'Jalur'}</th>
+                      <th>{lang === 'en' ? 'Added' : 'Ditambahkan'}</th>
+                      <th>{lang === 'en' ? 'Action' : 'Aksi'}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.passkeys.map((pk) => (
+                    {pagedPasskeys.map((pk) => (
                       <tr key={pk.id}>
                         <td className="strong">{pk.device_name}</td>
                         <td><Badge tone="muted">{pk.transports}</Badge></td>
-                        <td>{new Date(pk.created_at).toLocaleDateString('id-ID')}</td>
+                        <td>{new Date(pk.created_at).toLocaleDateString(dateLocale)}</td>
                         <td>
                           <button
                             type="button"
                             className="btn-outline"
                             onClick={() => deletePasskeyMut.mutate(pk.id)}
                           >
-                            <Trash2 size={14} /> Hapus
+                            <Trash2 size={14} /> {lang === 'en' ? 'Remove' : 'Hapus'}
                           </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                <Pagination totalItems={data.passkeys.length} page={passkeyPage} pageSize={10} onPageChange={setPasskeyPage} />
               </div>
             ) : (
               <p className="subtle-note">{lang === 'en' ? 'No passkeys registered yet.' : 'Belum ada passkey terdaftar.'}</p>
@@ -539,17 +592,20 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
             <div>
               <h2 id="sec-backup">
                 <KeyRound size={17} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
-                Backup Codes
+                {lang === 'en' ? 'Backup Codes & Account Backup' : 'Kode Cadangan & Fitur Backup'}
               </h2>
               <p>
                 {lang === 'en'
-                  ? 'Single-use recovery codes hashed with SHA-256 on the server.'
-                  : 'Kode pemulihan sekali pakai yang hanya disimpan sebagai hash SHA-256 di server.'}
+                  ? `Single-use recovery codes hashed with ${data.backup_hash_algorithm ?? 'Argon2id'} on the server, plus account backup export.`
+                  : `Kode pemulihan sekali pakai dilindungi hash ${data.backup_hash_algorithm ?? 'Argon2id'}, dilengkapi unduhan cadangan data akun.`}
               </p>
             </div>
-            <Badge tone={data.backup_codes_remaining > 2 ? 'good' : 'warn'}>
-              {data.backup_codes_remaining} tersisa
-            </Badge>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <Badge tone="info">{data.backup_hash_algorithm ?? 'Argon2id'}</Badge>
+              <Badge tone={data.backup_codes_remaining > 2 ? 'good' : 'warn'}>
+                {lang === 'en' ? `${data.backup_codes_remaining} left` : `${data.backup_codes_remaining} tersisa`}
+              </Badge>
+            </div>
           </header>
           <div style={{ display: 'grid', gap: 12 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -561,8 +617,19 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
               >
                 <RefreshCw size={15} />
                 {regenCodesMut.isPending
-                  ? 'Membuat Kode…'
+                  ? lang === 'en' ? 'Generating…' : 'Membuat Kode…'
                   : lang === 'en' ? 'Generate 8 Backup Codes' : 'Buat Ulang 8 Backup Codes'}
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                disabled={accountBackupMut.isPending}
+                onClick={() => accountBackupMut.mutate()}
+              >
+                <Download size={15} />
+                {accountBackupMut.isPending
+                  ? lang === 'en' ? 'Preparing Backup…' : 'Menyiapkan Cadangan…'
+                  : lang === 'en' ? 'Download Account Backup (.json)' : 'Unduh Cadangan Akun (.json)'}
               </button>
               {generatedCodes ? (
                 <>
@@ -571,22 +638,28 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                     className="btn-outline"
                     onClick={() => copyText(generatedCodes.join('\n'), 'backup-codes')}
                   >
-                    <Copy size={14} /> {copiedKey === 'backup-codes' ? 'Tersalin!' : 'Salin Semua'}
+                    <Copy size={14} />{' '}
+                    {copiedKey === 'backup-codes'
+                      ? lang === 'en' ? 'Copied!' : 'Tersalin!'
+                      : lang === 'en' ? 'Copy All' : 'Salin Semua'}
                   </button>
                   <button
                     type="button"
                     className="btn-outline"
                     onClick={() => downloadBackupCodes(generatedCodes)}
                   >
-                    <Download size={14} /> Unduh .txt
+                    <Download size={14} /> {lang === 'en' ? 'Save .txt' : 'Unduh .txt'}
                   </button>
                 </>
               ) : null}
             </div>
+            {backupMsg ? <small className="subtle-note">{backupMsg}</small> : null}
             {generatedCodes ? (
               <div style={{ padding: 12, borderRadius: 10, border: '1px solid var(--warn-line, var(--line))', display: 'grid', gap: 8 }}>
                 <strong style={{ fontSize: '0.88rem' }}>
-                  Salin kode ini sekarang — kode tidak dapat ditampilkan ulang setelah halaman ditutup:
+                  {lang === 'en'
+                    ? 'Save these codes now — they cannot be displayed again after closing this page:'
+                    : 'Simpan kode ini sekarang — kode tidak dapat ditampilkan lagi setelah halaman ditutup:'}
                 </strong>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
                   {generatedCodes.map((c) => (
@@ -606,7 +679,7 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
           <div>
             <h2 id="sec-sessions">
               <Laptop size={17} style={{ verticalAlign: 'text-bottom', marginRight: 6 }} />
-              {lang === 'en' ? 'Active Sessions & Device Locations' : 'Sesi Aktif & Lokasi Perangkat Saya'}
+              {lang === 'en' ? 'Active Sessions & Device Locations' : 'Perangkat Aktif & Lokasi Login'}
             </h2>
           </div>
         </header>
@@ -614,21 +687,21 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Perangkat</th>
-                <th>Lokasi & IP</th>
-                <th>Posisi Halaman</th>
-                <th>Peran</th>
+                <th>{lang === 'en' ? 'Device' : 'Perangkat'}</th>
+                <th>{lang === 'en' ? 'Location & IP' : 'Lokasi & IP'}</th>
+                <th>{lang === 'en' ? 'Current Page' : 'Posisi Halaman'}</th>
+                <th>{lang === 'en' ? 'Role' : 'Peran'}</th>
                 <th>MFA</th>
-                <th>Aktivitas Terakhir</th>
-                <th>Aksi</th>
+                <th>{lang === 'en' ? 'Last Activity' : 'Aktivitas Terakhir'}</th>
+                <th>{lang === 'en' ? 'Action' : 'Aksi'}</th>
               </tr>
             </thead>
             <tbody>
-              {data.sessions.map((s) => (
+              {pagedSessions.map((s) => (
                 <tr key={s.session_id}>
                   <td>
-                    <p className="strong">{s.device_label ?? 'Browser Web'}</p>
-                    {s.is_current ? <Badge tone="good">Sesi Ini</Badge> : null}
+                    <p className="strong">{s.device_label ?? (lang === 'en' ? 'Web Browser' : 'Browser Web')}</p>
+                    {s.is_current ? <Badge tone="good">{lang === 'en' ? 'This Device' : 'Perangkat Ini'}</Badge> : null}
                   </td>
                   <td>
                     <p>{s.location_label ?? '-'}</p>
@@ -636,8 +709,12 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                   </td>
                   <td><code>{s.current_path ?? '/lab'}</code></td>
                   <td><Badge tone="muted">{s.active_role}</Badge></td>
-                  <td><Badge tone={s.mfa_verified ? 'good' : 'muted'}>{s.mfa_verified ? 'Terverifikasi' : 'OIDC'}</Badge></td>
-                  <td>{new Date(s.last_seen_at).toLocaleString('id-ID')}</td>
+                  <td>
+                    <Badge tone={s.mfa_verified ? 'good' : 'muted'}>
+                      {s.mfa_verified ? (lang === 'en' ? 'Verified' : 'Terverifikasi') : 'OIDC'}
+                    </Badge>
+                  </td>
+                  <td>{new Date(s.last_seen_at).toLocaleString(dateLocale)}</td>
                   <td>
                     {!s.is_current ? (
                       <button
@@ -646,10 +723,10 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                         disabled={revokeSessionMut.isPending}
                         onClick={() => revokeSessionMut.mutate(s.session_id)}
                       >
-                        Cabut Sesi
+                        {lang === 'en' ? 'Revoke Session' : 'Cabut Sesi'}
                       </button>
                     ) : (
-                      <small className="subtle-note">Aktif sekarang</small>
+                      <small className="subtle-note">{lang === 'en' ? 'Active now' : 'Sedang digunakan'}</small>
                     )}
                   </td>
                 </tr>
@@ -657,6 +734,7 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
             </tbody>
           </table>
         </div>
+        <Pagination totalItems={data.sessions.length} page={sessionPage} pageSize={10} onPageChange={setSessionPage} />
       </section>
 
       <section className="card table-card" aria-labelledby="sec-notif-history" style={{ minWidth: 0 }}>
@@ -670,17 +748,17 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Waktu</th>
-                <th>Tujuan Email</th>
-                <th>Kategori</th>
-                <th>Subjek & Ringkasan</th>
+                <th>{lang === 'en' ? 'Time' : 'Waktu'}</th>
+                <th>{lang === 'en' ? 'Recipient' : 'Email Tujuan'}</th>
+                <th>{lang === 'en' ? 'Category' : 'Jenis'}</th>
+                <th>{lang === 'en' ? 'Subject & Summary' : 'Judul & Ringkasan'}</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {data.notifications.map((n) => (
+              {pagedNotifications.map((n) => (
                 <tr key={n.id}>
-                  <td className="nowrap">{new Date(n.created_at).toLocaleString('id-ID')}</td>
+                  <td className="nowrap">{new Date(n.created_at).toLocaleString(dateLocale)}</td>
                   <td><code>{n.recipient_email}</code></td>
                   <td>
                     <Badge tone={n.category === 'security_alert' ? 'warn' : n.category === 'assignment' ? 'good' : 'muted'}>
@@ -696,12 +774,15 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
               ))}
               {!data.notifications.length ? (
                 <tr>
-                  <td colSpan={5} className="empty">Belum ada email notifikasi terkirim.</td>
+                  <td colSpan={5} className="empty">
+                    {lang === 'en' ? 'No email notifications sent yet.' : 'Belum ada email notifikasi yang terkirim.'}
+                  </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
+        <Pagination totalItems={data.notifications.length} page={notifPage} pageSize={10} onPageChange={setNotifPage} />
       </section>
     </div>
   )

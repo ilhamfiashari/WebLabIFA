@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Award, Layers, Medal, Search, ShieldAlert, Trophy } from 'lucide-react'
+import { Pagination } from '../portal/Pagination'
 import { Badge, Select } from '../portal/ui'
 import { AnimatedMeterRow, AnimatedNumber } from '../shared/charts/AnimatedCharts'
 import { useI18n } from '../shared/i18n'
@@ -24,6 +25,7 @@ export function LeaderboardSection({ entries, classes, hide, limit, highlightSel
   const [query, setQuery] = useState('')
   const [classFilter, setClassFilter] = useState('ALL')
   const [sortBy, setSortBy] = useState<'xp' | 'avg_score' | 'levels_passed'>('xp')
+  const [page, setPage] = useState(1)
 
   const normalized = useMemo(
     () =>
@@ -150,7 +152,10 @@ export function LeaderboardSection({ entries, classes, hide, limit, highlightSel
           <input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
             placeholder={lang === 'en' ? 'Search name, NIM (xxx140xxx), or email...' : 'Cari nama, NIM (xxx140xxx), atau email...'}
             aria-label={lang === 'en' ? 'Search leaderboard' : 'Cari mahasiswa di leaderboard'}
           />
@@ -160,7 +165,10 @@ export function LeaderboardSection({ entries, classes, hide, limit, highlightSel
             label={lang === 'en' ? 'Class filter' : 'Filter kelas'}
             icon={Layers}
             value={classFilter}
-            onChange={setClassFilter}
+            onChange={(v) => {
+              setClassFilter(v)
+              setPage(1)
+            }}
             options={[
               { value: 'ALL', label: lang === 'en' ? 'All Classes' : 'Semua Kelas' },
               ...classes.map((c) => ({ value: c.id, label: c.id })),
@@ -170,7 +178,10 @@ export function LeaderboardSection({ entries, classes, hide, limit, highlightSel
         <Select
           label={lang === 'en' ? 'Sort leaderboard' : 'Urutkan leaderboard'}
           value={sortBy}
-          onChange={(v) => setSortBy(v as 'xp' | 'avg_score' | 'levels_passed')}
+          onChange={(v) => {
+            setSortBy(v as 'xp' | 'avg_score' | 'levels_passed')
+            setPage(1)
+          }}
           icon={Award}
           options={[
             { value: 'xp', label: lang === 'en' ? 'Highest XP' : 'XP Tertinggi' },
@@ -194,7 +205,7 @@ export function LeaderboardSection({ entries, classes, hide, limit, highlightSel
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row, idx) => (
+            {filtered.slice((page - 1) * 10, page * 10).map((row, idx) => (
               <tr
                 key={row.user_id}
                 style={
@@ -248,6 +259,9 @@ export function LeaderboardSection({ entries, classes, hide, limit, highlightSel
           </tbody>
         </table>
       </div>
+      {!limit ? (
+        <Pagination totalItems={filtered.length} page={page} pageSize={10} onPageChange={setPage} />
+      ) : null}
     </section>
   )
 }
