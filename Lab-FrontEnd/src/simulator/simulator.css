@@ -1,0 +1,1026 @@
+/* Pentester Simulator & Lab Workspace (IFARISE design system extension) */
+
+.sim-catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+}
+
+.sim-catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sim-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sim-chip {
+  min-height: 34px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sim-chip:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.sim-chip[aria-pressed='true'] {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.sim-lab-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sim-lab-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+.sim-lab-card:hover {
+  border-color: var(--brand);
+}
+
+.sim-lab-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sim-owasp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-level-dots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sim-level-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.sim-level-pill.is-done {
+  background: var(--good-soft);
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 35%, transparent);
+}
+
+.sim-level-pill.is-running {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+}
+
+.sim-level-pill.is-locked {
+  opacity: 0.72;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.sim-level-card.is-locked {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
+.sim-mode-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sim-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.sim-mode-pill.is-open {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.sim-mode-pill.is-done {
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.sim-mode-pill.is-locked {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+/* 5-Stage Stepper */
+.sim-stepper {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sim-step-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.sim-step-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.sim-step-btn.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--ink);
+}
+
+.sim-step-btn.is-done .sim-step-num {
+  background: var(--good);
+  color: #fff;
+  border-color: var(--good);
+}
+
+.sim-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.sim-step-btn.is-active .sim-step-num {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+  color: var(--on-brand);
+}
+
+.sim-step-text {
+  display: grid;
+  min-width: 0;
+}
+
+.sim-step-text strong {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-step-text span {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Workbench */
+.sim-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.sim-pane {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sim-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.sim-tab {
+  min-height: 34px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sim-tab[aria-selected='true'],
+.sim-tab.is-active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+.sim-http-pre {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sim-trace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.sim-trace-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.sim-trace-item.tone-good {
+  border-left: 3px solid var(--good);
+}
+.sim-trace-item.tone-warn {
+  border-left: 3px solid var(--warn);
+}
+.sim-trace-item.tone-bad {
+  border-left: 3px solid var(--bad);
+}
+.sim-trace-item.tone-info {
+  border-left: 3px solid var(--brand);
+}
+
+/* Cross-Stack Code Comparison */
+.sim-code-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sim-code-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.sim-code-panel.is-vuln {
+  border-top: 3px solid var(--bad);
+}
+
+.sim-code-panel.is-fix {
+  border-top: 3px solid var(--good);
+}
+
+.sim-code-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.sim-code-lines {
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.sim-code-line {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.sim-line-no {
+  color: var(--ink-3);
+  user-select: none;
+  text-align: right;
+}
+
+.sim-code-explain {
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Interactive Topology (@xyflow/react) */
+.sim-flow-wrap {
+  height: 390px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.sim-flow-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.sim-flow-toolbar {
+  z-index: 6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.sim-flow-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.sim-flow-toolbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sim-flow-toolbtn:hover {
+  background: var(--hover);
+}
+
+.sim-flow-toolbtn.is-primary {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.sim-flow-node {
+  box-sizing: border-box;
+  padding: 10px 13px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 170px;
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.sim-flow-node.is-danger {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.sim-flow-node.is-safe {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.sim-flow-node.is-brand {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.sim-flow-node.is-selected {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.sim-flow-node.is-pulse {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 22%, transparent), var(--shadow);
+}
+
+.sim-node-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 60%, transparent);
+  animation: simPulseRing 1.3s ease-out infinite;
+}
+
+.sim-edge-flow path {
+  animation: simFlowDash 1.1s linear infinite;
+}
+
+.sim-edge-pill {
+  position: absolute;
+  z-index: 5;
+  pointer-events: all;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 172px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sim-webgoat-mission {
+  border: 1px solid color-mix(in srgb, var(--brand) 32%, var(--line));
+  background: color-mix(in srgb, var(--brand-soft) 55%, var(--surface));
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.sim-scenario-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.sim-scenario-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sim-scenario-btn:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--brand);
+}
+
+.sim-scenario-btn.is-done {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--line));
+  background: color-mix(in srgb, var(--good-soft) 45%, var(--surface));
+}
+
+.sim-url-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.sim-edge-pill.is-boundary {
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+}
+
+.sim-edge-pill.is-danger {
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  background: var(--bad-soft);
+}
+
+.sim-edge-pill.is-active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent), 0 4px 12px rgba(15, 23, 42, 0.14);
+}
+
+.sim-edge-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.sim-edge-pill.is-danger .sim-edge-tag {
+  background: var(--bad);
+  color: #fff;
+}
+
+.sim-topo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  animation: simFadeIn 0.18s ease-out;
+}
+
+.sim-topo-modal {
+  width: min(1320px, 96vw);
+  height: min(860px, 90vh);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: simModalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sim-topo-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.sim-topo-modal-canvas {
+  flex: 1;
+  min-height: 360px;
+  background: var(--surface-2);
+  position: relative;
+}
+
+.sim-topo-modal-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 12.5px;
+}
+
+.sim-topo-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sim-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.sim-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.sim-legend-dot.is-safe {
+  background: var(--good);
+}
+
+.sim-legend-dot.is-brand {
+  background: var(--brand);
+}
+
+.sim-legend-dot.is-boundary {
+  border: 2px dashed var(--good);
+  background: transparent;
+}
+
+.sim-legend-dot.is-danger {
+  background: var(--bad);
+}
+
+.sim-topo-inspector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.sim-flow-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.sim-flow-badge.is-safe {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.sim-flow-badge.is-danger {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+@keyframes simFlowDash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes simPulseRing {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 60%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent);
+  }
+}
+
+@keyframes simFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes simModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Lab Visualizers */
+.sim-vis-box {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  display: grid;
+  gap: 10px;
+}
+
+.sim-ast-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sim-token {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.sim-token.is-sql {
+  border-color: var(--brand);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.sim-token.is-inject {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.sim-token.is-param {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.sim-form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.sim-form-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sim-input,
+.sim-textarea,
+.sim-select-full {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.sim-textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.sim-radio-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.sim-radio-card:hover {
+  background: var(--hover);
+}
+
+.sim-radio-card.is-picked {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.sim-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.sim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.sim-table th,
+.sim-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.sim-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-2);
+  background: var(--surface-2);
+}
+
+.sim-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.sim-rubric-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sim-rubric-cell {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+  background: var(--surface-2);
+  display: grid;
+  gap: 4px;
+}
+
+.sim-rubric-cell strong {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 60;
+}
+
+.sim-modal {
+  width: min(460px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+}
+
+@media (max-width: 1024px) {
+  .sim-catalog-layout,
+  .sim-workbench,
+  .sim-code-grid {
+    grid-template-columns: 1fr;
+  }
+  .sim-stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sim-rubric-grid,
+  .sim-mode-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .sim-lab-grid,
+  .sim-stepper,
+  .sim-mode-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dashboard Hero, Progress Rings & Leaderboard Podium */
+.sim-dash-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-soft) 72%, var(--surface)) 0%, var(--surface) 100%);
+  border: 1px solid color-mix(in srgb, var(--brand) 25%, var(--line));
+}
+
+.sim-podium-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sim-podium-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  animation: chartFadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sim-podium-card.is-first {
+  border-color: color-mix(in srgb, #eab308 55%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, #eab308 12%, var(--surface)) 0%, var(--surface) 100%);
+}
+
+.sim-podium-card.is-second {
+  border-color: color-mix(in srgb, #94a3b8 55%, var(--line));
+}
+
+.sim-podium-card.is-third {
+  border-color: color-mix(in srgb, #c27803 45%, var(--line));
+}
+
+.sim-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 820px) {
+  .sim-dash-hero,
+  .sim-podium-grid {
+    grid-template-columns: 1fr;
+  }
+}
