@@ -1,0 +1,46 @@
+# Passive-only, loopback fixture environment; never point this plan at production.
+env:
+  contexts:
+    - name: ifa-local
+      urls: ["http://127.0.0.1:5173"]
+      includePaths: ["http://127.0.0.1:5173/.*"]
+      excludePaths: [".*/api/auth/.*"]
+  parameters:
+    failOnError: true
+    failOnWarning: true
+    progressToStdout: true
+jobs:
+  - type: requestor
+    parameters:
+      user: ""
+    requests:
+      - url: http://127.0.0.1:5173/login
+        method: GET
+      - url: http://127.0.0.1:5173/privasi
+        method: GET
+      - url: http://127.0.0.1:5173/bantuan
+        method: GET
+      - url: http://127.0.0.1:5173/api/openapi.json
+        method: GET
+  - type: spiderAjax
+    parameters:
+      context: ifa-local
+      maxDuration: 2
+      browserId: firefox-headless
+  - type: openapi
+    parameters:
+      apiUrl: http://127.0.0.1:5173/api/openapi.json
+      targetUrl: http://127.0.0.1:5173
+      context: ifa-local
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk/reports
+      reportFile: zap-passive.json
+  - type: exitStatus
+    parameters:
+      errorLevel: High
+      warnLevel: Medium
