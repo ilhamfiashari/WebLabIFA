@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import QRCode from 'qrcode'
 import {
   Check,
   Copy,
@@ -43,7 +44,7 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
   const [notifySec, setNotifySec] = useState<boolean | null>(null)
   const [prefsMsg, setPrefsMsg] = useState('')
 
-  const [totpEnroll, setTotpEnroll] = useState<{ secret: string; otpauth_uri: string } | null>(null)
+  const [totpEnroll, setTotpEnroll] = useState<{ secret: string; otpauth_uri: string; qrUrl: string } | null>(null)
   const [totpCode, setTotpCode] = useState('')
   const [mfaMsg, setMfaMsg] = useState('')
   const [mfaVerifyCode, setMfaVerifyCode] = useState('')
@@ -80,9 +81,18 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
   })
 
   const enrollTotpMut = useMutation({
-    mutationFn: () => simApi.enrollTotp(user.csrf_token),
+    mutationFn: async () => {
+      const res = await simApi.enrollTotp(user.csrf_token)
+      const qrUrl = await QRCode.toDataURL(res.otpauth_uri, {
+        width: 192,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#0f2318', light: '#ffffff' },
+      }).catch(() => '')
+      return { ...res, qrUrl }
+    },
     onSuccess: (res) => {
-      setTotpEnroll({ secret: res.secret, otpauth_uri: res.otpauth_uri })
+      setTotpEnroll(res)
       setMfaMsg('')
     },
   })
@@ -323,23 +333,70 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
 
           <div style={{ display: 'grid', gap: 12 }}>
             {totpEnroll ? (
-              <div style={{ padding: 12, borderRadius: 10, border: '1px solid var(--line)', display: 'grid', gap: 10 }}>
+              <div style={{ padding: 12, borderRadius: 10, border: '1px solid var(--line)', display: 'grid', gap: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <strong>1. Salin Secret Key / Setup URI</strong>
-                  <button
-                    type="button"
-                    className="btn-outline"
-                    onClick={() => copyText(totpEnroll.secret, 'totp-secret')}
-                  >
-                    <Copy size={14} /> {copiedKey === 'totp-secret' ? 'Tersalin!' : 'Salin Secret'}
-                  </button>
+                  <strong>
+                    {lang === 'en'
+                      ? '1. Scan QR Code or Copy Secret Key'
+                      : '1. Pindai QR Code atau Salin Secret Key'}
+                  </strong>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => copyText(totpEnroll.secret, 'totp-secret')}
+                    >
+                      <Copy size={14} /> {copiedKey === 'totp-secret' ? 'Tersalin!' : 'Salin Secret'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={() => {
+                        setTotpEnroll(null)
+                        setTotpCode('')
+                      }}
+                    >
+                      {lang === 'en' ? 'Cancel' : 'Batal'}
+                    </button>
+                  </div>
                 </div>
-                <code style={{ wordBreak: 'break-all', fontSize: '0.85rem' }}>{totpEnroll.secret}</code>
-                <small style={{ wordBreak: 'break-all', color: 'var(--muted)' }}>{totpEnroll.otpauth_uri}</small>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {totpEnroll.qrUrl ? (
+                    <div
+                      style={{
+                        padding: 8,
+                        background: '#ffffff',
+                        borderRadius: 10,
+                        border: '1px solid var(--line)',
+                        display: 'inline-flex',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={totpEnroll.qrUrl}
+                        alt="QR Code Authenticator App"
+                        width={168}
+                        height={168}
+                        style={{ display: 'block', borderRadius: 4 }}
+                      />
+                    </div>
+                  ) : null}
+                  <div style={{ display: 'grid', gap: 6, minWidth: 0, flex: '1 1 200px' }}>
+                    <small style={{ color: 'var(--muted)' }}>
+                      {lang === 'en'
+                        ? 'Open Google Authenticator, Microsoft Authenticator, or Bitwarden and scan the QR code, or enter this Base32 key manually:'
+                        : 'Buka Google Authenticator, Microsoft Authenticator, atau Bitwarden lalu pindai QR code di samping, atau masukkan kunci Base32 berikut secara manual:'}
+                    </small>
+                    <code style={{ wordBreak: 'break-all', fontSize: '0.85rem' }}>{totpEnroll.secret}</code>
+                    <small style={{ wordBreak: 'break-all', color: 'var(--muted)', fontSize: '0.75rem' }}>
+                      {totpEnroll.otpauth_uri}
+                    </small>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     className="input"
-                    placeholder="Masukkan 6 digit kode TOTP"
+                    placeholder={lang === 'en' ? 'Enter 6-digit TOTP code' : 'Masukkan 6 digit kode TOTP'}
                     aria-label="Kode verifikasi TOTP"
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value)}
@@ -351,7 +408,7 @@ export function SecuritySettingsPage({ user }: { user: Identity }) {
                     disabled={verifyTotpMut.isPending || totpCode.trim().length < 6}
                     onClick={() => verifyTotpMut.mutate()}
                   >
-                    Verifikasi & Aktifkan
+                    {lang === 'en' ? 'Verify & Enable' : 'Verifikasi & Aktifkan'}
                   </button>
                 </div>
               </div>

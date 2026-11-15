@@ -192,6 +192,9 @@ test('pengaturan keamanan akun mahasiswa: email, TOTP, passkey, backup codes, se
   await expect(page.getByText('Preferensi email & notifikasi berhasil disimpan.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Siapkan Authenticator App' }).click()
+  const qrImg = page.getByAltText('QR Code Authenticator App')
+  await expect(qrImg).toBeVisible()
+  await expect(qrImg).toHaveAttribute('src', /^data:image\/png;base64,/)
   await expect(page.getByText('JBSWY3DPEHPK3PXP', { exact: true })).toBeVisible()
   await page.getByLabel('Kode verifikasi TOTP').fill('123456')
   await page.getByRole('button', { name: 'Verifikasi & Aktifkan' }).click()
