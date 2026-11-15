@@ -1,0 +1,63 @@
+import { test, expect } from '@playwright/test'
+
+test.describe('OIDC lokal dengan backend dan PostgreSQL nyata', () => {
+  test.skip(!process.env.RUN_OIDC_E2E, 'Jalankan hanya bersama fixture OIDC dan backend lokal')
+  test('login sampai /lab dan logout', async ({ page }) => {
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Masuk dengan Google', exact: true }).click()
+    await expect(page).toHaveURL(/\/lab\/dosen$/)
+    await expect(page.getByText('Selamat datang, Rani.')).toBeVisible()
+    await expect(page.getByText('Sesi aktif', { exact: true })).toBeVisible()
+    await page.screenshot({ path: '../docs/screenshots/lab-oidc-local.png', fullPage: true })
+    await page.getByRole('button', { name: 'Keluar', exact: true }).click()
+    await expect(page).toHaveURL(/\/login$/)
+    await page.goto('/lab')
+    await expect(page).toHaveURL(/\/login\?status=expired$/)
+  })
+  test('alur batal kembali ke login', async ({ page }) => {
+    await page.route('**/api/auth/google/start', async route => {
+      const response = await route.fetch({ maxRedirects: 0 })
+      const url = new URL(response.headers()['location']); url.searchParams.set('scenario', 'cancelled')
+      return route.fulfill({ response, headers: { ...response.headers(), location: url.href } })
+    })
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Masuk dengan Google', exact: true }).click()
+    await expect(page).toHaveURL(/\/login\?status=cancelled$/)
+    await expect(page.getByRole('status')).toContainText('Login dibatalkan')
+  })
+  test('akun di luar allowlist ditolak tanpa sesi', async ({ page }) => {
+    await page.route('**/api/auth/google/start', async route => {
+      const response = await route.fetch({ maxRedirects: 0 })
+      const url = new URL(response.headers()['location']); url.searchParams.set('scenario', 'unauthorized_account')
+      return route.fulfill({ response, headers: { ...response.headers(), location: url.href } })
+    })
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Masuk dengan Google', exact: true }).click()
+    await expect(page).toHaveURL(/\/login\?status=unauthorized$/)
+    await expect(page.getByRole('status')).toContainText('tidak memiliki akses')
+    expect((await page.request.get('/api/me')).status()).toBe(401)
+  })
+  test('Dosen beralih ke Admin dan guard menolak konteks lain', async ({ page }) => {
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Masuk dengan Google', exact: true }).click()
+    await expect(page).toHaveURL(/\/lab\/dosen$/)
+    await page.getByRole('button', { name: 'Beralih ke Admin', exact: true }).click()
+    await expect(page).toHaveURL(/\/lab\/admin$/)
+    await expect(page.getByRole('heading', { level: 1, name: 'Beranda Admin' })).toBeVisible()
+    await page.goto('/lab/dosen')
+    await expect(page.getByRole('heading', { name: 'Akses halaman ditolak' })).toBeVisible()
+  })
+  test('Mahasiswa tidak memiliki aksi atau rute Admin', async ({ page }) => {
+    await page.route('**/api/auth/google/start', async route => {
+      const response = await route.fetch({ maxRedirects: 0 })
+      const url = new URL(response.headers()['location']); url.searchParams.set('scenario', 'student_success')
+      return route.fulfill({ response, headers: { ...response.headers(), location: url.href } })
+    })
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Masuk dengan Google', exact: true }).click()
+    await expect(page).toHaveURL(/\/lab$/)
+    await expect(page.getByRole('button', { name: 'Beralih ke Admin' })).toHaveCount(0)
+    await page.goto('/lab/admin')
+    await expect(page.getByRole('heading', { name: 'Akses halaman ditolak' })).toBeVisible()
+  })
+})
