@@ -159,7 +159,19 @@
 .search svg { position: absolute; left: 12px; color: var(--ink-2); pointer-events: none; }
 .search input { min-height: 40px; width: 300px; max-width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 12px 0 38px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
 .search input::placeholder { color: var(--ink-3); }
-.btn-primary, .btn-outline { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 18px; border-radius: 8px; font-size: 15px; font-weight: 600; }
+.input { min-height: 42px; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.4; }
+.input::placeholder { color: var(--ink-3); }
+.field-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
+.input-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; width: 100%; }
+.input-row > .input { flex: 1 1 200px; width: auto; min-width: 0; }
+.input-row > button { flex-shrink: 0; white-space: nowrap; }
+.btn-primary, .btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border-radius: 8px; font-size: 14px; font-weight: 600; box-sizing: border-box; max-width: 100%; }
+.card-head { flex-wrap: wrap; gap: 10px; }
+.card-head > div { min-width: 0; flex: 1 1 220px; }
+.card p, .card small, .card code { overflow-wrap: anywhere; }
+.pagination-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.pagination-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pagination-controls .btn-outline { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .btn-primary { background: var(--brand-strong); color: var(--on-brand); border: 1px solid var(--brand-strong); }
 .btn-primary:hover { filter: brightness(1.1); }
 .btn-outline { background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); }

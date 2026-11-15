@@ -102,6 +102,7 @@ test('pengaturan keamanan akun mahasiswa: email, TOTP, passkey, backup codes, se
         notify_security_alerts: true,
         mfa_enabled: mfaEnabled,
         totp_verified: totpVerified,
+        backup_hash_algorithm: 'Argon2id',
         backup_codes_remaining: 8,
         passkeys,
         sessions,
@@ -181,6 +182,19 @@ test('pengaturan keamanan akun mahasiswa: email, TOTP, passkey, backup codes, se
     sessions = sessions.filter((s) => s.is_current)
     return route.fulfill({ json: { revoked: true } })
   })
+  await page.route('**/api/account/backup', (route) =>
+    route.fulfill({
+      json: {
+        exported_at: '2026-11-15T10:20:00Z',
+        format_version: 'weblabifa-account-backup-v1',
+        backup_hash_algorithm: 'Argon2id',
+        account: { id: student.id, name: student.name, email: student.email, roles: ['mahasiswa'] },
+        security: { mfa_enabled: mfaEnabled, totp_verified: totpVerified, backup_codes_remaining: 8 },
+        exercise_progress: [],
+        lab_sessions: [],
+      },
+    }),
+  )
 
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/lab/pengaturan')
@@ -207,6 +221,10 @@ test('pengaturan keamanan akun mahasiswa: email, TOTP, passkey, backup codes, se
 
   await page.getByRole('button', { name: 'Buat Ulang 8 Backup Codes' }).click()
   await expect(page.getByText('ABCD-1234')).toBeVisible()
+  await expect(page.getByText('Argon2id').first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Unduh Cadangan Akun (.json)' }).click()
+  await expect(page.getByText('Cadangan data akun & progres belajar berhasil diunduh (.json).')).toBeVisible()
 
   await page.getByRole('button', { name: 'Cabut Sesi' }).click()
   await expect(page.getByText('Firefox · Linux')).toHaveCount(0)
@@ -214,6 +232,10 @@ test('pengaturan keamanan akun mahasiswa: email, TOTP, passkey, backup codes, se
   await page.getByRole('button', { name: /Notifikasi/ }).click()
   await expect(page.getByText('[Tugas Baru IF-4A] Audit Celah Akses IDOR').first()).toBeVisible()
   await page.getByRole('button', { name: 'Tandai dibaca' }).click()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
+  expect(noOverflow).toBe(true)
 })
 
 test('admin monitor sesi aktif, posisi pengguna, log aktivitas & konfirmasi anomali', async ({ page }) => {
@@ -266,22 +288,33 @@ test('admin monitor sesi aktif, posisi pengguna, log aktivitas & konfirmasi anom
             created_at: '2026-11-15T10:00:00Z',
           },
         ],
-        activity_logs: [
-          {
-            id: 'act-1',
-            user_id: student.id,
-            actor_email: '123140051@student.itera.ac.id',
-            user_name: 'Rani Mahasiswa',
-            action: 'login_success',
-            route_path: '/lab/web/A01/broken-access-control',
-            ip_address: '10.24.10.21',
-            device_label: 'Chrome · Windows',
-            location_label: 'Jaringan Kampus ITERA',
-            anomaly_flag: true,
-            detail: 'Login lokasi baru dan membuka skenario IDOR',
-            created_at: '2026-11-15T10:00:00Z',
-          },
-        ],
+        activity_logs: Array.from({ length: 12 }, (_, idx) => ({
+          id: `act-${idx + 1}`,
+          user_id: student.id,
+          actor_email: '123140051@student.itera.ac.id',
+          user_name: 'Rani Mahasiswa',
+          action: idx === 0 ? 'login_success' : `lab_event_${idx + 1}`,
+          route_path: '/lab/web/A01/broken-access-control',
+          ip_address: '10.24.10.21',
+          device_label: 'Chrome · Windows',
+          location_label: 'Jaringan Kampus ITERA',
+          anomaly_flag: idx === 0,
+          detail: idx === 0 ? 'Login lokasi baru dan membuka skenario IDOR' : `Aktivitas modul ke-${idx + 1}`,
+          created_at: '2026-11-15T10:00:00Z',
+        })),
+      },
+    }),
+  )
+  await page.route('**/api/admin/backup', (route) =>
+    route.fulfill({
+      json: {
+        exported_at: '2026-11-15T10:22:00Z',
+        format_version: 'weblabifa-system-backup-v1',
+        backup_hash_algorithm: 'Argon2id',
+        summary: { users: 12, classes: 2, modules: 6, lab_sessions: 14 },
+        classes: [],
+        users: [],
+        modules: [],
       },
     }),
   )
@@ -299,10 +332,22 @@ test('admin monitor sesi aktif, posisi pengguna, log aktivitas & konfirmasi anom
 
   await expect(page.getByText('Login lokasi berbeda terdeteksi untuk akun mahasiswa')).toBeVisible()
   await expect(page.getByText('/lab/web/A01/broken-access-control').first()).toBeVisible()
+  const activityRegion = page.getByRole('region', { name: 'Catatan Aktivitas Pengguna' })
+  await expect(activityRegion.getByText('Menampilkan 1–10 dari 12 data')).toBeVisible()
+  await activityRegion.getByRole('button', { name: 'Halaman berikutnya' }).click()
+  await expect(activityRegion.getByText('Menampilkan 11–12 dari 12 data')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Unduh Cadangan Sistem (.json)' }).click()
+  await expect(page.getByText('Cadangan sistem portal berhasil diunduh (.json).')).toBeVisible()
 
   await page.getByRole('button', { name: 'Tandai Ditinjau' }).click()
-  await expect(page.getByText('Ditinjau', { exact: true })).toBeVisible()
+  await expect(page.getByText('Sudah Ditinjau', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Cabut Sesi' }).click()
-  await expect(page.getByText('Belum ada sesi pengguna aktif saat ini.')).toBeVisible()
+  await expect(page.getByText('Belum ada pengguna yang sedang aktif.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Bahasa' }).click()
+  await page.getByRole('menuitemradio', { name: 'English' }).click()
+  await expect(page.getByRole('heading', { name: 'Login, Location & Device Anomaly Alerts' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Download System Backup (.json)' })).toBeVisible()
 })

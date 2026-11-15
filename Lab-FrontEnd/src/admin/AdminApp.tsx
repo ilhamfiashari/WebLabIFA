@@ -16,6 +16,7 @@ import {
 import { BarChart, ChartCard, HBarList, Heatmap, LineChart, SegmentBar } from './charts'
 import { ADMIN_BASE, fmt } from './routes'
 import { Shell } from '../portal/Shell'
+import { Pagination } from '../portal/Pagination'
 import { usePath, useTheme, type Theme } from '../portal/hooks'
 import { Badge, Drawer, Kpi, NavLink, Popover, Select, type Tone } from '../portal/ui'
 
@@ -33,13 +34,14 @@ const PAGES: Array<{ key: PageKey; path: string; label: string; icon: typeof Hou
 const statusTone: Record<AccessStatus, Tone> = { Aktif: 'good', Nonaktif: 'muted', Ditangguhkan: 'warn' }
 const pubTone: Record<PubStatus, Tone> = { Terbit: 'good', Review: 'warn', Draft: 'muted' }
 function SampleTag({ live }: { live?: boolean }) {
+  const { lang } = useI18n()
   return live ? (
     <span className="sample-tag" style={{ background: 'var(--good-soft)', color: 'var(--good)' }}>
-      Data langsung
+      {lang === 'en' ? 'Live data' : 'Data langsung'}
     </span>
   ) : (
-    <span className="sample-tag" title="Backend belum menyediakan API admin. Angka pada halaman ini adalah data contoh.">
-      Data contoh
+    <span className="sample-tag" title={lang === 'en' ? 'Showing sample preview data until live backend metrics are loaded.' : 'Menampilkan data contoh.'}>
+      {lang === 'en' ? 'Sample data' : 'Data contoh'}
     </span>
   )
 }
@@ -138,6 +140,8 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
   const [status, setStatus] = useState<'all' | AccessStatus>('all')
   const [detail, setDetail] = useState<User | null>(null)
   const [policy, setPolicy] = useState(false)
+  const [liveUserPage, setLiveUserPage] = useState(1)
+  const [userPage, setUserPage] = useState(1)
   const toggleMut = useMutation({
     mutationFn: ({ userId, active }: { userId: string; active: boolean }) => simApi.setUserStatus(csrf, userId, active),
     onSuccess: async () => {
@@ -146,6 +150,8 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
   })
   const q = query.trim().toLowerCase()
   const list = USERS.filter(u => (role === 'all' || u.role === role) && (status === 'all' || u.status === status) && (!q || u.name.toLowerCase().includes(q) || (u.nim ?? '').includes(q)))
+  const pagedLiveUsers = live ? live.users.slice((liveUserPage - 1) * 10, liveUserPage * 10) : []
+  const pagedUsers = list.slice((userPage - 1) * 10, userPage * 10)
   return <>
     <PageHead page="pengguna" live={Boolean(live)} actions={<button type="button" className="btn-primary" onClick={() => setPolicy(true)}><KeyRound size={17} aria-hidden="true" />Kelola akses</button>} />
     {live ? (
@@ -155,7 +161,7 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
         </header>
         <div className="sim-table-wrap"><table className="sim-table">
           <thead><tr><th scope="col">Nama</th><th scope="col">Email</th><th scope="col">Peran</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead>
-          <tbody>{live.users.map(u => <tr key={u.id}>
+          <tbody>{pagedLiveUsers.map(u => <tr key={u.id}>
             <td><strong>{u.name}</strong></td>
             <td>{u.email}</td>
             <td>{u.roles.join(', ') || 'mahasiswa'}</td>
@@ -167,6 +173,7 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
             </td>
           </tr>)}</tbody>
         </table></div>
+        <Pagination totalItems={live.users.length} page={liveUserPage} pageSize={10} onPageChange={setLiveUserPage} />
       </section>
     ) : null}
     <div className="kpi-grid">
@@ -179,21 +186,21 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
       <header className="table-head">
         <h2 id="users-title">Daftar pengguna</h2>
         <div className="filters">
-          <label className="search"><Search size={16} aria-hidden="true" /><span className="sr-only">Cari pengguna</span><input type="search" placeholder="Cari nama atau NIM" value={query} onChange={e => setQuery(e.target.value)} /></label>
-          <Select label="Peran" icon={Users} value={role} onChange={setRole} options={[{ value: 'all', label: 'Semua peran' }, ...(['Mahasiswa', 'Dosen', 'Admin'] as Role[]).map(r => ({ value: r, label: r }))]} />
-          <Select label="Status" icon={ShieldCheck} value={status} onChange={setStatus} options={[{ value: 'all', label: 'Semua status' }, ...(['Aktif', 'Nonaktif', 'Ditangguhkan'] as AccessStatus[]).map(s => ({ value: s, label: s }))]} />
+          <label className="search"><Search size={16} aria-hidden="true" /><span className="sr-only">Cari pengguna</span><input type="search" placeholder="Cari nama atau NIM" value={query} onChange={e => { setQuery(e.target.value); setUserPage(1) }} /></label>
+          <Select label="Peran" icon={Users} value={role} onChange={(v) => { setRole(v); setUserPage(1) }} options={[{ value: 'all', label: 'Semua peran' }, ...(['Mahasiswa', 'Dosen', 'Admin'] as Role[]).map(r => ({ value: r, label: r }))]} />
+          <Select label="Status" icon={ShieldCheck} value={status} onChange={(v) => { setStatus(v); setUserPage(1) }} options={[{ value: 'all', label: 'Semua status' }, ...(['Aktif', 'Nonaktif', 'Ditangguhkan'] as AccessStatus[]).map(s => ({ value: s, label: s }))]} />
         </div>
       </header>
       <div className="table-wrap"><table className="data-table">
         <thead><tr><th scope="col">Pengguna</th><th scope="col">Peran</th><th scope="col">Kelas</th><th scope="col">Status akses</th><th scope="col">Terakhir aktif</th><th scope="col" className="center">Aksi</th></tr></thead>
-        <tbody>{list.map(u => <tr key={u.id}>
+        <tbody>{pagedUsers.map(u => <tr key={u.id}>
           <td><div className="person"><span className="avatar">{u.initials}</span><div><p>{u.name}</p>{u.nim && <small>{u.nim}</small>}</div></div></td>
           <td>{u.role}</td><td>{u.classId ?? '—'}</td><td><Badge tone={statusTone[u.status]}>{u.status}</Badge></td><td>{u.lastActive}</td>
           <td className="center"><RowMenu user={u} onDetail={() => setDetail(u)} /></td>
         </tr>)}
         {!list.length && <tr><td colSpan={6} className="empty">Tidak ada pengguna yang cocok dengan filter.</td></tr>}</tbody>
       </table></div>
-      <p className="table-foot">{list.length} dari {USERS.length} pengguna contoh</p>
+      <Pagination totalItems={list.length} page={userPage} pageSize={10} onPageChange={setUserPage} />
     </section>
     <div className="grid-2">
       <ChartCard title="Login per hari" subtitle="Login berhasil, 7 hari terakhir" columns={['Tanggal', 'Login']} rows={AUDIT_DAILY.map(d => [d.label, fmt(d.value * 3)])}>
@@ -312,7 +319,11 @@ function CatalogPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
   })
   const [track, setTrack] = useState<'all' | Track>('all')
   const [status, setStatus] = useState<'all' | PubStatus>('all')
+  const [liveModPage, setLiveModPage] = useState(1)
+  const [modPage, setModPage] = useState(1)
   const list = MODULES.filter(m => (track === 'all' || m.track === track) && (status === 'all' || m.status === status))
+  const pagedLiveModules = live ? live.modules.slice((liveModPage - 1) * 10, liveModPage * 10) : []
+  const pagedModules = list.slice((modPage - 1) * 10, modPage * 10)
   const coverage = owaspCoverage()
   const count = (s: PubStatus, t?: Track) => MODULES.filter(m => m.status === s && (!t || m.track === t)).length
   return <>
@@ -322,7 +333,7 @@ function CatalogPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
         <header className="table-head"><h2>Kontrol Publikasi Modul Simulator ({live.modules.length})</h2></header>
         <div className="table-wrap"><table className="data-table">
           <thead><tr><th>Lab ID</th><th>Judul</th><th>Jalur</th><th>Status</th><th>Ubah Status</th></tr></thead>
-          <tbody>{live.modules.map(m => <tr key={m.lab_id}>
+          <tbody>{pagedLiveModules.map(m => <tr key={m.lab_id}>
             <td><code>{m.lab_id}</code></td>
             <td><strong>{m.title}</strong></td>
             <td>{m.owasp_code ?? m.track.toUpperCase()}</td>
@@ -336,6 +347,7 @@ function CatalogPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
             </td>
           </tr>)}</tbody>
         </table></div>
+        <Pagination totalItems={live.modules.length} page={liveModPage} pageSize={10} onPageChange={setLiveModPage} />
       </section>
     ) : null}
     <div className="kpi-grid">
@@ -364,16 +376,16 @@ function CatalogPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
     <section className="card table-card" aria-labelledby="module-title">
       <header className="table-head"><h2 id="module-title">Daftar modul</h2>
         <div className="filters">
-          <Select label="Jalur" icon={Layers} value={track} onChange={setTrack} options={[{ value: 'all', label: 'Semua jalur' }, { value: 'Web', label: 'Keamanan web' }, { value: 'IoT', label: 'Keamanan IoT' }]} />
-          <Select label="Status publikasi" icon={ShieldCheck} value={status} onChange={setStatus} options={[{ value: 'all', label: 'Semua status' }, ...(['Draft', 'Review', 'Terbit'] as PubStatus[]).map(s => ({ value: s, label: s }))]} />
+          <Select label="Jalur" icon={Layers} value={track} onChange={(v) => { setTrack(v); setModPage(1) }} options={[{ value: 'all', label: 'Semua jalur' }, { value: 'Web', label: 'Keamanan web' }, { value: 'IoT', label: 'Keamanan IoT' }]} />
+          <Select label="Status publikasi" icon={ShieldCheck} value={status} onChange={(v) => { setStatus(v); setModPage(1) }} options={[{ value: 'all', label: 'Semua status' }, ...(['Draft', 'Review', 'Terbit'] as PubStatus[]).map(s => ({ value: s, label: s }))]} />
         </div>
       </header>
       <div className="table-wrap"><table className="data-table">
         <thead><tr><th scope="col">Modul</th><th scope="col">Jalur</th><th scope="col">OWASP</th><th scope="col">Tingkat</th><th scope="col">Status</th><th scope="col">Penulis</th><th scope="col">Diperbarui</th></tr></thead>
-        <tbody>{list.map(m => <tr key={m.id}><td><p className="strong">{m.title}</p><small className="mono">{m.id}</small></td><td>{m.track}</td><td>{m.owasp ? <span title={OWASP.find(o => o.code === m.owasp)?.name}>{m.owasp}</span> : '—'}</td><td>{m.level}</td><td><Badge tone={pubTone[m.status]}>{m.status}</Badge></td><td>{m.author}</td><td>{m.updated}</td></tr>)}
+        <tbody>{pagedModules.map(m => <tr key={m.id}><td><p className="strong">{m.title}</p><small className="mono">{m.id}</small></td><td>{m.track}</td><td>{m.owasp ? <span title={OWASP.find(o => o.code === m.owasp)?.name}>{m.owasp}</span> : '—'}</td><td>{m.level}</td><td><Badge tone={pubTone[m.status]}>{m.status}</Badge></td><td>{m.author}</td><td>{m.updated}</td></tr>)}
         {!list.length && <tr><td colSpan={7} className="empty">Tidak ada modul yang cocok dengan filter.</td></tr>}</tbody>
       </table></div>
-      <p className="table-foot">{list.length} modul</p>
+      <Pagination totalItems={list.length} page={modPage} pageSize={10} onPageChange={setModPage} />
     </section>
   </>
 }
@@ -382,7 +394,11 @@ function AuditPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
   const kinds: AuditKind[] = ['Akses', 'Akun', 'Kelas', 'Publikasi', 'Sesi']
   const [kind, setKind] = useState<'all' | AuditKind>('all')
   const [result, setResult] = useState<'all' | 'Berhasil' | 'Ditolak'>('all')
+  const [liveAuditPage, setLiveAuditPage] = useState(1)
+  const [eventPage, setEventPage] = useState(1)
   const list = AUDIT.filter(e => (kind === 'all' || e.kind === kind) && (result === 'all' || e.result === result))
+  const pagedLiveAudit = live ? live.audit_logs.slice((liveAuditPage - 1) * 10, liveAuditPage * 10) : []
+  const pagedEvents = list.slice((eventPage - 1) * 10, eventPage * 10)
   const exportCsv = () => {
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`
     const csv = ['tanggal,waktu,jenis,peristiwa,aktor,detail,hasil', ...list.map(e => [e.date, e.at, e.kind, e.title, e.actor, e.detail, e.result].map(esc).join(','))].join('\n')
@@ -397,8 +413,9 @@ function AuditPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
         <header className="table-head"><h2>Log Audit Langsung Basis Data</h2></header>
         <div className="table-wrap"><table className="data-table">
           <thead><tr><th>Waktu</th><th>Jenis</th><th>Peristiwa</th><th>Target</th><th>Hasil</th></tr></thead>
-          <tbody>{live.audit_logs.map(a => <tr key={a.id}><td>{new Date(a.created_at).toLocaleString('id-ID')}</td><td>{a.kind}</td><td>{a.title}</td><td><code>{a.target}</code></td><td><Badge tone={a.result === 'Berhasil' ? 'good' : 'bad'}>{a.result}</Badge></td></tr>)}</tbody>
+          <tbody>{pagedLiveAudit.map(a => <tr key={a.id}><td>{new Date(a.created_at).toLocaleString('id-ID')}</td><td>{a.kind}</td><td>{a.title}</td><td><code>{a.target}</code></td><td><Badge tone={a.result === 'Berhasil' ? 'good' : 'bad'}>{a.result}</Badge></td></tr>)}</tbody>
         </table></div>
+        <Pagination totalItems={live.audit_logs.length} page={liveAuditPage} pageSize={10} onPageChange={setLiveAuditPage} />
       </section>
     ) : null}
     <div className="grid-3">
@@ -412,57 +429,59 @@ function AuditPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
     <section className="card table-card" aria-labelledby="audit-log-title">
       <header className="table-head"><h2 id="audit-log-title">Log peristiwa</h2>
         <div className="filters">
-          <div className="chips" role="group" aria-label="Jenis peristiwa">{(['all', ...kinds] as const).map(k => <button key={k} type="button" className="chip" aria-pressed={kind === k} onClick={() => setKind(k)}>{k === 'all' ? 'Semua' : k}</button>)}</div>
-          <Select label="Hasil" icon={ShieldCheck} value={result} onChange={setResult} options={[{ value: 'all', label: 'Semua hasil' }, { value: 'Berhasil', label: 'Berhasil' }, { value: 'Ditolak', label: 'Ditolak' }]} />
+          <div className="chips" role="group" aria-label="Jenis peristiwa">{(['all', ...kinds] as const).map(k => <button key={k} type="button" className="chip" aria-pressed={kind === k} onClick={() => { setKind(k); setEventPage(1) }}>{k === 'all' ? 'Semua' : k}</button>)}</div>
+          <Select label="Hasil" icon={ShieldCheck} value={result} onChange={(v) => { setResult(v); setEventPage(1) }} options={[{ value: 'all', label: 'Semua hasil' }, { value: 'Berhasil', label: 'Berhasil' }, { value: 'Ditolak', label: 'Ditolak' }]} />
         </div>
       </header>
       <div className="table-wrap"><table className="data-table">
         <thead><tr><th scope="col">Waktu</th><th scope="col">Jenis</th><th scope="col">Peristiwa</th><th scope="col">Aktor</th><th scope="col">Hasil</th></tr></thead>
-        <tbody>{list.map(e => <tr key={e.id}><td className="nowrap">{e.date}<small>{e.at} WIB</small></td><td>{e.kind}</td><td><p className="strong">{e.title}</p><small>{e.detail}</small></td><td>{e.actor}</td><td><Badge tone={e.result === 'Berhasil' ? 'good' : 'bad'}>{e.result}</Badge></td></tr>)}
+        <tbody>{pagedEvents.map(e => <tr key={e.id}><td className="nowrap">{e.date}<small>{e.at} WIB</small></td><td>{e.kind}</td><td><p className="strong">{e.title}</p><small>{e.detail}</small></td><td>{e.actor}</td><td><Badge tone={e.result === 'Berhasil' ? 'good' : 'bad'}>{e.result}</Badge></td></tr>)}
         {!list.length && <tr><td colSpan={5} className="empty">Tidak ada peristiwa yang cocok dengan filter.</td></tr>}</tbody>
       </table></div>
-      <p className="table-foot">{list.length} peristiwa · Log tidak menyimpan token, kode otorisasi, atau kata sandi.</p>
+      <Pagination totalItems={list.length} page={eventPage} pageSize={10} onPageChange={setEventPage} />
     </section>
   </>
 }
 
 function SettingsPage({ theme, setTheme, user }: { theme: Theme; setTheme: (t: Theme) => void; user: Identity }) {
+  const { lang } = useI18n()
+  const en = lang === 'en'
   return <>
     <PageHead page="pengaturan" />
     <SecuritySettingsPage user={user} />
     <div className="grid-2" style={{ marginTop: 18 }}>
       <section className="card" aria-labelledby="session-policy">
-        <header className="card-head"><div><h2 id="session-policy">Kebijakan sesi</h2><p>Konfigurasi server · baca saja</p></div></header>
+        <header className="card-head"><div><h2 id="session-policy">{en ? 'Session Policy' : 'Kebijakan sesi'}</h2><p>{en ? 'Server configuration · read only' : 'Konfigurasi server · baca saja'}</p></div></header>
         <dl className="detail-list">
-          <div><dt>Batas tanpa aktivitas</dt><dd>30 menit</dd></div>
-          <div><dt>Batas sesi absolut</dt><dd>8 jam</dd></div>
-          <div><dt>Transaksi login</dt><dd>5 menit</dd></div>
-          <div><dt>Pembersihan sesi kedaluwarsa</dt><dd>Setiap 5 menit</dd></div>
-          <div><dt>Sesi Anda berakhir</dt><dd>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(user.expires_at))}</dd></div>
+          <div><dt>{en ? 'Idle timeout' : 'Batas tanpa aktivitas'}</dt><dd>{en ? '30 minutes' : '30 menit'}</dd></div>
+          <div><dt>{en ? 'Absolute session lifetime' : 'Batas sesi absolut'}</dt><dd>{en ? '8 hours' : '8 jam'}</dd></div>
+          <div><dt>{en ? 'Login transaction' : 'Transaksi login'}</dt><dd>{en ? '5 minutes' : '5 menit'}</dd></div>
+          <div><dt>{en ? 'Expired session cleanup' : 'Pembersihan sesi kedaluwarsa'}</dt><dd>{en ? 'Every 5 minutes' : 'Setiap 5 menit'}</dd></div>
+          <div><dt>{en ? 'Current session expires' : 'Sesi Anda berakhir'}</dt><dd>{new Intl.DateTimeFormat(en ? 'en-US' : 'id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(user.expires_at))}</dd></div>
         </dl>
       </section>
       <section className="card" aria-labelledby="access-policy">
-        <header className="card-head"><div><h2 id="access-policy">Kebijakan akses</h2><p>Ditetapkan melalui konfigurasi deployment</p></div></header>
+        <header className="card-head"><div><h2 id="access-policy">{en ? 'Access Policy' : 'Kebijakan akses'}</h2><p>{en ? 'Configured via deployment environment' : 'Ditetapkan melalui konfigurasi deployment'}</p></div></header>
         <ul className="check-list">
-          <li><Check size={15} aria-hidden="true" />Login hanya melalui Google dengan email terverifikasi.</li>
-          <li><Check size={15} aria-hidden="true" />Dosen dan Admin dibatasi allowlist; Mahasiswa melalui pola NIM.</li>
-          <li><Check size={15} aria-hidden="true" />Claim Workspace <code>hd</code> diperiksa untuk akun institusi.</li>
-          <li><Check size={15} aria-hidden="true" />Permintaan perubahan memakai Origin exact dan token CSRF.</li>
+          <li><Check size={15} aria-hidden="true" />{en ? 'Sign in exclusively through Google with a verified email.' : 'Login hanya melalui Google dengan email terverifikasi.'}</li>
+          <li><Check size={15} aria-hidden="true" />{en ? 'Lecturers and Admins are verified against the allowlist; Students by NIM format.' : 'Dosen dan Admin dibatasi allowlist; Mahasiswa melalui pola NIM.'}</li>
+          <li><Check size={15} aria-hidden="true" />{en ? 'Workspace hd claim is checked for institutional accounts.' : 'Claim Workspace hd diperiksa untuk akun institusi.'}</li>
+          <li><Check size={15} aria-hidden="true" />{en ? 'Mutating requests enforce exact Origin and CSRF token verification.' : 'Permintaan perubahan memakai Origin exact dan token CSRF.'}</li>
         </ul>
       </section>
       <section className="card" aria-labelledby="display-pref">
-        <header className="card-head"><div><h2 id="display-pref">Tampilan</h2><p>Disimpan di peramban ini</p></div></header>
-        <div className="segmented" role="radiogroup" aria-label="Tema">
-          {([['light', 'Terang', Sun], ['dark', 'Gelap', Moon], ['system', 'Ikuti sistem', Monitor]] as const).map(([v, label, Icon]) => <button key={v} type="button" role="radio" aria-checked={theme === v} onClick={() => setTheme(v)}><Icon size={16} aria-hidden="true" />{label}</button>)}
+        <header className="card-head"><div><h2 id="display-pref">{en ? 'Appearance' : 'Tampilan'}</h2><p>{en ? 'Saved in this browser' : 'Disimpan di peramban ini'}</p></div></header>
+        <div className="segmented" role="radiogroup" aria-label={en ? 'Theme' : 'Tema'}>
+          {([['light', en ? 'Light' : 'Terang', Sun], ['dark', en ? 'Dark' : 'Gelap', Moon], ['system', en ? 'Follow system' : 'Ikuti sistem', Monitor]] as const).map(([v, label, Icon]) => <button key={v} type="button" role="radio" aria-checked={theme === v} onClick={() => setTheme(v)}><Icon size={16} aria-hidden="true" />{label}</button>)}
         </div>
-        <p className="subtle-note">Bahasa antarmuka mendukung Bahasa Indonesia dan English melalui menu akun.</p>
+        <p className="subtle-note">{en ? 'Interface language can be switched between Indonesian and English in the top bar.' : 'Bahasa antarmuka mendukung Bahasa Indonesia dan English melalui menu atas.'}</p>
       </section>
       <section className="card" aria-labelledby="retention">
-        <header className="card-head"><div><h2 id="retention">Retensi data</h2><p>Menunggu keputusan pengelola</p></div></header>
+        <header className="card-head"><div><h2 id="retention">{en ? 'Data Retention' : 'Retensi data'}</h2><p>{en ? 'Backup & privacy policy' : 'Kebijakan cadangan & privasi'}</p></div></header>
         <dl className="detail-list">
-          <div><dt>Log autentikasi</dt><dd>Jenis peristiwa saja, tanpa token</dd></div>
-          <div><dt>Retensi log dan backup</dt><dd><Badge tone="warn">Belum ditetapkan</Badge></dd></div>
-          <div><dt>Cookie analitik</dt><dd>Tidak digunakan</dd></div>
+          <div><dt>{en ? 'Authentication logs' : 'Log autentikasi'}</dt><dd>{en ? 'Event metadata only, without tokens' : 'Jenis peristiwa saja, tanpa token'}</dd></div>
+          <div><dt>{en ? 'Backup hashing' : 'Hash kode cadangan'}</dt><dd><Badge tone="good">Argon2id</Badge></dd></div>
+          <div><dt>{en ? 'Analytics cookies' : 'Cookie analitik'}</dt><dd>{en ? 'Not used' : 'Tidak digunakan'}</dd></div>
         </dl>
       </section>
     </div>
@@ -470,8 +489,19 @@ function SettingsPage({ theme, setTheme, user }: { theme: Theme; setTheme: (t: T
 }
 
 function PageHead({ page, actions, live }: { page: PageKey; actions?: ReactNode; live?: boolean }) {
+  const { lang, tr } = useI18n()
   const p = PAGES.find(x => x.key === page)!
-  return <div className="page-head"><div><div className="page-title"><h1>{page === 'beranda' ? 'Beranda Admin' : p.label}</h1>{page !== 'pengaturan' && <SampleTag live={live} />}</div><p>{p.description}</p></div>{actions && <div className="page-actions">{actions}</div>}</div>
+  const enDescriptions: Record<PageKey, string> = {
+    beranda: 'Activity overview and lab publications for IFA Lab.',
+    pengguna: 'Manage accounts, roles, and access states across IFA Lab.',
+    kelas: 'Active classes, instructors, and lab completion progress.',
+    katalog: 'Lab modules, review pipeline, and OWASP Top 10 coverage.',
+    audit: 'Access trails, active sessions, anomaly alerts, and user activity logs.',
+    pengaturan: 'MFA authenticator QR, passkeys, backup codes, sessions, and backup export.',
+  }
+  const label = lang === 'en' ? (page === 'beranda' ? 'Admin Home' : tr.nav.admin[page]) : (page === 'beranda' ? 'Beranda Admin' : p.label)
+  const description = lang === 'en' ? enDescriptions[page] : p.description
+  return <div className="page-head"><div><div className="page-title"><h1>{label}</h1>{page !== 'pengaturan' && <SampleTag live={live} />}</div><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</div>
 }
 
 // ---------------------------------------------------------------- Shell

@@ -27,6 +27,7 @@ import { BarChart, ChartCard, HBarList, SegmentBar } from '../admin/charts'
 import { getLecturerCatalog, type Catalog } from '../latihan/api'
 import { ExercisePlayer, LevelMap } from '../latihan/components'
 import { Shell, type NavPage } from '../portal/Shell'
+import { Pagination } from '../portal/Pagination'
 import { store, usePath, useTheme } from '../portal/hooks'
 import { Badge, Drawer, Kpi, LoadState, NavLink, PageHead, Select, SessionCard, TrackTabs } from '../portal/ui'
 import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../shared/charts/AnimatedCharts'
@@ -321,6 +322,7 @@ function InstructorSimulatorView({
   const [searchText, setSearchText] = useState('')
   const [trackFilter, setTrackFilter] = useState<'all' | 'web' | 'iot'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'passed' | 'running' | 'not_started'>('all')
+  const [rowsPage, setRowsPage] = useState(1)
   const [seedNotice, setSeedNotice] = useState<string | null>(null)
 
   const seedMut = useMutation({
@@ -353,6 +355,7 @@ function InstructorSimulatorView({
       (r.lab_id ?? '').toLowerCase().includes(q)
     )
   })
+  const pagedRows = filteredRows.slice((rowsPage - 1) * 10, rowsPage * 10)
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -594,39 +597,39 @@ function InstructorSimulatorView({
 
       <section className="card table-card">
         <header className="table-head" style={{ flexWrap: 'wrap', gap: 10 }}>
-          <h2>Daftar Progres &amp; Bukti Praktikum Mahasiswa</h2>
+          <h2>{lang === 'en' ? 'Student Progress & Practice Evidence' : 'Daftar Progres & Bukti Praktikum Mahasiswa'}</h2>
           <div className="sim-filter-bar" style={{ marginLeft: 'auto' }}>
             <div className="search" style={{ minWidth: 200 }}>
               <Search size={14} aria-hidden="true" />
               <input
                 type="search"
                 value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                placeholder="Filter nama / NIM / lab..."
-                aria-label="Filter mahasiswa"
+                onChange={(e) => { setSearchText(e.target.value); setRowsPage(1) }}
+                placeholder={lang === 'en' ? 'Filter name / ID / lab...' : 'Filter nama / NIM / lab...'}
+                aria-label={lang === 'en' ? 'Filter students' : 'Filter mahasiswa'}
               />
             </div>
             <Select
-              label="Filter track"
+              label={lang === 'en' ? 'Filter track' : 'Filter track'}
               icon={ShieldAlert}
               value={trackFilter}
-              onChange={(v) => setTrackFilter(v as 'all' | 'web' | 'iot')}
+              onChange={(v) => { setTrackFilter(v as 'all' | 'web' | 'iot'); setRowsPage(1) }}
               options={[
-                { value: 'all', label: 'Semua Track' },
+                { value: 'all', label: lang === 'en' ? 'All Tracks' : 'Semua Track' },
                 { value: 'web', label: 'Web OWASP' },
                 { value: 'iot', label: 'IoT Studio' },
               ]}
             />
             <Select
-              label="Filter status"
+              label={lang === 'en' ? 'Filter status' : 'Filter status'}
               icon={ListChecks}
               value={statusFilter}
-              onChange={(v) => setStatusFilter(v as 'all' | 'passed' | 'running' | 'not_started')}
+              onChange={(v) => { setStatusFilter(v as 'all' | 'passed' | 'running' | 'not_started'); setRowsPage(1) }}
               options={[
-                { value: 'all', label: 'Semua Status' },
-                { value: 'passed', label: 'Lulus' },
-                { value: 'running', label: 'Berjalan' },
-                { value: 'not_started', label: 'Belum mulai' },
+                { value: 'all', label: lang === 'en' ? 'All Statuses' : 'Semua Status' },
+                { value: 'passed', label: lang === 'en' ? 'Passed' : 'Lulus' },
+                { value: 'running', label: lang === 'en' ? 'In Progress' : 'Berjalan' },
+                { value: 'not_started', label: lang === 'en' ? 'Not Started' : 'Belum mulai' },
               ]}
             />
           </div>
@@ -635,19 +638,19 @@ function InstructorSimulatorView({
           <table className="sim-table">
             <thead>
               <tr>
-                <th>Mahasiswa</th>
-                <th>Lab &amp; Level</th>
-                <th>Tahap</th>
-                <th>Skor</th>
+                <th>{lang === 'en' ? 'Student' : 'Mahasiswa'}</th>
+                <th>{lang === 'en' ? 'Lab & Level' : 'Lab & Level'}</th>
+                <th>{lang === 'en' ? 'Step' : 'Tahap'}</th>
+                <th>{lang === 'en' ? 'Score' : 'Skor'}</th>
                 <th>Status</th>
-                <th>Tinjau Bukti</th>
+                <th>{lang === 'en' ? 'Inspect Evidence' : 'Tinjau Bukti'}</th>
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((r, idx) => (
+              {pagedRows.map((r, idx) => (
                 <tr key={`${r.user_id}-${r.session_id ?? idx}`}>
                   <td>
-                    <strong>{hide ? `Mahasiswa #${idx + 1}` : r.name}</strong>
+                    <strong>{hide ? `${lang === 'en' ? 'Student' : 'Mahasiswa'} #${(rowsPage - 1) * 10 + idx + 1}` : r.name}</strong>
                     <div className="muted" style={{ fontSize: 12 }}>
                       {hide ? '••••••••' : r.email}
                     </div>
@@ -657,7 +660,7 @@ function InstructorSimulatorView({
                   <td>{r.score ?? '-'}</td>
                   <td>
                     <Badge tone={r.passed ? 'good' : r.session_id ? 'warn' : 'muted'}>
-                      {r.passed ? 'Lulus' : r.session_id ? 'Berjalan' : 'Belum mulai'}
+                      {r.passed ? (lang === 'en' ? 'Passed' : 'Lulus') : r.session_id ? (lang === 'en' ? 'Running' : 'Berjalan') : (lang === 'en' ? 'Not Started' : 'Belum mulai')}
                     </Badge>
                   </td>
                   <td>
@@ -668,7 +671,7 @@ function InstructorSimulatorView({
                         style={{ minHeight: 32, fontSize: 12.5 }}
                         onClick={() => onInspectSession(r.session_id!)}
                       >
-                        <MessageSquare size={13} /> Tinjau Bukti
+                        <MessageSquare size={13} /> {lang === 'en' ? 'Inspect' : 'Tinjau Bukti'}
                       </button>
                     ) : (
                       <span className="muted">-</span>
@@ -679,13 +682,14 @@ function InstructorSimulatorView({
               {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="empty">
-                    Belum ada baris mahasiswa yang cocok dengan filter ini.
+                    {lang === 'en' ? 'No student rows match this filter.' : 'Belum ada baris mahasiswa yang cocok dengan filter ini.'}
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
+        <Pagination totalItems={filteredRows.length} page={rowsPage} pageSize={10} onPageChange={setRowsPage} />
       </section>
 
       <SessionCard name={user.name} email={user.email} role={user.role} expiresAt={user.expires_at} />
