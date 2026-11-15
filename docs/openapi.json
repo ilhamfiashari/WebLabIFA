@@ -1,0 +1,763 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IFA Lab API",
+    "version": "0.2.0"
+  },
+  "servers": [
+    {
+      "url": "https://lab.ilhamfirmanashari.my.id"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Proses API aktif"
+          }
+        }
+      }
+    },
+    "/api/public/config": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Kontak bantuan publik"
+          }
+        }
+      }
+    },
+    "/api/auth/google/start": {
+      "get": {
+        "responses": {
+          "303": {
+            "description": "Alihkan ke penyedia OIDC"
+          },
+          "429": {
+            "description": "Batas permintaan"
+          }
+        }
+      }
+    },
+    "/api/auth/google/callback": {
+      "get": {
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Alihkan ke /lab atau pesan login aman"
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Identitas portal dan token CSRF",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi tidak sah"
+          },
+          "503": {
+            "description": "Database tidak tersedia"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sesi dicabut dan cookie dihapus"
+          },
+          "401": {
+            "description": "Sesi tidak aktif"
+          },
+          "403": {
+            "description": "Origin atau CSRF salah"
+          }
+        }
+      }
+    },
+    "/api/session/context": {
+      "post": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "role"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "mahasiswa",
+                      "dosen",
+                      "admin"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Konteks diubah; cookie dan CSRF dirotasi, batas sesi tetap",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "home_route": {
+                      "type": "string",
+                      "enum": [
+                        "/lab",
+                        "/lab/dosen",
+                        "/lab/admin"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi tidak aktif"
+          },
+          "403": {
+            "description": "Peran tidak dimiliki atau Origin/CSRF salah"
+          }
+        }
+      }
+    },
+    "/api/latihan": {
+      "get": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Latihan Mahasiswa dengan status kunci dan progres",
+        "responses": {
+          "200": {
+            "description": "Katalog tanpa kunci jawaban",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi tidak aktif"
+          },
+          "403": {
+            "description": "Peran aktif bukan Mahasiswa"
+          }
+        }
+      }
+    },
+    "/api/dosen/latihan": {
+      "get": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Bank latihan lengkap dengan kunci jawaban",
+        "responses": {
+          "200": {
+            "description": "Semua latihan terbuka dengan key, hint, dan explanation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi tidak aktif"
+          },
+          "403": {
+            "description": "Peran aktif bukan Dosen"
+          }
+        }
+      }
+    },
+    "/api/latihan/{id}/jawab": {
+      "post": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Kirim jawaban Mahasiswa; diperiksa di server",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "answer"
+                ],
+                "properties": {
+                  "answer": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hasil pemeriksaan. Poin: dasar level, setengah bila memakai petunjuk, -10% per percobaan salah, minimum 20%. Latihan selesai tidak dinilai ulang.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "correct": {
+                      "type": "boolean"
+                    },
+                    "earned": {
+                      "type": "integer"
+                    },
+                    "attempts": {
+                      "type": "integer"
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "description": "Hanya bila benar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi tidak aktif"
+          },
+          "403": {
+            "description": "Origin/CSRF salah atau peran bukan Mahasiswa"
+          },
+          "404": {
+            "description": "Latihan tidak ada"
+          },
+          "409": {
+            "description": "Langkah sebelumnya belum selesai"
+          },
+          "422": {
+            "description": "Jawaban kosong atau lebih dari 200 karakter"
+          }
+        }
+      }
+    },
+    "/api/latihan/{id}/petunjuk": {
+      "post": {
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Buka petunjuk; XP latihan menjadi setengah",
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Petunjuk",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hint": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesi tidak aktif"
+          },
+          "403": {
+            "description": "Origin/CSRF salah atau peran bukan Mahasiswa"
+          },
+          "404": {
+            "description": "Latihan tidak ada"
+          },
+          "409": {
+            "description": "Langkah sebelumnya belum selesai"
+          }
+        }
+      }
+    },
+    "/api/labs/catalog": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Katalog 15 modul simulator (11 Web OWASP A01-A10 + 4 IoT Studio)",
+        "responses": { "200": { "description": "Daftar kategori OWASP, lab, dan progres level" }, "401": { "description": "Sesi tidak aktif" } }
+      }
+    },
+    "/api/labs/{lab_id}": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Detail modul lab, trust boundary, dan 4 level",
+        "responses": { "200": { "description": "Detail modul dan level" }, "401": { "description": "Sesi tidak aktif" }, "404": { "description": "Lab tidak ditemukan" } }
+      }
+    },
+    "/api/labs/sessions": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Mulai atau lanjutkan sesi praktikum simulator",
+        "responses": { "200": { "description": "ID sesi baru atau yang dilanjutkan" }, "401": { "description": "Sesi tidak aktif" }, "403": { "description": "CSRF/Origin salah" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Muat detail sesi, spesifikasi lab, dan petunjuk terbuka",
+        "responses": { "200": { "description": "Detail sesi" }, "403": { "description": "Bukan pemilik atau dosen pengampu kelas" }, "404": { "description": "Sesi tidak ada" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}/step": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Simpan hipotesis, diagnosis, pilihan patch, dan tahap aktif (optimistic row_version)",
+        "responses": { "200": { "description": "Tahap diperbarui" }, "409": { "description": "Konflik row_version" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}/probe": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Jalankan probe simulator deterministik dan rekam HTTP/Trace",
+        "responses": { "200": { "description": "Hasil HTTP request/response, timeline trace, dan visual_data" }, "409": { "description": "Konflik row_version" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}/hint": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Buka satu petunjuk bertingkat berikutnya",
+        "responses": { "200": { "description": "Daftar petunjuk terbuka" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}/verify": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Jalankan matriks verifikasi Positif/Negatif/Regresi terhadap patch terpilih",
+        "responses": { "200": { "description": "Matriks verifikasi sebelum vs sesudah" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}/reflect": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Kirim refleksi 3 kolom, hitung rubrik (100 poin), dan berikan XP/lencana idempoten",
+        "responses": { "200": { "description": "Rincian rubrik, XP baru, dan ringkasan resmi" } }
+      }
+    },
+    "/api/labs/sessions/{session_id}/reset": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Reset state sandbox sesi simulator tanpa menghapus XP",
+        "responses": { "200": { "description": "State sandbox direset" } }
+      }
+    },
+    "/api/dashboard/student": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Beranda Mahasiswa: KPI, grafik aktivitas, peta OWASP, tugas, dan lencana",
+        "responses": { "200": { "description": "Ringkasan beranda mahasiswa" }, "403": { "description": "Bukan peran Mahasiswa" } }
+      }
+    },
+    "/api/student/history": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Riwayat sesi simulator mahasiswa",
+        "responses": { "200": { "description": "Daftar sesi praktikum" }, "403": { "description": "Bukan peran Mahasiswa" } }
+      }
+    },
+    "/api/dashboard/instructor": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Beranda Dosen: KPI kelas, progres penugasan, histogram nilai, daftar mahasiswa",
+        "responses": { "200": { "description": "Ringkasan kelas untuk dosen pengampu" }, "403": { "description": "Bukan Dosen atau bukan pengampu kelas" } }
+      }
+    },
+    "/api/dosen/assignments": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Terbitkan penugasan simulator untuk kelas yang diampu",
+        "responses": { "200": { "description": "Penugasan tersimpan" }, "403": { "description": "Bukan dosen pengampu kelas" } }
+      }
+    },
+    "/api/dosen/sessions/{session_id}/feedback": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Tambahkan umpan balik dosen pada sesi praktikum mahasiswa kelasnya",
+        "responses": { "200": { "description": "Umpan balik tersimpan" }, "403": { "description": "Bukan dosen pengampu" } }
+      }
+    },
+    "/api/dosen/export": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Ekspor CSV nilai kelas dengan proteksi anti formula-injection",
+        "responses": { "200": { "description": "Berkas CSV laporan kelas" }, "403": { "description": "Bukan dosen pengampu kelas" } }
+      }
+    },
+    "/api/dosen/labs": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Bank katalog simulator lengkap dengan catatan diskusi dosen",
+        "responses": { "200": { "description": "Daftar 15 modul simulator" }, "403": { "description": "Bukan peran Dosen" } }
+      }
+    },
+    "/api/dashboard/admin": {
+      "get": {
+        "security": [{ "session": [] }],
+        "summary": "Beranda Admin: akun, kelas, status publikasi modul, dan log audit",
+        "responses": { "200": { "description": "Data pengelola basis data" }, "403": { "description": "Bukan peran Admin" } }
+      }
+    },
+    "/api/admin/users/{user_id}/status": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Aktifkan atau nonaktifkan akun pengguna dengan proteksi minimal 1 Admin aktif",
+        "responses": { "200": { "description": "Status diperbarui" }, "409": { "description": "Admin terakhir tidak dapat dinonaktifkan" } }
+      }
+    },
+    "/api/admin/classes": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Buat atau perbarui kelas pada basis data",
+        "responses": { "200": { "description": "Kelas tersimpan" } }
+      }
+    },
+    "/api/admin/catalog/{lab_id}/status": {
+      "post": {
+        "security": [{ "session": [] }],
+        "summary": "Ubah status publikasi modul simulator (Draft/Review/Terbit)",
+        "responses": { "200": { "description": "Status publikasi diperbarui" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-ifa_session"
+      }
+    },
+    "schemas": {
+      "Identity": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "csrf_token",
+          "expires_at",
+          "allowed_roles",
+          "home_route"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "mahasiswa",
+              "dosen",
+              "admin"
+            ]
+          },
+          "csrf_token": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "allowed_roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "mahasiswa",
+                "dosen",
+                "admin"
+              ]
+            }
+          },
+          "home_route": {
+            "type": "string",
+            "enum": [
+              "/lab",
+              "/lab/dosen",
+              "/lab/admin"
+            ]
+          }
+        }
+      },
+      "Catalog": {
+        "type": "object",
+        "description": "Jalur, level, dan latihan. Versi Mahasiswa tidak memuat field key; latihan terkunci tidak memuat content.",
+        "properties": {
+          "levels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "points": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "exercises": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "level": {
+                        "type": "integer"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "owasp": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "points": {
+                        "type": "integer"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "terkunci",
+                          "terbuka",
+                          "selesai"
+                        ]
+                      },
+                      "content": {
+                        "type": "object",
+                        "description": "Ada bila latihan terbuka. hint hanya setelah petunjuk dibuka; explanation hanya setelah selesai (Mahasiswa)."
+                      },
+                      "progress": {
+                        "type": "object",
+                        "properties": {
+                          "attempts": {
+                            "type": "integer"
+                          },
+                          "hint_used": {
+                            "type": "boolean"
+                          },
+                          "earned": {
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "key": {
+                        "type": "object",
+                        "description": "Hanya pada /api/dosen/latihan",
+                        "properties": {
+                          "answers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
