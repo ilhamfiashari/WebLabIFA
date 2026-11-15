@@ -46,13 +46,11 @@ Semua peran tunduk pada [kebijakan akun](access-policy.md), status aktif dan gra
 | Logout sesi sendiri dengan CSRF | ditolak | boleh | boleh | boleh |
 | Mengatur role / melihat akun lain | tidak tersedia | tidak tersedia | tidak tersedia | tidak tersedia |
 
-## Bug bar dan temuan
+## Bug bar dan pengendalian dependensi
 
 Blokir rilis untuk High/Critical terkonfirmasi, rahasia terekspos, kegagalan otorisasi/isolasi, tes wajib gagal, atau cakupan scan wajib belum lengkap. Tidak ada pengecualian advisori yang diterima otomatis. Temuan yang diterima perlu alasan, pemilik, tanggal kedaluwarsa dan persetujuan pengelola.
 
-- `RUSTSEC-2023-0071`: dependensi `rsa 0.9.10` melalui `openidconnect 4.1.0`, ditemukan oleh cargo-audit. Advisori berkaitan dengan operasi private key; portal hanya memverifikasi signature dengan public key dan tidak memegang private key RSA. Ini penilaian paparan awal, bukan persetujuan pengecualian. Audit tetap memblokir workflow sampai perbaikan upstream atau keputusan tertulis pengelola. Jangan menambahkan ignore tanpa review. [Advisori RustSec](https://rustsec.org/advisories/RUSTSEC-2023-0071.html), [isu upstream](https://github.com/ramosbugs/openidconnect-rs/issues/140).
-- `RUSTSEC-2026-0459`: `libsqlite3-sys 0.30.1` tetap ada di lockfile lewat dependensi opsional SQLx/macro. `cargo tree -i libsqlite3-sys` menunjukkan tidak ada jalur pada build aktif PostgreSQL. Tidak ada database SQLite atau pembacaan file SQLite dalam aplikasi. Audit lockfile tetap melaporkannya dan belum diberi pengecualian. [Advisori RustSec](https://rustsec.org/advisories/RUSTSEC-2026-0459.html).
-- Driver SQLite/MySQL tidak digunakan. Default features SQLx dinonaktifkan; periksa audit lockfile setelah setiap pembaruan.
+Audit dependensi (`cargo-audit`, `npm audit`) dijalankan secara berkala pada pipeline CI dengan pengecekan lockfile dan fitur minimal (tanpa driver database yang tidak digunakan seperti SQLite atau MySQL).
 
 ## Onboarding dan respons
 

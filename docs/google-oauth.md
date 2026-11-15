@@ -8,14 +8,11 @@ Buka [Google Cloud Console](https://console.cloud.google.com/), pilih project kh
 
 ## 2. Isi Branding
 
-Isi nama aplikasi **IFA Lab**, email dukungan yang aktif, dan kontak pengembang. Untuk production, isi homepage `https://lab.ilhamfirmanashari.my.id` dan privacy policy `https://lab.ilhamfirmanashari.my.id/privasi`. Authorized domain adalah domain induk `ilhamfirmanashari.my.id`; selesaikan verifikasi kepemilikan domain bila diminta. Pastikan halaman tersebut tersedia melalui HTTPS sebelum pemeriksaan Google.
+Isi nama aplikasi **IFA Lab**, email dukungan yang aktif, dan kontak pengembang. Untuk production, isi homepage dan privacy policy sesuai domain portal HTTPS Anda, lalu selesaikan verifikasi kepemilikan domain bila diminta.
 
 ## 3. Atur Audience
 
-Pilih **External**, karena akses mencakup akun Workspace ITERA dan Gmail pribadi. Mulai dengan status **Testing**. Pada **Test users**, tambahkan hanya:
-
-- `firman.ashari@if.itera.ac.id`
-- `ilhamfirman39@gmail.com`
+Pilih **External**, karena akses mencakup akun Workspace institusi dan akun uji yang diizinkan. Mulai dengan status **Testing**. Pada **Test users**, tambahkan hanya akun yang terdaftar pada konfigurasi `ALLOWED_EMAILS` dan akun penguji mahasiswa yang berwenang.
 
 Tambahkan akun mahasiswa penguji yang memenuhi kebijakan bila diperlukan untuk consent Testing. Daftar test users tidak menggantikan policy backend. Claim `hd` dari ID token wajib diperiksa untuk akun institusi; parameter `hd` pada URL hanya hint. Akun Gmail yang diizinkan tidak memerlukan hd.
 
@@ -28,7 +25,7 @@ Gunakan cakupan identitas minimum: `openid`, email (`https://www.googleapis.com/
 Buka **Clients** → **Create client**, pilih **Web application**, lalu beri nama `IFA Lab Production`. Tambahkan **Authorized redirect URI** persis:
 
 ```text
-https://lab.ilhamfirmanashari.my.id/api/auth/google/callback
+https://portal.institution.example/api/auth/google/callback
 ```
 
 Tidak perlu mengisi JavaScript origins untuk alur redirect server ini. Simpan Client ID dan Client Secret ke konfigurasi backend. Secret tidak boleh dimasukkan ke frontend, variabel `VITE_*`, Git, atau percakapan.
@@ -57,13 +54,13 @@ Production menggunakan `deploy/production.env.example` sebagai dasar `/etc/ifa/r
 
 ```dotenv
 APP_ENV=production
-APP_BASE_URL=https://lab.ilhamfirmanashari.my.id
+APP_BASE_URL=https://portal.institution.example
 OIDC_ISSUER=https://accounts.google.com
 OIDC_CLIENT_ID=isi-client-id-production
 OIDC_CLIENT_SECRET=isi-secret-di-server
-ALLOWED_EMAILS=firman.ashari@if.itera.ac.id,ilhamfirman39@gmail.com
+ALLOWED_EMAILS=dosen-utama@institution.example,admin-cadangan@example.com
 ITERA_WORKSPACE_DOMAIN=isi-domain-dari-claim-hd-yang-terverifikasi
-SUPPORT_EMAIL=firman.ashari@if.itera.ac.id
+SUPPORT_EMAIL=support@institution.example
 ```
 
 Isi juga database dan bind address sesuai contoh deployment. File server dimiliki root:ifa dengan mode 0640. Backend production menolak startup bila allowlist akun istimewa bukan persis dua email tersebut. Isi ITERA_WORKSPACE_DOMAIN dari claim login institusi yang sah; kosong berarti akses institusi ditolak. Restart layanan setelah konfigurasi berubah.
