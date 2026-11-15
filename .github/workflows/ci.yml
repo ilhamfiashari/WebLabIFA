@@ -1,0 +1,123 @@
+name: CI Verification, SAST & Container Checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: ifa_test
+          POSTGRES_PASSWORD: local-only # pragma: allowlist secret -- disposable CI fixture
+          POSTGRES_DB: ifa_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U ifa_test -d ifa_test" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://ifa_test:local-only@127.0.0.1:5432/ifa_test # pragma: allowlist secret -- disposable CI fixture
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: Lab-FrontEnd/package-lock.json
+      - name: Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy && rustup default 1.99.1
+      - name: Frontend dependencies
+        working-directory: Lab-FrontEnd
+        run: npm ci
+      - name: Frontend checks
+        working-directory: Lab-FrontEnd
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm audit --audit-level=high
+          npm sbom --sbom-format cyclonedx > ../frontend-sbom.json
+      - name: Rust checks
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo build --release --locked
+      - name: Browser and OIDC verification
+        run: |
+          cd Lab-FrontEnd
+          npx playwright install --with-deps chromium
+          cd ..
+          node scripts/run-local-checks.mjs
+      - name: SCA and SBOM
+        run: |
+          cargo install cargo-cyclonedx --version 0.5.7 --locked
+          cargo cyclonedx --format json
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo audit --json > rust-audit.json
+      - name: SAST and secret scanning
+        if: ${{ !cancelled() }}
+        run: |
+          python3 -m venv /tmp/ifa-scanners
+          /tmp/ifa-scanners/bin/pip install -r security/requirements.txt
+          export PATH="/tmp/ifa-scanners/bin:$PATH"
+          /tmp/ifa-scanners/bin/semgrep --test security
+          /tmp/ifa-scanners/bin/semgrep scan --config security/semgrep.yml --error --json Lab-Backend/src Lab-FrontEnd/src > semgrep.json
+          /tmp/ifa-scanners/bin/python scripts/scan-secrets.py secrets.json
+          python3 scripts/check-secrets.py secrets.json
+      - name: Evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase1-${{ github.sha }}
+          path: |
+            docs/screenshots
+            Lab-FrontEnd/playwright-report
+            Lab-FrontEnd/test-results
+            frontend-sbom.json
+            rust-audit.json
+            **/bom.json
+            semgrep.json
+            secrets.json
+
+  containers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate Compose definitions
+        run: |
+          docker compose --profile app config --quiet
+          cp deploy/production.env.example deploy/production.env
+          POSTGRES_MIGRATOR_PASSWORD=ci-check-only docker compose -f deploy/compose.prod.yaml config --quiet
+          rm -f deploy/production.env
+      - name: Build backend & frontend containers
+        run: |
+          docker build -t ifa-lab-backend:ci -f Lab-Backend/Dockerfile .
+          docker build -t ifa-lab-frontend:ci -f Lab-FrontEnd/Dockerfile .
+      - name: Verify non-root container users
+        run: |
+          test "$(docker inspect --format '{{.Config.User}}' ifa-lab-backend:ci)" = "10001:10001"
+          test -n "$(docker inspect --format '{{.Config.User}}' ifa-lab-frontend:ci)"
+      - name: Container vulnerability scan (Trivy)
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: ifa-lab-backend:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Frontend container vulnerability scan (Trivy)
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: ifa-lab-frontend:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
