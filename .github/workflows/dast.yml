@@ -1,0 +1,83 @@
+name: Passive DAST on isolated fixture
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Lab-Backend/**"
+      - "Lab-FrontEnd/src/**"
+      - "deploy/**"
+      - "security/**"
+      - ".github/workflows/dast.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Lab-Backend/**"
+      - "Lab-FrontEnd/src/**"
+      - "deploy/**"
+      - "security/**"
+      - ".github/workflows/dast.yml"
+permissions:
+  contents: read
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  zap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: ifa_test
+          POSTGRES_PASSWORD: local-only # pragma: allowlist secret -- disposable CI fixture
+          POSTGRES_DB: ifa_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U ifa_test -d ifa_test" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://ifa_test:local-only@127.0.0.1:5432/ifa_test # pragma: allowlist secret -- disposable CI fixture
+      ZAP_PROXY: http://127.0.0.1:8090
+      IFA_EXTERNAL_PREVIEW: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Build and browser dependencies
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+          cd Lab-FrontEnd
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+          cd ..
+          sudo apt-get update
+          sudo apt-get install -y nginx
+      - name: Start isolated production frontend and passive proxy
+        run: |
+          mkdir -p reports
+          chmod 777 reports
+          sed "s|WORKSPACE|$GITHUB_WORKSPACE|g" security/nginx-test.conf > reports/nginx-test.conf
+          nginx -c "$GITHUB_WORKSPACE/reports/nginx-test.conf"
+          docker run -d --name ifa-zap --network host -v "$GITHUB_WORKSPACE/security:/zap/wrk/security:ro" -v "$GITHUB_WORKSPACE/reports:/zap/wrk/reports:rw" zaproxy/zap-stable:2.16.1 zap.sh -daemon -host 127.0.0.1 -port 8090 -config api.disablekey=true
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8090/JSON/core/view/version/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Browser traffic, authenticated coverage and Automation Framework
+        run: node scripts/run-local-checks.mjs
+      - name: DAST evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: passive-dast-${{ github.sha }}
+          path: |
+            reports
+            Lab-FrontEnd/playwright-report
+      - name: Teardown
+        if: always()
+        run: |
+          docker rm -f ifa-zap || true
+          if test -f reports/nginx.pid; then kill "$(cat reports/nginx.pid)"; fi
