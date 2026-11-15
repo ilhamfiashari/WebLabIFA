@@ -1,0 +1,330 @@
+{
+  "tracks": [
+    { "id": "web", "title": "Keamanan Web", "description": "Kenali celah aplikasi web dari OWASP Top 10:2025, lalu pilih perbaikan yang tepat." },
+    { "id": "iot", "title": "Keamanan IoT", "description": "Telusuri risiko perangkat ESP32, MQTT, dan pembaruan firmware." }
+  ],
+  "levels": [
+    { "level": 1, "name": "Mudah", "points": 10 },
+    { "level": 2, "name": "Menengah", "points": 20 },
+    { "level": 3, "name": "Sulit", "points": 30 },
+    { "level": 4, "name": "Ahli", "points": 50 }
+  ],
+  "exercises": [
+    {
+      "id": "web-1-1", "track": "web", "level": 1, "title": "Nilai milik teman", "owasp": "A01",
+      "scenario": "Portal nilai memuat data melalui permintaan di bawah. Saat NIM diganti dengan NIM teman, nilai teman ikut tampil.",
+      "code": "GET /api/nilai?nim=123140051\nCookie: session=...", "code_lang": "http",
+      "question": "Kategori kerentanan apa yang paling tepat?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Injection" },
+        { "key": "b", "text": "Broken Access Control (IDOR)" },
+        { "key": "c", "text": "Cryptographic Failures" },
+        { "key": "d", "text": "Security Misconfiguration" }
+      ],
+      "answer": ["b"],
+      "hint": "Server tidak memeriksa apakah NIM pada permintaan adalah milik pemilik sesi.",
+      "explanation": "Ini IDOR (Insecure Direct Object Reference), bagian dari A01 Broken Access Control. Server harus mengambil NIM dari sesi atau memeriksa kepemilikan data sebelum mengembalikannya, bukan mempercayai parameter dari klien."
+    },
+    {
+      "id": "web-1-2", "track": "web", "level": 1, "title": "Login tanpa kata sandi", "owasp": "A05",
+      "scenario": "Form login membangun kueri dengan menggabungkan string input pengguna.",
+      "code": "query = \"SELECT * FROM users WHERE username='\" + u + \"' AND password='\" + p + \"'\"", "code_lang": "python",
+      "question": "Input username mana yang membuat penyerang masuk sebagai admin tanpa mengetahui kata sandi?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "admin" },
+        { "key": "b", "text": "<script>admin</script>" },
+        { "key": "c", "text": "admin' -- " },
+        { "key": "d", "text": "../admin" }
+      ],
+      "answer": ["c"],
+      "hint": "Tanda kutip menutup string, lalu sisa kueri perlu dinonaktifkan.",
+      "explanation": "Input admin' --  menutup string username dan menjadikan pemeriksaan password sebagai komentar SQL. Perbaikannya: parameterized query (prepared statement), bukan penyaringan karakter secara manual."
+    },
+    {
+      "id": "web-1-3", "track": "web", "level": 1, "title": "Halaman dalam bingkai", "owasp": "A02",
+      "scenario": "Situs penyerang memuat halaman pengaturan akun di dalam iframe transparan dan menipu korban agar menekan tombol hapus akun.",
+      "question": "Sebutkan satu header respons HTTP yang mencegah halaman dimuat dalam iframe situs lain.",
+      "kind": "isian",
+      "answer": ["x-frame-options", "content-security-policy", "csp", "content-security-policy: frame-ancestors", "frame-ancestors", "x-frame-options: deny"],
+      "hint": "Serangan ini disebut clickjacking. Ada header lama dan direktif CSP yang lebih baru.",
+      "explanation": "Gunakan Content-Security-Policy: frame-ancestors 'none' (atau 'self'). Header lama X-Frame-Options: DENY masih berguna untuk peramban lama. Keduanya termasuk konfigurasi keamanan (A02)."
+    },
+    {
+      "id": "web-2-1", "track": "web", "level": 2, "title": "Komentar yang menjalankan skrip", "owasp": "A05",
+      "scenario": "Forum kelas menampilkan komentar dengan kode React berikut. Komentar berisi tag <img onerror> berhasil mencuri data dari peramban pembaca.",
+      "code": "<div dangerouslySetInnerHTML={{ __html: comment.body }} />", "code_lang": "tsx",
+      "question": "Perbaikan mana yang paling tepat?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Render sebagai teks biasa: <div>{comment.body}</div>, atau sanitasi dengan pustaka teruji bila HTML memang dibutuhkan" },
+        { "key": "b", "text": "Hapus kata \"script\" dari komentar sebelum disimpan" },
+        { "key": "c", "text": "Batasi panjang komentar menjadi 100 karakter" },
+        { "key": "d", "text": "Simpan komentar dalam Base64" }
+      ],
+      "answer": ["a"],
+      "hint": "Payload tidak memakai tag <script> sama sekali.",
+      "explanation": "React melakukan escaping otomatis bila konten dirender sebagai teks. Daftar hitam kata seperti \"script\" mudah dilewati (onerror, svg onload). Bila HTML wajib, gunakan sanitizer teruji seperti DOMPurify dan tambahkan CSP sebagai lapisan kedua."
+    },
+    {
+      "id": "web-2-2", "track": "web", "level": 2, "title": "Menyimpan kata sandi", "owasp": "A04",
+      "scenario": "Basis data bocor dan kolom password berisi hash MD5 tanpa salt. Sebagian besar hash langsung ditemukan di tabel pelangi.",
+      "question": "Algoritma mana yang paling tepat untuk menyimpan kata sandi?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "SHA-256 dengan satu salt global" },
+        { "key": "b", "text": "AES-256 dengan kunci di file konfigurasi" },
+        { "key": "c", "text": "Argon2id dengan salt unik per pengguna" },
+        { "key": "d", "text": "MD5 diulang dua kali" }
+      ],
+      "answer": ["c"],
+      "hint": "Cari fungsi yang sengaja dibuat lambat dan memakan memori.",
+      "explanation": "Argon2id adalah fungsi hash kata sandi yang lambat, memory-hard, dan memakai salt unik. SHA-256 terlalu cepat untuk ditebak massal, sedangkan AES bersifat dapat dibalik sehingga bocornya kunci membuka semua kata sandi."
+    },
+    {
+      "id": "web-2-3", "track": "web", "level": 2, "title": "Token tanpa tanda tangan", "owasp": "A07",
+      "scenario": "Server menerima JWT dan membaca algoritma dari header token itu sendiri. Penyerang mengubah header lalu menghapus bagian tanda tangan, dan server tetap menerima token.",
+      "code": "{\"alg\":\"???\",\"typ\":\"JWT\"}.{\"sub\":\"123140051\",\"role\":\"admin\"}.", "code_lang": "json",
+      "question": "Nilai alg apa yang dipakai penyerang?",
+      "kind": "isian",
+      "answer": ["none"],
+      "hint": "Nilainya menyatakan bahwa token tidak ditandatangani.",
+      "explanation": "alg \"none\" menyatakan token tanpa tanda tangan. Server harus menetapkan algoritma yang diterima di sisi server (misalnya hanya RS256) dan tidak pernah mempercayai header alg dari klien."
+    },
+    {
+      "id": "web-3-1", "track": "web", "level": 3, "title": "Pratinjau tautan ke dalam", "owasp": "A01",
+      "scenario": "Fitur pratinjau tautan mengambil URL apa pun yang dikirim pengguna dari server aplikasi yang berjalan di cloud.",
+      "code": "POST /api/preview\n{\"url\": \"http://???/latest/meta-data/iam/security-credentials/\"}", "code_lang": "http",
+      "question": "Alamat IP apa yang dipakai penyerang untuk mengambil kredensial dari layanan metadata cloud?",
+      "kind": "isian",
+      "answer": ["169.254.169.254"],
+      "hint": "Alamatnya berada di rentang link-local 169.254.0.0/16.",
+      "explanation": "169.254.169.254 adalah endpoint metadata instance pada banyak penyedia cloud. Cegah SSRF dengan allowlist tujuan, resolusi DNS lalu blokir alamat privat/link-local, menolak redirect, dan mewajibkan IMDSv2."
+    },
+    {
+      "id": "web-3-2", "track": "web", "level": 3, "title": "Profil yang berubah peran", "owasp": "A01",
+      "scenario": "Endpoint ubah profil menyalin seluruh isi JSON ke objek pengguna. Mahasiswa mengirim permintaan di bawah dan menjadi admin.",
+      "code": "PATCH /api/profil\n{\"name\": \"Nadia\", \"role\": \"admin\"}\n\n// server\nObject.assign(user, req.body); await user.save()", "code_lang": "js",
+      "question": "Apa akar masalah dan perbaikan yang tepat?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Validasi panjang field name" },
+        { "key": "b", "text": "Mass assignment; terima hanya field yang diizinkan (allowlist) dan ubah peran lewat endpoint admin terpisah" },
+        { "key": "c", "text": "Enkripsi body permintaan dengan HTTPS" },
+        { "key": "d", "text": "Sembunyikan field role dari tampilan form" }
+      ],
+      "answer": ["b"],
+      "hint": "Server mempercayai semua properti yang dikirim klien.",
+      "explanation": "Ini mass assignment. Gunakan DTO atau allowlist field (misalnya hanya name dan foto), dan lakukan perubahan peran pada endpoint terpisah yang memeriksa otorisasi admin. Menyembunyikan field di UI tidak berpengaruh karena penyerang mengirim permintaan langsung."
+    },
+    {
+      "id": "web-3-3", "track": "web", "level": 3, "title": "Cookie SameSite=Lax", "owasp": "A01",
+      "scenario": "Cookie sesi memakai SameSite=Lax. Pengembang menganggap CSRF sudah tertangani sepenuhnya, padahal aksi hapus data masih memakai GET.",
+      "question": "Permintaan lintas situs mana yang tetap membawa cookie SameSite=Lax?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "POST dari form tersembunyi di situs penyerang" },
+        { "key": "b", "text": "fetch() dengan credentials: 'include' dari situs penyerang" },
+        { "key": "c", "text": "Navigasi tingkat atas dengan metode GET, misalnya mengklik tautan" },
+        { "key": "d", "text": "Gambar <img> yang dimuat dari situs penyerang" }
+      ],
+      "answer": ["c"],
+      "hint": "Lax tetap mengizinkan pengguna berpindah situs lewat tautan biasa.",
+      "explanation": "Lax mengirim cookie pada navigasi tingkat atas dengan metode aman (GET). Karena itu aksi yang mengubah data tidak boleh memakai GET. Gunakan POST/PUT/DELETE disertai token CSRF dan pemeriksaan Origin."
+    },
+    {
+      "id": "web-4-1", "track": "web", "level": 4, "title": "Paket internal tertukar", "owasp": "A03",
+      "scenario": "Proyek memakai paket internal bernama ifa-utils dari registry privat. Penyerang menerbitkan ifa-utils versi 99.0.0 di registry publik, lalu pipeline CI memasang versi publik tersebut.",
+      "question": "Kombinasi perbaikan mana yang paling kuat?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Memakai versi \"latest\" agar selalu mendapat perbaikan" },
+        { "key": "b", "text": "Menjalankan npm audit setiap minggu" },
+        { "key": "c", "text": "Menghapus file lock agar dependensi dipasang ulang" },
+        { "key": "d", "text": "Scope milik organisasi (@ifa/utils) yang dipetakan ke registry privat, lockfile dengan integrity hash, dan npm ci di CI" }
+      ],
+      "answer": ["d"],
+      "hint": "Penyerang memanfaatkan nama tanpa scope dan versi tertinggi.",
+      "explanation": "Dependency confusion terjadi saat resolver memilih versi tertinggi dari registry publik. Scope organisasi yang dipetakan ke registry privat menutup celah penamaan, sedangkan lockfile berintegritas dan npm ci memastikan CI hanya memasang artefak yang sudah ditinjau."
+    },
+    {
+      "id": "web-4-2", "track": "web", "level": 4, "title": "Voucher dipakai sepuluh kali", "owasp": "A06",
+      "scenario": "Voucher sekali pakai dicek lalu ditandai terpakai pada dua langkah terpisah. Penyerang mengirim 10 permintaan bersamaan dan semuanya berhasil.",
+      "code": "if (!voucher.used) {\n  await grantCredit(user)\n  voucher.used = true\n  await voucher.save()\n}", "code_lang": "js",
+      "question": "Apa nama kelas kerentanan ini?",
+      "kind": "isian",
+      "answer": ["race condition", "toctou", "time of check to time of use", "time-of-check to time-of-use", "kondisi balapan", "race"],
+      "hint": "Masalahnya terletak pada jeda antara pemeriksaan dan penggunaan.",
+      "explanation": "Ini race condition (TOCTOU). Perbaiki dengan operasi atomik di basis data, misalnya UPDATE vouchers SET used=true WHERE id=$1 AND used=false RETURNING id, lalu berikan kredit hanya bila baris berhasil diperbarui, atau gunakan row lock dalam transaksi."
+    },
+    {
+      "id": "web-4-3", "track": "web", "level": 4, "title": "Gagal tapi terbuka", "owasp": "A10",
+      "scenario": "Middleware autentikasi menangani error verifikasi token dengan cara berikut. Saat layanan kunci publik sedang gangguan, semua permintaan lolos.",
+      "code": "try {\n  req.user = await verify(token)\n} catch (err) {\n  logger.warn(err)\n}\nreturn next()", "code_lang": "js",
+      "question": "Apa masalah utamanya?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Logger seharusnya memakai level error" },
+        { "key": "b", "text": "Kondisi luar biasa ditangani secara fail-open; seharusnya permintaan ditolak (fail-closed) saat verifikasi gagal" },
+        { "key": "c", "text": "verify() seharusnya dipanggil tanpa await" },
+        { "key": "d", "text": "Token sebaiknya disimpan di localStorage" }
+      ],
+      "answer": ["b"],
+      "hint": "Perhatikan apa yang terjadi setelah blok catch selesai.",
+      "explanation": "Penanganan error yang membiarkan permintaan lanjut adalah fail-open (A10 Mishandling of Exceptional Conditions). Saat verifikasi gagal karena alasan apa pun, middleware harus mengembalikan 401/503 dan tidak memanggil next()."
+    },
+    {
+      "id": "iot-1-1", "track": "iot", "level": 1, "title": "Broker yang terbuka", "owasp": null,
+      "scenario": "Hasil pemindaian jaringan kampus menemukan broker MQTT yang menerima koneksi tanpa TLS dan tanpa username.",
+      "question": "Port TCP standar MQTT tanpa TLS adalah?",
+      "kind": "isian",
+      "answer": ["1883"],
+      "hint": "Port ini empat digit dan diawali 18.",
+      "explanation": "MQTT tanpa enkripsi memakai port 1883, sedangkan MQTT over TLS memakai 8883. Broker yang terbuka di 1883 tanpa autentikasi memungkinkan siapa pun membaca dan mengirim pesan."
+    },
+    {
+      "id": "iot-1-2", "track": "iot", "level": 1, "title": "Kata sandi pabrik", "owasp": null,
+      "scenario": "Ratusan kamera IP di laboratorium memakai akun admin/admin bawaan pabrik dan bisa diakses dari jaringan tamu.",
+      "question": "Mitigasi apa yang paling efektif dari sisi desain perangkat?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Mencetak kata sandi bawaan di buku manual" },
+        { "key": "b", "text": "Mengganti port web dari 80 ke 8080" },
+        { "key": "c", "text": "Mewajibkan kata sandi unik saat penyiapan pertama atau kredensial unik per perangkat" },
+        { "key": "d", "text": "Menyembunyikan SSID Wi-Fi" }
+      ],
+      "answer": ["c"],
+      "hint": "Kata sandi yang sama di banyak perangkat adalah masalah utamanya.",
+      "explanation": "Kredensial bawaan yang seragam dimanfaatkan botnet seperti Mirai. Perangkat harus memaksa pengguna membuat kata sandi saat penyiapan atau dikirim dengan kredensial unik per unit. Mengganti port atau menyembunyikan SSID hanya mengaburkan."
+    },
+    {
+      "id": "iot-1-3", "track": "iot", "level": 1, "title": "Berlangganan semua topik", "owasp": null,
+      "scenario": "Pada broker tanpa ACL, penyerang ingin menerima seluruh pesan dari semua sensor sekaligus.",
+      "code": "mosquitto_sub -h broker.lab -t \"?\" -v", "code_lang": "bash",
+      "question": "Wildcard topik MQTT apa yang dipakai untuk semua level topik?",
+      "kind": "isian",
+      "answer": ["#"],
+      "hint": "Ada dua wildcard: satu untuk satu level, satu lagi untuk banyak level.",
+      "explanation": "# adalah wildcard multi-level, sedangkan + hanya satu level. Broker harus menerapkan ACL per klien agar langganan # tidak membuka seluruh data."
+    },
+    {
+      "id": "iot-2-1", "track": "iot", "level": 2, "title": "MQTT terenkripsi", "owasp": null,
+      "scenario": "Tim memindahkan sensor kelembapan ke koneksi MQTT yang terenkripsi TLS.",
+      "question": "Port TCP standar MQTT over TLS adalah?",
+      "kind": "isian",
+      "answer": ["8883"],
+      "hint": "Mirip port tanpa TLS, tetapi diawali 88.",
+      "explanation": "MQTT over TLS memakai port 8883. Pastikan perangkat memverifikasi sertifikat broker (bukan setInsecure()) agar TLS benar-benar melindungi dari MITM."
+    },
+    {
+      "id": "iot-2-2", "track": "iot", "level": 2, "title": "Wi-Fi di dalam firmware", "owasp": null,
+      "scenario": "Firmware ESP32 menyimpan SSID dan kata sandi Wi-Fi sebagai konstanta. Seseorang membaca isi flash melalui USB dan menemukan kredensial dengan perintah strings.",
+      "code": "const char* WIFI_PASS = \"LabIFA2026!\";", "code_lang": "cpp",
+      "question": "Langkah mana yang paling melindungi rahasia pada perangkat yang jatuh ke tangan penyerang?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Aktifkan flash encryption dan secure boot, simpan kredensial di NVS terenkripsi, dan pakai kredensial unik per perangkat" },
+        { "key": "b", "text": "Ubah kata sandi menjadi Base64 di kode" },
+        { "key": "c", "text": "Gunakan nama variabel yang tidak jelas" },
+        { "key": "d", "text": "Kompilasi dengan optimasi -O3" }
+      ],
+      "answer": ["a"],
+      "hint": "Encoding dan obfuscation bukan enkripsi.",
+      "explanation": "Isi flash ESP32 dapat dibaca bila tidak dienkripsi. Flash encryption, secure boot, dan NVS terenkripsi melindungi rahasia saat perangkat diambil. Kredensial unik per perangkat membatasi dampak bila satu unit bocor."
+    },
+    {
+      "id": "iot-2-3", "track": "iot", "level": 2, "title": "Pairing Bluetooth", "owasp": null,
+      "scenario": "Gelang sensor memakai BLE pairing mode \"Just Works\" karena tidak memiliki layar atau tombol.",
+      "question": "Apa kelemahan utama mode ini?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Tidak ada enkripsi sama sekali setelah pairing" },
+        { "key": "b", "text": "Tidak ada perlindungan terhadap man-in-the-middle saat pairing" },
+        { "key": "c", "text": "Jangkauan sinyal menjadi lebih pendek" },
+        { "key": "d", "text": "Baterai cepat habis" }
+      ],
+      "answer": ["b"],
+      "hint": "Tidak ada angka yang dibandingkan pengguna saat pairing.",
+      "explanation": "Just Works tetap mengenkripsi tautan, tetapi tidak mengautentikasi pihak lain sehingga rentan MITM saat pairing. Gunakan LE Secure Connections dengan passkey, numeric comparison, atau OOB bila memungkinkan."
+    },
+    {
+      "id": "iot-3-1", "track": "iot", "level": 3, "title": "Pembaruan OTA palsu", "owasp": null,
+      "scenario": "Perangkat mengunduh firmware dari URL HTTP dan langsung memasangnya. Penyerang di jaringan yang sama mengganti file firmware.",
+      "question": "Perbaikan mana yang menjamin hanya firmware resmi yang berjalan?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Memeriksa ukuran file sebelum dipasang" },
+        { "key": "b", "text": "Mengganti nama file menjadi acak" },
+        { "key": "c", "text": "Memakai checksum CRC32 yang diunduh dari server yang sama" },
+        { "key": "d", "text": "Menandatangani firmware dan memverifikasi tanda tangan di perangkat (secure boot), serta mengunduh lewat HTTPS dengan verifikasi sertifikat" }
+      ],
+      "answer": ["d"],
+      "hint": "Checksum dari sumber yang sama bisa ikut diganti penyerang.",
+      "explanation": "Tanda tangan digital dengan kunci privat yang hanya dimiliki pengembang membuktikan keaslian firmware. Perangkat memverifikasi dengan kunci publik yang tertanam. CRC hanya mendeteksi kerusakan, bukan pemalsuan."
+    },
+    {
+      "id": "iot-3-2", "track": "iot", "level": 3, "title": "Protokol CoAP", "owasp": null,
+      "scenario": "Sensor tanah memakai CoAP tanpa DTLS dan bisa dipakai untuk serangan amplifikasi UDP.",
+      "question": "Port UDP standar CoAP tanpa DTLS adalah?",
+      "kind": "isian",
+      "answer": ["5683"],
+      "hint": "Port CoAP dengan DTLS adalah 5684.",
+      "explanation": "CoAP memakai UDP 5683, sedangkan CoAP over DTLS memakai 5684. Respons CoAP yang lebih besar dari permintaan dapat disalahgunakan untuk amplifikasi DDoS bila layanan terbuka ke internet."
+    },
+    {
+      "id": "iot-3-3", "track": "iot", "level": 3, "title": "Perintah yang diputar ulang", "owasp": null,
+      "scenario": "Pintu laboratorium terbuka saat menerima pesan MQTT {\"cmd\":\"open\"} di topik lab/pintu. Penyerang merekam pesan lalu mengirim ulang keesokan harinya.",
+      "question": "Mekanisme mana yang mencegah serangan replay?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Menambahkan counter atau nonce dan timestamp yang diautentikasi dengan MAC atau tanda tangan, lalu menolak nilai lama" },
+        { "key": "b", "text": "Mengganti nama topik secara berkala" },
+        { "key": "c", "text": "Mengirim perintah dua kali" },
+        { "key": "d", "text": "Mengompresi payload" }
+      ],
+      "answer": ["a"],
+      "hint": "Pesan yang identik tidak boleh diterima dua kali.",
+      "explanation": "Replay dicegah dengan nilai sekali pakai (nonce/counter monotonic) dan waktu yang diikat ke pesan melalui MAC atau tanda tangan. Perangkat menyimpan nilai terakhir dan menolak pesan dengan nilai yang sama atau lebih lama."
+    },
+    {
+      "id": "iot-4-1", "track": "iot", "level": 4, "title": "Membaca flash ESP32", "owasp": null,
+      "scenario": "Penyerang membaca seluruh flash ESP32 dengan esptool read_flash. Tim ingin isi flash tidak bisa dibaca tanpa kunci di eFuse.",
+      "question": "Fitur ESP32 apa yang perlu diaktifkan?",
+      "kind": "isian",
+      "answer": ["flash encryption", "enkripsi flash", "flash-encryption", "esp32 flash encryption"],
+      "hint": "Fitur ini menyimpan kunci di eFuse dan mengenkripsi isi memori flash.",
+      "explanation": "Flash encryption mengenkripsi isi flash dengan kunci di eFuse yang tidak bisa dibaca perangkat lunak. Gabungkan dengan secure boot dan mode release agar bootloader tidak bisa diganti dan JTAG/UART download dinonaktifkan."
+    },
+    {
+      "id": "iot-4-2", "track": "iot", "level": 4, "title": "ACL broker kelas", "owasp": null,
+      "scenario": "Semua perangkat kelas memakai satu akun MQTT yang sama. Satu sensor yang diretas mengirim perintah ke aktuator kelas lain di topik kelas/IF-3B/aktuator/kipas.",
+      "question": "Desain mana yang paling tepat?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Memakai satu akun bersama dengan kata sandi lebih panjang" },
+        { "key": "b", "text": "Memindahkan broker ke port acak" },
+        { "key": "c", "text": "Identitas unik per perangkat (misalnya sertifikat klien) dan ACL berbasis identitas: sensor hanya publish ke topik datanya sendiri" },
+        { "key": "d", "text": "Mengizinkan wildcard # untuk semua perangkat agar mudah dipantau" }
+      ],
+      "answer": ["c"],
+      "hint": "Terapkan least privilege per perangkat, bukan per kelas.",
+      "explanation": "Dengan identitas per perangkat, broker dapat menerapkan ACL seperti pattern write kelas/%u/sensor/#. Perangkat yang diretas hanya bisa memengaruhi topiknya sendiri, dan kredensialnya bisa dicabut tanpa mengganggu perangkat lain."
+    },
+    {
+      "id": "iot-4-3", "track": "iot", "level": 4, "title": "Glitch saat boot", "owasp": null,
+      "scenario": "Peneliti menurunkan tegangan sesaat pada saat bootloader memverifikasi tanda tangan, dan firmware tanpa tanda tangan berhasil berjalan.",
+      "question": "Teknik serangan ini disebut apa?",
+      "kind": "pilihan",
+      "options": [
+        { "key": "a", "text": "Cold boot attack" },
+        { "key": "b", "text": "Fault injection (voltage glitching)" },
+        { "key": "c", "text": "Side-channel timing attack" },
+        { "key": "d", "text": "Brute force kunci eFuse" }
+      ],
+      "answer": ["b"],
+      "hint": "Penyerang sengaja membuat prosesor salah mengeksekusi instruksi.",
+      "explanation": "Voltage glitching adalah bentuk fault injection yang membuat prosesor melewati percabangan penting seperti verifikasi tanda tangan. Mitigasinya meliputi pemeriksaan berlapis, deteksi brownout, dan chip dengan perlindungan glitch."
+    }
+  ]
+}
