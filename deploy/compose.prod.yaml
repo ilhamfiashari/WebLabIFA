@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: ifa_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD wajib diisi}
+      POSTGRES_DB: ifa_lab
+    volumes:
+      - ifa_pg_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ifa_migrator -d ifa_lab"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=256MB", "-c", "work_mem=4MB"]
+    networks:
+      - internal
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: Lab-Backend/Dockerfile
+    command: ["migrate"]
+    env_file:
+      - production.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  backend:
+    build:
+      context: ..
+      dockerfile: Lab-Backend/Dockerfile
+    env_file:
+      - production.env
+    environment:
+      BIND_ADDR: 0.0.0.0:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: Lab-FrontEnd/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+networks:
+  internal:
+    internal: false
+
+volumes:
+  ifa_pg_prod:

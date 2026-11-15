@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: ifa_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-only} # pragma: allowlist secret -- local development only
+      POSTGRES_DB: ifa_lab
+    ports:
+      - "127.0.0.1:${PG_HOST_PORT:-55432}:5432"
+    volumes:
+      - ifa_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ifa_migrator -d ifa_lab"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    command: ["postgres", "-c", "max_connections=20", "-c", "shared_buffers=128MB", "-c", "work_mem=2MB"]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Lab-Backend/Dockerfile
+    profiles: ["app"]
+    command: ["migrate"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      DATABASE_URL: postgres://ifa_migrator:${POSTGRES_PASSWORD:-local-only}@postgres:5432/ifa_lab # pragma: allowlist secret -- local development only
+      MIGRATION_DATABASE_URL: postgres://ifa_migrator:${POSTGRES_PASSWORD:-local-only}@postgres:5432/ifa_lab # pragma: allowlist secret -- local development only
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-local-dev-client-id}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-local-dev-client-secret} # pragma: allowlist secret -- local development only
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-firman.ashari@if.itera.ac.id,ilhamfirman39@gmail.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  backend:
+    build:
+      context: .
+      dockerfile: Lab-Backend/Dockerfile
+    profiles: ["app"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      BIND_ADDR: 0.0.0.0:3000
+      DATABASE_URL: postgres://ifa_migrator:${POSTGRES_PASSWORD:-local-only}@postgres:5432/ifa_lab # pragma: allowlist secret -- local development only
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-local-dev-client-id}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-local-dev-client-secret} # pragma: allowlist secret -- local development only
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-firman.ashari@if.itera.ac.id,ilhamfirman39@gmail.com}
+      STUDENT_EMAILS: ${STUDENT_EMAILS:-}
+      ITERA_WORKSPACE_DOMAIN: ${ITERA_WORKSPACE_DOMAIN:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+    ports:
+      - "127.0.0.1:${API_PORT:-3008}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Lab-FrontEnd/Dockerfile
+    profiles: ["app"]
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  ifa_pg:
