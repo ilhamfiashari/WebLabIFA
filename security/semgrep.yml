@@ -1,0 +1,28 @@
+rules:
+  - id: lab-no-raw-html
+    languages: [typescript]
+    severity: ERROR
+    message: Render payload praktikum sebagai teks; raw HTML tidak diizinkan.
+    pattern-either:
+      - pattern: <$TAG ... dangerouslySetInnerHTML={...} ... />
+      - pattern: $EL.innerHTML = $INPUT
+  - id: rust-no-shell-process
+    languages: [rust]
+    severity: ERROR
+    message: Proses sistem tidak diizinkan pada runtime portal.
+    pattern-either:
+      - pattern: std::process::Command::new(...)
+      - pattern: Command::new(...)
+      - pattern: tokio::process::Command::new(...)
+  - id: rust-no-formatted-sql
+    languages: [rust]
+    severity: ERROR
+    message: Gunakan binding parameter SQLx, jangan rakit kueri dengan input.
+    patterns:
+      - pattern-either:
+          - pattern: sqlx::query(&format!(...))
+          - pattern: sqlx::query_as(&format!(...))
+          - pattern: |
+              let $SQL = format!(...);
+              ...
+              sqlx::query(&$SQL)
