@@ -1,0 +1,3 @@
+[workspace]
+members = ["Lab-Backend"]
+resolver = "2"
