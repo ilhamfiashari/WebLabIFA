@@ -1,0 +1,31 @@
+[Unit]
+Description=IFA Lab API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ifa
+Group=ifa
+WorkingDirectory=/srv/ifa/current
+EnvironmentFile=/etc/ifa/runtime.env
+ExecStart=/srv/ifa/current/target/release/ifa-lab-api
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
