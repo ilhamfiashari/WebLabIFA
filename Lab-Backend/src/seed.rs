@@ -553,6 +553,8 @@ pub async fn seed_demo_data(
 
     tx.commit().await?;
 
+    crate::security_account::seed_security_demo_data(pool).await;
+
     Ok(SeedReport {
         students_created,
         students_total: SEED_STUDENTS.len(),
