@@ -13,7 +13,10 @@ use uuid::Uuid;
 
 use super::{
     telemetry::{extract_telemetry, record_activity},
-    totp::{generate_backup_codes, generate_totp_secret, sha256_hex, verify_totp_code},
+    totp::{
+        argon2_hash_secret, argon2_verify_secret, generate_backup_codes, generate_totp_secret,
+        sha256_hex, verify_totp_code,
+    },
 };
 use crate::{ApiError, AppState, hash, identity, verify_mutation};
 
@@ -135,6 +138,7 @@ pub async fn get_security_settings(
         "mfa_enabled": mfa_enabled,
         "totp_verified": totp_verified,
         "backup_codes_remaining": backup_remaining.0,
+        "backup_hash_algorithm": "Argon2id",
         "passkeys": passkeys,
         "sessions": sessions,
         "notifications": notifications,
@@ -328,7 +332,8 @@ pub async fn regenerate_backup_codes(
         .execute(&mut *tx)
         .await?;
     for code in &codes {
-        let digest = sha256_hex(&code.replace('-', ""));
+        let digest = argon2_hash_secret(&code.replace('-', ""))
+            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR))?;
         sqlx::query("INSERT INTO mfa_backup_codes(id,user_id,code_hash) VALUES($1,$2,$3)")
             .bind(Uuid::new_v4())
             .bind(actor.id)
@@ -389,16 +394,35 @@ pub async fn verify_mfa_challenge(
     }
 
     if method.is_none() {
-        let digest = sha256_hex(&trimmed.replace('-', ""));
-        let consumed: Option<(Uuid,)> = sqlx::query_as(
-            "UPDATE mfa_backup_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING id",
+        let normalized = trimmed.replace('-', "");
+        let sha_digest = sha256_hex(&normalized);
+        let unused_codes: Vec<(Uuid, String)> = sqlx::query_as(
+            "SELECT id, code_hash FROM mfa_backup_codes WHERE user_id=$1 AND used_at IS NULL",
         )
         .bind(actor.id)
-        .bind(digest)
-        .fetch_optional(&state.pool)
+        .fetch_all(&state.pool)
         .await?;
-        if consumed.is_some() {
-            method = Some("backup_code");
+
+        let matched_id = unused_codes.into_iter().find_map(|(id, stored)| {
+            let is_match = if stored.starts_with("$argon2") {
+                argon2_verify_secret(&normalized, &stored)
+            } else {
+                stored == sha_digest
+            };
+            is_match.then_some(id)
+        });
+
+        if let Some(code_id) = matched_id {
+            let consumed: Option<(Uuid,)> = sqlx::query_as(
+                "UPDATE mfa_backup_codes SET used_at=now() WHERE id=$1 AND user_id=$2 AND used_at IS NULL RETURNING id",
+            )
+            .bind(code_id)
+            .bind(actor.id)
+            .fetch_optional(&state.pool)
+            .await?;
+            if consumed.is_some() {
+                method = Some("backup_code");
+            }
         }
     }
 
@@ -657,4 +681,105 @@ pub async fn mark_notifications_read(
         .await?;
     }
     Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Serialize, FromRow)]
+struct ExerciseBackupRow {
+    exercise_id: String,
+    attempts: i32,
+    hint_used: bool,
+    points: i32,
+    completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, FromRow)]
+struct LabSessionBackupRow {
+    id: Uuid,
+    lab_id: String,
+    level_id: String,
+    current_step: String,
+    verification_passed: bool,
+    score: Option<i32>,
+}
+
+pub async fn export_account_backup(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let actor = identity(&state, &jar).await?;
+    let settings: Option<(Option<String>, bool, bool, bool, bool, bool)> = sqlx::query_as(
+        "SELECT secondary_email, notify_assignments, notify_feedback, notify_security_alerts, mfa_enabled, totp_verified FROM user_security_settings WHERE user_id=$1",
+    )
+    .bind(actor.id)
+    .fetch_optional(&state.pool)
+    .await?;
+    let (secondary_email, n_assign, n_feed, n_sec, mfa_enabled, totp_verified) =
+        settings.unwrap_or((None, true, true, true, false, false));
+
+    let backup_remaining: (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM mfa_backup_codes WHERE user_id=$1 AND used_at IS NULL",
+    )
+    .bind(actor.id)
+    .fetch_one(&state.pool)
+    .await?;
+
+    let passkeys: Vec<PasskeyRow> = sqlx::query_as(
+        "SELECT id, credential_id, device_name, transports, created_at, last_used_at FROM user_passkeys WHERE user_id=$1 ORDER BY created_at DESC",
+    )
+    .bind(actor.id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let exercises: Vec<ExerciseBackupRow> = sqlx::query_as(
+        "SELECT exercise_id, attempts, hint_used, points, completed_at FROM exercise_progress WHERE user_id=$1 ORDER BY exercise_id",
+    )
+    .bind(actor.id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let lab_sessions: Vec<LabSessionBackupRow> = sqlx::query_as(
+        "SELECT id, lab_id, level_id, current_step, verification_passed, score FROM lab_sessions WHERE user_id=$1 ORDER BY lab_id, level_id",
+    )
+    .bind(actor.id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let telemetry = extract_telemetry(&headers);
+    record_activity(
+        &state.pool,
+        Some(actor.id),
+        Some(&actor.email),
+        None,
+        "account_backup_exported",
+        Some("/pengaturan"),
+        &telemetry,
+        false,
+        "Mengunduh cadangan akun & progres belajar (JSON)",
+    )
+    .await;
+
+    Ok(Json(json!({
+        "schema": "weblabifa.account_backup.v1",
+        "exported_at": Utc::now(),
+        "account": {
+            "id": actor.id,
+            "name": actor.name,
+            "email": actor.email,
+            "role": actor.role,
+        },
+        "security_metadata": {
+            "secondary_email": secondary_email,
+            "notify_assignments": n_assign,
+            "notify_feedback": n_feed,
+            "notify_security_alerts": n_sec,
+            "mfa_enabled": mfa_enabled,
+            "totp_verified": totp_verified,
+            "backup_codes_remaining": backup_remaining.0,
+            "backup_hash_algorithm": "Argon2id",
+            "passkeys": passkeys,
+        },
+        "exercise_progress": exercises,
+        "simulator_sessions": lab_sessions,
+    })))
 }

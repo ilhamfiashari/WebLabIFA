@@ -1,3 +1,7 @@
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
@@ -161,6 +165,22 @@ pub fn sha256_hex(input: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+pub fn argon2_hash_secret(secret: &str) -> Result<String, argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    Ok(Argon2::default()
+        .hash_password(secret.as_bytes(), &salt)?
+        .to_string())
+}
+
+pub fn argon2_verify_secret(secret: &str, phc_hash: &str) -> bool {
+    let Ok(parsed) = PasswordHash::new(phc_hash) else {
+        return false;
+    };
+    Argon2::default()
+        .verify_password(secret.as_bytes(), &parsed)
+        .is_ok()
+}
+
 pub fn generate_totp_secret() -> String {
     let mut bytes = [0u8; 20];
     rand::thread_rng().fill_bytes(&mut bytes);
@@ -210,5 +230,14 @@ mod tests {
             assert!(c.contains('-'));
         }
         assert_ne!(sha256_hex(&codes[0]), sha256_hex(&codes[1]));
+    }
+
+    #[test]
+    fn argon2_hash_and_verify_roundtrip() {
+        let code = "ABCD1234";
+        let hash = argon2_hash_secret(code).expect("argon2id hash");
+        assert!(hash.starts_with("$argon2id$"));
+        assert!(argon2_verify_secret(code, &hash));
+        assert!(!argon2_verify_secret("WRONG999", &hash));
     }
 }
