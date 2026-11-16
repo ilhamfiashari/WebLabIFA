@@ -83,6 +83,7 @@ jobs:
             frontend-sbom.json
             rust-audit.json
             **/bom.json
+            **/*.cdx.json
             semgrep.json
             secrets.json
 
