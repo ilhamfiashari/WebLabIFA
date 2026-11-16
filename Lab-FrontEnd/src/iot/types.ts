@@ -46,12 +46,32 @@ export type ComponentKind =
   | 'resistor'
   | 'breadboard'
   | 'potentiometer'
+  | 'slide-pot'
+  | 'rotary-encoder'
+  | 'keypad-4x4'
+  | 'dip-switch'
+  | 'ir-receiver'
+  | 'ir-remote'
   | 'hc-sr04'
   | 'dht22'
+  | 'mq2'
+  | 'ds18b20'
+  | 'ntc'
   | 'ldr'
   | 'pir'
+  | 'mpu6050'
+  | 'bmp180'
+  | 'rfid-rc522'
+  | 'rtc-ds1307'
   | 'oled-ssd1306'
   | 'lcd-1602'
+  | 'lcd-20x4'
+  | 'seven-seg'
+  | 'seven-seg-4'
+  | 'led-bar-graph'
+  | 'neopixel-ring'
+  | 'neopixel-strip'
+  | 'tft-ili9341'
   | 'servo'
   | 'buzzer'
   | 'relay'
@@ -97,6 +117,14 @@ export interface PlacedComponent {
     potPct?: number
     lux?: number
     motion?: boolean
+    gasPpm?: number
+    pressureHpa?: number
+    tiltDeg?: number
+    dipBits?: number[]
+    encoderStep?: number
+    lastKey?: string
+    rfidUid?: string | null
+    irHex?: string | null
   }
 }
 
