@@ -6,6 +6,7 @@ pub mod security_account;
 pub mod seed;
 pub mod simulator;
 pub mod simulator_catalog;
+pub mod weather;
 
 use axum::{
     Json, Router,
@@ -38,6 +39,7 @@ pub struct AppState {
     pub oidc: Option<oidc::Oidc>,
     pub budget: Arc<Mutex<(std::time::Instant, u32)>>,
     pub auth_budget: Arc<Mutex<(std::time::Instant, u32)>>,
+    pub weather_cache: weather::WeatherCache,
 }
 
 impl AppState {
@@ -48,6 +50,7 @@ impl AppState {
             oidc,
             budget: Arc::new(Mutex::new((std::time::Instant::now(), 0))),
             auth_budget: Arc::new(Mutex::new((std::time::Instant::now(), 0))),
+            weather_cache: weather::WeatherCache::new(),
         }
     }
 }
@@ -59,6 +62,7 @@ pub fn router(state: AppState) -> Router {
             get(|| async { Json(serde_json::json!({"status":"ok"})) }),
         )
         .route("/api/public/config", get(public_config))
+        .route("/api/public/weather", get(public_weather))
         .route("/api/me", get(me))
         .route("/api/session/context", post(switch_context))
         .route("/api/auth/google/start", get(start))
@@ -362,6 +366,19 @@ fn cookie(config: &Config, name: &'static str, value: String, seconds: i64) -> C
 
 async fn public_config(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(serde_json::json!({"support_email":state.config.support_email}))
+}
+
+#[derive(Deserialize)]
+struct WeatherQuery {
+    lat: Option<f64>,
+    lon: Option<f64>,
+}
+
+async fn public_weather(
+    State(state): State<AppState>,
+    Query(query): Query<WeatherQuery>,
+) -> Json<weather::WeatherPayload> {
+    Json(state.weather_cache.lookup(query.lat, query.lon).await)
 }
 
 async fn start(State(state): State<AppState>, jar: CookieJar) -> Result<Response, ApiError> {

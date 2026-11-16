@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowUpRight, Check, ChevronRight, CircleHelp, Globe, LoaderCircle, LockKeyhole, LogOut, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CircleHelp, Globe, LogOut, ShieldCheck } from 'lucide-react'
 import { ApiError, getIdentity, getPublicConfig, type Identity } from './api'
 import { Button } from './components/ui/button'
 import { AdminApp } from './admin/AdminApp'
 import { StudentApp } from './student/StudentApp'
 import { LecturerApp } from './lecturer/LecturerApp'
+import { LoginView } from './login/LoginView'
 import { allowedPath } from './portal/hooks'
 import { ErrorView } from './shared/errors/ErrorView'
 import { useI18n } from './shared/i18n'
@@ -50,59 +51,6 @@ function LangToggleButton() {
       <span>{lang === 'id' ? 'ID → EN' : 'EN → ID'}</span>
     </button>
   )
-}
-
-const messagesId: Record<string, string> = {
-  cancelled: 'Login dibatalkan. Anda bisa mencoba lagi saat siap.',
-  expired: 'Waktu login habis atau tautan sudah digunakan. Mulai login kembali.',
-  temporary: 'Login belum dapat diproses. Tunggu sebentar, lalu coba lagi.',
-  unauthorized: 'Akun Google ini tidak memiliki akses ke IFA Lab. Gunakan akun yang telah diizinkan.',
-}
-const messagesEn: Record<string, string> = {
-  cancelled: 'Sign-in cancelled. You can try again whenever ready.',
-  expired: 'Sign-in expired or link was already used. Please start again.',
-  temporary: 'Sign-in could not be processed right now. Wait a moment and retry.',
-  unauthorized: 'This Google account does not have access to IFA Lab. Use an authorized account.',
-}
-
-function Login() {
-  const { tr, lang } = useI18n()
-  const session = useQuery({ queryKey: ['identity'], queryFn: getIdentity })
-  const [redirecting, setRedirecting] = useState(false)
-  const status = new URLSearchParams(window.location.search).get('status') ?? ''
-  const messages = lang === 'en' ? messagesEn : messagesId
-  useEffect(() => { if (session.data) window.location.replace('/lab') }, [session.data])
-  useEffect(() => { const reset = () => setRedirecting(false); window.addEventListener('pageshow', reset); return () => window.removeEventListener('pageshow', reset) }, [])
-  return <main className="login-layout" id="main">
-    <section className="login-panel" aria-labelledby="login-title">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Brand />
-        <LangToggleButton />
-      </header>
-      <div className="login-content">
-        <div className="login-intro"><span className="intro-line" aria-hidden="true" /><p className="eyebrow">{tr.brand.eyebrow}</p></div>
-        <h1 id="login-title">{tr.brand.loginTitle}</h1>
-        <p className="login-description">{tr.brand.loginDesc}</p>
-        <Button variant="outline" className="google-button" disabled={redirecting} onClick={() => { setRedirecting(true); window.location.assign('/api/auth/google/start') }}>
-          {redirecting ? <LoaderCircle className="spin" size={20} aria-hidden="true" /> : <img src="/assets/google-g.svg" width="20" height="20" alt="" />}
-          <span>{redirecting ? tr.brand.redirecting : tr.brand.googleBtn}</span>
-        </Button>
-        <div aria-live="polite" className="login-feedback">
-          {messages[status] && <p role="status" className="notice">{messages[status]}</p>}
-          {session.isError && <p className="notice">{lang === 'en' ? 'Session status could not be checked.' : 'Status sesi belum dapat diperiksa.'} <button className="inline-link" onClick={() => void session.refetch()}>{lang === 'en' ? 'Retry' : 'Coba lagi'}</button></p>}
-          {redirecting && <p role="status">{tr.brand.openingGoogle}</p>}
-        </div>
-        <p className="account-note">{tr.brand.accountNote}</p>
-        <div className="security-note"><LockKeyhole size={14} aria-hidden="true"/><span>{tr.brand.securityNote}</span></div>
-      </div>
-      <footer className="login-footer"><span>© {new Date().getFullYear()} IFA Lab</span><nav aria-label="Informasi"><a href="/privasi">{tr.brand.privacy}</a><a href="/bantuan">{tr.brand.help} <ArrowUpRight size={13} aria-hidden="true" /></a></nav></footer>
-    </section>
-    <aside className="hero-panel" aria-label={tr.brand.heroTop}>
-      <picture><source srcSet="/assets/lab-720.webp 720w, /assets/lab-1440.webp 1440w" sizes="57vw" type="image/webp"/><img className="hero-image" src="/assets/lab-1440.webp" width="1440" height="2160" alt="" fetchPriority="high" /></picture>
-      <div className="hero-caption"><p className="hero-kicker">{tr.brand.heroKicker}</p><h2>{tr.brand.heroTitle}</h2><p>{tr.brand.heroSub}</p><span className="hero-bottom">{tr.brand.heroBottom} <span aria-hidden="true">↗</span></span></div>
-      <div className="hero-top"><span className="hero-dot"/> {tr.brand.heroTop}</div>
-    </aside>
-  </main>
 }
 
 function LabContent({ user }: { user: Identity }) {
@@ -201,5 +149,5 @@ export default function App() {
   const path = window.location.pathname
   const { tr } = useI18n()
   useEffect(() => { if (path.startsWith('/lab')) return; document.title = `${path === '/lab' ? 'Ruang praktikum' : path === '/privasi' ? tr.brand.privacy : path === '/bantuan' ? tr.brand.help : 'Masuk'} · IFA Lab` }, [path, tr.brand.help, tr.brand.privacy])
-  return <><a className="skip-link" href="#main">Lewati ke konten utama</a>{path === '/' || path === '/login' ? <Login/> : path === '/lab' || path.startsWith('/lab/') ? <Lab/> : path === '/privasi' || path === '/bantuan' ? <Information help={path === '/bantuan'}/> : <main className="document" id="main"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}><Brand /><LangToggleButton /></div><ErrorView status={404} homeHref="/" /></main>}</>
+  return <><a className="skip-link" href="#main">Lewati ke konten utama</a>{path === '/' || path === '/login' ? <LoginView/> : path === '/lab' || path.startsWith('/lab/') ? <Lab/> : path === '/privasi' || path === '/bantuan' ? <Information help={path === '/bantuan'}/> : <main className="document" id="main"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}><Brand /><LangToggleButton /></div><ErrorView status={404} homeHref="/" /></main>}</>
 }
