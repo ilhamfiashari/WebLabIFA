@@ -621,6 +621,107 @@ export function WokwiExtendedPartSvg({
           </text>
         </g>
       )
+    case 'slide-switch': {
+      const on = Boolean(comp.props.latched || comp.props.pressed)
+      return (
+        <g
+          className="iot-interactive-control"
+          style={{ cursor: 'pointer' }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onUpdateProps(comp.id, { latched: !on, pressed: !on })
+          }}
+        >
+          <rect x={8} y={8} width={56} height={30} rx={4} fill="#334155" stroke="#64748b" strokeWidth={1.4} />
+          <rect x={14} y={14} width={44} height={18} rx={3} fill="#0f172a" />
+          <rect x={on ? 38 : 16} y={15} width={18} height={16} rx={2} fill={on ? '#22c55e' : '#e2e8f0'} />
+          <text x={36} y={36} textAnchor="middle" fontSize="6.5" fill="#cbd5e1" fontWeight={700}>
+            {on ? 'ON' : 'OFF'}
+          </text>
+        </g>
+      )
+    }
+    case 'joystick': {
+      const jx = comp.props.joyX ?? 512
+      const jy = comp.props.joyY ?? 512
+      const ox = ((jx - 512) / 512) * 14
+      const oy = ((jy - 512) / 512) * 14
+      return (
+        <g>
+          <rect x={6} y={6} width={84} height={74} rx={6} fill="#1e293b" stroke="#64748b" strokeWidth={1.5} />
+          <circle cx={48} cy={42} r={24} fill="#0f172a" stroke="#475569" strokeWidth={1.5} />
+          <circle
+            className="iot-interactive-control"
+            cx={48 + ox}
+            cy={42 + oy}
+            r={13}
+            fill="#334155"
+            stroke="#94a3b8"
+            strokeWidth={1.5}
+            style={{ cursor: 'move' }}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              const sx = e.clientX
+              const sy = e.clientY
+              const onMove = (ev: PointerEvent) => {
+                const dx = Math.max(-24, Math.min(24, ev.clientX - sx))
+                const dy = Math.max(-24, Math.min(24, ev.clientY - sy))
+                onUpdateProps(comp.id, {
+                  joyX: Math.round(512 + (dx / 24) * 511),
+                  joyY: Math.round(512 + (dy / 24) * 511),
+                })
+              }
+              const onUp = () => {
+                onUpdateProps(comp.id, { joyX: 512, joyY: 512 })
+                window.removeEventListener('pointermove', onMove)
+                window.removeEventListener('pointerup', onUp)
+              }
+              window.addEventListener('pointermove', onMove)
+              window.addEventListener('pointerup', onUp)
+            }}
+          />
+          <circle cx={48 + ox} cy={42 + oy} r={6} fill="#0284c7" style={{ pointerEvents: 'none' }} />
+        </g>
+      )
+    }
+    case 'hx711':
+      return (
+        <g>
+          <rect x={6} y={8} width={96} height={52} rx={5} fill="#059669" stroke="#34d399" strokeWidth={1.4} />
+          <rect x={18} y={16} width={72} height={24} rx={3} fill="#e2e8f0" stroke="#64748b" />
+          <text x={54} y={32} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="#0f172a">
+            {((comp.props.weightKg ?? 1.2)).toFixed(1)} kg
+          </text>
+          <text x={54} y={53} textAnchor="middle" fontSize="6.5" fill="#ecfdf5" fontWeight={700}>HX711 BRIDGE</text>
+        </g>
+      )
+    case 'max7219-matrix': {
+      const tick = Math.floor((sim.elapsedMs || 0) / 300)
+      return (
+        <g>
+          <rect x={6} y={6} width={86} height={76} rx={5} fill="#18181b" stroke="#52525b" strokeWidth={1.5} />
+          {Array.from({ length: 8 }, (_, r) =>
+            Array.from({ length: 8 }, (__, c) => {
+              const on = sim.running ? (r + c + tick) % 3 === 0 : r === c || r + c === 7
+              return <circle key={`${r}-${c}`} cx={16 + c * 9.2} cy={14 + r * 8.2} r={2.8} fill={on ? '#ef4444' : '#3f1d1d'} />
+            }),
+          )}
+        </g>
+      )
+    }
+    case 'stepper': {
+      const angle = sim.running ? ((sim.elapsedMs || 0) / 18) % 360 : 0
+      return (
+        <g>
+          <rect x={10} y={8} width={76} height={74} rx={8} fill="#1e293b" stroke="#64748b" strokeWidth={1.6} />
+          <circle cx={48} cy={45} r={26} fill="#cbd5e1" stroke="#475569" strokeWidth={1.8} />
+          <g transform={`translate(48, 45) rotate(${angle})`}>
+            <circle cx={0} cy={0} r={9} fill="#334155" />
+            <rect x={-3} y={-20} width={6} height={20} rx={2} fill="#f97316" />
+          </g>
+        </g>
+      )
+    }
     default:
       return null
   }
@@ -732,6 +833,45 @@ export function WokwiPartThumbnail({ kind }: { kind: ComponentKind }) {
         <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
           <rect x={10} y={10} width={60} height={36} rx={4} fill={kind === 'tft-ili9341' ? '#b91c1c' : '#0f766e'} />
           <rect x={16} y={16} width={48} height={24} rx={2} fill={kind === 'tft-ili9341' ? '#020617' : '#84cc16'} />
+        </svg>
+      )
+    case 'slide-switch':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={18} y={16} width={44} height={22} rx={3} fill="#334155" />
+          <rect x={24} y={20} width={14} height={14} rx={2} fill="#22c55e" />
+        </svg>
+      )
+    case 'joystick':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={18} y={8} width={44} height={40} rx={5} fill="#1e293b" />
+          <circle cx={40} cy={28} r={14} fill="#0f172a" stroke="#64748b" />
+          <circle cx={40} cy={28} r={7} fill="#0284c7" />
+        </svg>
+      )
+    case 'hx711':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={14} y={12} width={52} height={32} rx={4} fill="#059669" />
+          <rect x={22} y={18} width={36} height={16} rx={2} fill="#e2e8f0" />
+        </svg>
+      )
+    case 'max7219-matrix':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={18} y={8} width={44} height={40} rx={4} fill="#18181b" />
+          {[0, 1, 2, 3].map((r) =>
+            [0, 1, 2, 3].map((c) => <circle key={`${r}-${c}`} cx={28 + c * 8} cy={16 + r * 8} r={2.3} fill="#ef4444" />),
+          )}
+        </svg>
+      )
+    case 'stepper':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={20} y={8} width={40} height={40} rx={5} fill="#1e293b" />
+          <circle cx={40} cy={28} r={13} fill="#cbd5e1" />
+          <circle cx={40} cy={28} r={4} fill="#f97316" />
         </svg>
       )
     default:

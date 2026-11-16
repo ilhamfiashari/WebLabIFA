@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   CheckSquare,
+  Copy,
   Maximize2,
   Pause,
   Play,
   RotateCcw,
+  RotateCw,
   Sparkles,
   Trash2,
   Type,
@@ -23,6 +25,7 @@ import {
   getBoardInstances,
   getBoardPin,
   getComponentSpec,
+  rotatePointAroundBox,
 } from './boards'
 import { BoardHardwareView, ComponentHardwareView } from './CircuitSvgComponents'
 import type {
@@ -76,9 +79,10 @@ function getEndpointGeometry(
   const spec = getComponentSpec(comp.kind)
   const pin = spec.pins.find((p) => p.id === ep.pinId)
   if (!pin) return null
-  const x = comp.x + pin.dx
-  const y = comp.y + pin.dy
-  if (comp.kind === 'resistor' || comp.kind === 'pushbutton') {
+  const rot = rotatePointAroundBox(pin.dx, pin.dy, spec.width, spec.height, comp.rotate)
+  const x = comp.x + rot.dx
+  const y = comp.y + rot.dy
+  if ((comp.kind === 'resistor' || comp.kind === 'pushbutton') && (!comp.rotate || comp.rotate % 180 === 0)) {
     if (pin.dx < spec.width / 2) return { x, y, sx: x - 14, sy: y, side: 'left' }
     return { x, y, sx: x + 14, sy: y, side: 'right' }
   }
@@ -109,8 +113,9 @@ function findNearestPin(
     if (comp.kind === 'mcu') continue
     const spec = getComponentSpec(comp.kind)
     for (const p of spec.pins) {
-      const px = comp.x + p.dx
-      const py = comp.y + p.dy
+      const rot = rotatePointAroundBox(p.dx, p.dy, spec.width, spec.height, comp.rotate)
+      const px = comp.x + rot.dx
+      const py = comp.y + rot.dy
       const d = Math.hypot(px - x, py - y)
       if (d <= bestDist) {
         bestDist = d
@@ -233,6 +238,7 @@ export function CircuitCanvas({
   onUpdateWire,
   onDeleteWire,
   onDeleteNode,
+  onDuplicateNode,
   onSelectPrimaryBoard,
 }: {
   boardId: BoardId
@@ -252,6 +258,7 @@ export function CircuitCanvas({
   onUpdateWire: (wireId: string, patch: Partial<Wire>) => void
   onDeleteWire: (wireId: string) => void
   onDeleteNode: (nodeId: string) => void
+  onDuplicateNode?: (nodeId: string) => void
   onSelectPrimaryBoard?: (boardId: BoardId) => void
 }) {
   const en = lang === 'en'
@@ -328,6 +335,11 @@ export function CircuitCanvas({
           setSelectedNodeId(null)
           setInspectedNodeId(null)
         }
+      } else if ((e.key === 'r' || e.key === 'R') && selectedNodeId) {
+        const comp = components.find((c) => c.id === selectedNodeId && c.kind !== 'mcu')
+        if (comp) onUpdateComponent(comp.id, { rotate: ((comp.rotate ?? 0) + 90) % 360 })
+      } else if ((e.key === 'd' || e.key === 'D') && selectedNodeId && selectedNodeId !== 'board' && onDuplicateNode) {
+        onDuplicateNode(selectedNodeId)
       } else if (e.key === 'Escape') {
         setSelectedPin(null)
         setSelectedWireId(null)
@@ -339,7 +351,7 @@ export function CircuitCanvas({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedWireId, selectedNodeId, onDeleteWire, onDeleteNode])
+  }, [selectedWireId, selectedNodeId, components, onUpdateComponent, onDuplicateNode, onDeleteWire, onDeleteNode])
 
   const onPinPointerDown = (ep: WireEndpoint, clientX: number, clientY: number) => {
     suppressNextClickRef.current = false
@@ -673,17 +685,40 @@ export function CircuitCanvas({
           ) : null}
 
           {selectedNodeId && selectedNodeId !== 'board' ? (
-            <button
-              type="button"
-              className="btn-outline iot-mini-btn"
-              onClick={() => {
-                onDeleteNode(selectedNodeId)
-                setSelectedNodeId(null)
-                setInspectedNodeId(null)
-              }}
-            >
-              <Trash2 size={13} /> {en ? 'Remove Part' : 'Hapus Komponen'}
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn-outline iot-mini-btn"
+                title={en ? 'Rotate 90° (R)' : 'Putar 90° (R)'}
+                onClick={() => {
+                  const comp = components.find((c) => c.id === selectedNodeId && c.kind !== 'mcu')
+                  if (comp) onUpdateComponent(comp.id, { rotate: ((comp.rotate ?? 0) + 90) % 360 })
+                }}
+              >
+                <RotateCw size={13} /> {en ? 'Rotate (R)' : 'Putar (R)'}
+              </button>
+              {onDuplicateNode ? (
+                <button
+                  type="button"
+                  className="btn-outline iot-mini-btn"
+                  title={en ? 'Duplicate part (D)' : 'Duplikat komponen (D)'}
+                  onClick={() => onDuplicateNode(selectedNodeId)}
+                >
+                  <Copy size={13} /> {en ? 'Duplicate (D)' : 'Duplikat (D)'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn-outline iot-mini-btn"
+                onClick={() => {
+                  onDeleteNode(selectedNodeId)
+                  setSelectedNodeId(null)
+                  setInspectedNodeId(null)
+                }}
+              >
+                <Trash2 size={13} /> {en ? 'Remove Part' : 'Hapus Komponen'}
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -982,6 +1017,45 @@ export function CircuitCanvas({
               >
                 {inspectedComp.props.motion ? (en ? 'Clear Motion' : 'Matikan Deteksi Gerak') : (en ? 'Trigger Motion' : 'Picu Gerakan Objek')}
               </button>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'hx711' ? (
+            <div className="iot-popover-body">
+              <label className="iot-pop-field">
+                <span>{en ? 'Load Weight' : 'Beban Timbangan'}: {(inspectedComp.props.weightKg ?? 1.2).toFixed(1)} kg</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={50}
+                  step={0.5}
+                  value={inspectedComp.props.weightKg ?? 1.2}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { weightKg: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp ? (
+            <div className="iot-popover-footer">
+              <button
+                type="button"
+                className="btn-outline iot-mini-btn"
+                onClick={() =>
+                  onUpdateComponent(inspectedComp.id, { rotate: ((inspectedComp.rotate ?? 0) + 90) % 360 })
+                }
+              >
+                <RotateCw size={12} /> {en ? 'Rotate 90° (R)' : 'Putar 90° (R)'}
+              </button>
+              {onDuplicateNode ? (
+                <button
+                  type="button"
+                  className="btn-outline iot-mini-btn"
+                  onClick={() => onDuplicateNode(inspectedComp.id)}
+                >
+                  <Copy size={12} /> {en ? 'Duplicate (D)' : 'Duplikat (D)'}
+                </button>
+              ) : null}
             </div>
           ) : null}
 
