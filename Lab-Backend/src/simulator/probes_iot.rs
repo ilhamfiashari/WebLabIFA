@@ -2,428 +2,321 @@ use super::*;
 use crate::simulator_catalog::LevelId;
 use serde_json::{Value, json};
 
-pub(super) fn sim_iot_mqtt_acl(
+pub(super) fn sim_iot_esp32_gpio(
     level: LevelId,
     patch: &str,
     cid: &str,
     state: &mut Value,
     input: &ProbeInput,
 ) -> ProbeOutcome {
-    let secure = is_target_patch("iot-mqtt-acl", patch);
-    let client = if input.actor.is_empty() {
-        "sensor-tanah-01"
-    } else {
-        input.actor.as_str()
-    };
-    let topic = if input.target.is_empty() {
-        "kebun/A/sensor/kelembapan"
-    } else {
-        input.target.as_str()
-    };
-    let op = if input.action == "subscribe" {
-        "SUB"
-    } else {
-        "PUB"
-    };
-
-    let allowed = if secure || level == LevelId::Impossible {
-        matches!(
-            (client, op, topic),
-            ("sensor-tanah-01", "PUB", "kebun/A/sensor/kelembapan")
-                | ("controller-kebun-a", "SUB", "kebun/A/sensor/kelembapan")
-                | ("controller-kebun-a", "PUB", "kebun/A/aktuator/pompa")
-        )
-    } else {
-        match level {
-            LevelId::Easy => true,
-            LevelId::Medium => topic.starts_with("kebun/A/"),
-            LevelId::Hard => {
-                !(op == "PUB"
-                    && topic == "kebun/A/aktuator/pompa"
-                    && client != "controller-kebun-a")
-            }
-            LevelId::Impossible => unreachable!(),
-        }
-    };
-
-    let is_legit = matches!(
-        (client, op, topic),
-        ("sensor-tanah-01", "PUB", "kebun/A/sensor/kelembapan")
-            | ("controller-kebun-a", "PUB", "kebun/A/aktuator/pompa")
-            | ("controller-kebun-a", "SUB", "kebun/A/sensor/kelembapan")
-    );
-    let exploit = allowed && !is_legit;
-    if allowed && topic == "kebun/A/aktuator/pompa" {
-        state["pump"] = json!("ON");
-    }
-
-    let entry = format!(
-        "{op} {client} -> {topic} : {}",
-        if allowed { "ALLOW" } else { "DENY" }
-    );
-    if let Some(arr) = state.get_mut("broker_log").and_then(|v| v.as_array_mut())
-        && arr.len() < 10
-    {
-        arr.push(Value::String(entry.clone()));
-    }
-
-    ProbeOutcome {
-        request: RequestPreview { method: op.into(), path: topic.into(), headers: vec![("MQTT-ClientId".into(), client.into())], body: if op == "PUB" { "{\"cmd\":\"PUMP_ON\"}".into() } else { String::new() } },
-        response: ResponsePreview { status: if allowed { 200 } else { 403 }, status_text: if allowed { "ALLOW" } else { "Forbidden" }, headers: vec![], body: json!({"client": client, "op": op, "topic": topic, "acl_decision": if allowed { "ALLOW" } else { "DENY" }, "pump_state": state["pump"]}).to_string(), correlation_id: cid.into() },
-        events: vec![trace("MQTT Broker", "AclEngine", if allowed { if exploit { "BYPASS ALLOW" } else { "ALLOW" } } else { "DENY 403" }, &entry, if exploit { "bad" } else { "good" })],
-        visual_data: json!({ "kind": "iot_mqtt", "client": client, "topic": topic, "allowed": allowed, "pump": state["pump"], "broker_log": state["broker_log"] }),
-        baseline_captured: is_legit && allowed,
-        exploit_proved: exploit,
-        is_legitimate: is_legit && allowed,
-        updated_state: state.clone(),
-    }
-}
-
-pub(super) fn sim_iot_replay(
-    level: LevelId,
-    patch: &str,
-    cid: &str,
-    state: &mut Value,
-    input: &ProbeInput,
-) -> ProbeOutcome {
-    let secure = is_target_patch("iot-replay", patch);
+    let secure = is_target_patch("iot-esp32-gpio", patch);
     let action = if input.action.is_empty() {
-        "fresh_signed"
+        "blink_resistor"
     } else {
         input.action.as_str()
     };
-    let mut clock = state["clock_sec"].as_i64().unwrap_or(1000);
-    if input.advance_minutes > 0 {
-        clock += input.advance_minutes * 60;
-        state["clock_sec"] = json!(clock);
-    }
-    let mut seen: Vec<String> = state["seen_nonces"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let has_hmac = secure || level != LevelId::Easy;
-    let checks_nonce = secure || matches!(level, LevelId::Hard | LevelId::Impossible);
-    let checks_ts = secure || level == LevelId::Impossible;
-
-    let (accepted, reason, exploit, baseline) = match action {
-        "replay_recorded" => {
-            if checks_nonce && seen.iter().any(|n| n == "n-1001") {
+    let protected = secure || level == LevelId::Impossible;
+    let (status, allowed, exploit, baseline, detail) = match action {
+        "direct_no_resistor" | "short_circuit" => {
+            if protected {
                 (
+                    422,
                     false,
-                    "Ditolak: Nonce n-1001 sudah pernah dipakai (anti-replay).",
                     false,
                     false,
+                    "Proteksi GPIO 3.3V menahan over-current / short-circuit tanpa merusak pin.",
                 )
             } else {
                 (
+                    200,
                     true,
-                    "REPLAY DITERIMA: Paket lama kembali menyalakan pompa!",
-                    true,
-                    false,
-                )
-            }
-        }
-        "expired_ts" => {
-            if checks_ts {
-                (
-                    false,
-                    "Ditolak: Timestamp paket sudah melewati jendela toleransi 60 detik.",
-                    false,
-                    false,
-                )
-            } else {
-                (
-                    true,
-                    "Paket timestamp +10 menit lalu masih diterima aktuator!",
                     true,
                     false,
-                )
-            }
-        }
-        "forged_cmd" => {
-            if has_hmac {
-                (
-                    false,
-                    "Ditolak: HMAC tidak valid untuk payload yang dimodifikasi.",
-                    false,
-                    false,
-                )
-            } else {
-                (
-                    true,
-                    "Perintah palsu tanpa HMAC menyalakan pompa!",
-                    true,
-                    false,
-                )
-            }
-        }
-        _ => {
-            if !seen.iter().any(|n| n == "n-fresh-2002") {
-                seen.push("n-fresh-2002".into());
-            }
-            state["pump"] = json!("ON");
-            (
-                true,
-                "Perintah segar bertanda tangan sah (nonce n-fresh-2002) diterima (pump ON).",
-                false,
-                true,
-            )
-        }
-    };
-    state["seen_nonces"] = json!(seen);
-
-    ProbeOutcome {
-        request: RequestPreview {
-            method: "PUB".into(),
-            path: "kebun/A/aktuator/pompa".into(),
-            headers: vec![("Scenario".into(), action.into())],
-            body: json!({"cmd": "PUMP_ON", "nonce": "n-1001", "clock_sec": clock}).to_string(),
-        },
-        response: ResponsePreview {
-            status: if accepted { 200 } else { 403 },
-            status_text: if accepted { "OK" } else { "Forbidden" },
-            headers: vec![],
-            body: json!({"accepted": accepted, "reason": reason, "pump": state["pump"]})
-                .to_string(),
-            correlation_id: cid.into(),
-        },
-        events: vec![trace(
-            "ESP32",
-            "CommandGuard",
-            if exploit {
-                "REPLAY/FORGE LOLOS"
-            } else if accepted {
-                "ACCEPT"
-            } else {
-                "REJECT"
-            },
-            reason,
-            if exploit { "bad" } else { "good" },
-        )],
-        visual_data: json!({ "kind": "iot_replay", "pump": state["pump"], "clock_sec": clock, "seen_nonces": seen }),
-        baseline_captured: baseline,
-        exploit_proved: exploit,
-        is_legitimate: accepted && !exploit,
-        updated_state: state.clone(),
-    }
-}
-
-pub(super) fn sim_iot_ota(
-    level: LevelId,
-    patch: &str,
-    cid: &str,
-    state: &mut Value,
-    input: &ProbeInput,
-) -> ProbeOutcome {
-    let secure = is_target_patch("iot-ota", patch);
-    let pkg = if input.target.is_empty() {
-        "official-v2.2.0"
-    } else {
-        input.target.as_str()
-    };
-    let checks_sig = secure || matches!(level, LevelId::Hard | LevelId::Impossible);
-    let checks_rollback = secure || level == LevelId::Impossible;
-
-    let (accepted, new_ver, reason, exploit, baseline) = match pkg {
-        "tampered-bin" => {
-            if checks_sig {
-                (
-                    false,
-                    state["active_version"]
-                        .as_str()
-                        .unwrap_or("v2.1.0")
-                        .to_string(),
-                    "Ditolak: Tanda tangan digital ECDSA/Ed25519 tidak valid; tetap di v2.1.0.",
-                    false,
-                    false,
-                )
-            } else {
-                (
-                    true,
-                    "v9.9.9-rogue".into(),
-                    "BAHAYA: Firmware palsu tanpa signature terpasang di ESP32!",
-                    true,
-                    false,
-                )
-            }
-        }
-        "downgrade-v1.0.0" => {
-            if checks_rollback {
-                (
-                    false,
-                    state["active_version"]
-                        .as_str()
-                        .unwrap_or("v2.1.0")
-                        .to_string(),
-                    "Ditolak: Versi v1.0.0 lebih rendah dari anti-rollback minimum (v2.1.0).",
-                    false,
-                    false,
-                )
-            } else {
-                (
-                    true,
-                    "v1.0.0-vulnerable".into(),
-                    "DOWNGRADE: Firmware lama rentan terpasang menimpa v2.1.0!",
-                    true,
-                    false,
+                    "BAHAYA: Pin GPIO mengalirkan arus tanpa resistor pembatas 220Ω!",
                 )
             }
         }
         _ => (
+            200,
             true,
-            "v2.2.0".into(),
-            "Firmware resmi v2.2.0 terverifikasi signature & versi naik.",
             false,
             true,
+            "LED menyala stabil melalui resistor seri 220Ω pada logika 3.3V ESP32-C3.",
         ),
     };
-    state["active_version"] = json!(new_ver);
+    state["gpio2"] = json!(if allowed { "HIGH" } else { "SAFE_LOW" });
 
     ProbeOutcome {
-        request: RequestPreview { method: "POST".into(), path: "/ota/flash".into(), headers: vec![], body: json!({"package": pkg}).to_string() },
-        response: ResponsePreview { status: if accepted { 200 } else { 422 }, status_text: if accepted { "OK" } else { "Unprocessable Entity" }, headers: vec![], body: json!({"accepted": accepted, "active_version": new_ver, "operational": true, "reason": reason}).to_string(), correlation_id: cid.into() },
-        events: vec![trace("Bootloader", "OtaVerifier", if exploit { "FLASH RENTAN" } else if accepted { "FLASH SAH" } else { "SAFE REJECT" }, reason, if exploit { "bad" } else { "good" })],
-        visual_data: json!({ "kind": "iot_ota", "active_version": new_ver, "operational": true, "package": pkg }),
+        request: RequestPreview {
+            method: "SIM".into(),
+            path: format!("/esp32-c3/gpio/{action}"),
+            headers: vec![("X-Board".into(), "ESP32-C3-RISCV".into())],
+            body: json!({ "action": action, "logic_v": 3.3 }).to_string(),
+        },
+        response: ResponsePreview {
+            status,
+            status_text: status_text(status),
+            headers: vec![],
+            body: json!({ "gpio2": state["gpio2"], "safe": !exploit, "detail": detail })
+                .to_string(),
+            correlation_id: cid.into(),
+        },
+        events: vec![trace(
+            "ESP32 GPIO",
+            "HardwareChecker",
+            if exploit {
+                "OVER_CURRENT"
+            } else if allowed {
+                "SAFE_HIGH"
+            } else {
+                "BLOCKED"
+            },
+            detail,
+            if exploit { "bad" } else { "good" },
+        )],
+        visual_data: json!({ "kind": "esp32_gpio", "gpio2": state["gpio2"] }),
         baseline_captured: baseline,
         exploit_proved: exploit,
-        is_legitimate: !exploit,
+        is_legitimate: baseline && !exploit,
         updated_state: state.clone(),
     }
 }
 
-pub(super) fn sim_iot_interlock(
+pub(super) fn sim_iot_esp32_ultrasonic(
     level: LevelId,
     patch: &str,
     cid: &str,
     state: &mut Value,
     input: &ProbeInput,
 ) -> ProbeOutcome {
-    let secure = is_target_patch("iot-interlock", patch);
-    let mode = if input.action.is_empty() {
-        "dry_valid"
+    let secure = is_target_patch("iot-esp32-ultrasonic", patch);
+    let action = if input.action.is_empty() {
+        "valid_distance"
     } else {
         input.action.as_str()
     };
-
-    let checks_range =
-        secure || matches!(level, LevelId::Medium | LevelId::Hard | LevelId::Impossible);
-    let checks_online = secure || matches!(level, LevelId::Hard | LevelId::Impossible);
-    let recovers = secure || level == LevelId::Impossible;
-    let was_fault = state["fault_latched"].as_bool().unwrap_or(false);
-
-    let (pump, reason, exploit, baseline) = match mode {
-        "out_of_range" => {
-            if checks_range {
-                state["fault_latched"] = json!(true);
+    let protected = secure || level == LevelId::Impossible;
+    let (status, servo_deg, exploit, baseline, detail) = match action {
+        "timeout_zero" | "noise_999" => {
+            if protected {
                 (
-                    "SAFE_OFF",
-                    "Nilai sensor -50% di luar rentang 0..100%; pompa masuk SAFE_OFF.",
+                    422,
+                    0,
                     false,
                     false,
+                    "Nilai sensor di luar rentang 2..400 cm diabaikan; servo dan buzzer tetap aman.",
                 )
             } else {
                 (
-                    "ON",
-                    "BAHAYA: Nilai -50% dianggap kering (<30%), pompa menyala terus!",
+                    200,
+                    90,
                     true,
                     false,
+                    "BAHAYA: Pembacaan 0/timeout langsung membuka servo dan menyalakan buzzer!",
                 )
             }
         }
-        "sensor_offline" => {
-            if checks_online {
-                state["fault_latched"] = json!(true);
-                (
-                    "SAFE_OFF",
-                    "Heartbeat sensor terputus (offline); pompa otomatis SAFE_OFF.",
-                    false,
-                    false,
-                )
-            } else {
-                (
-                    "ON",
-                    "BAHAYA: Memakai data basi terakhir (18%) saat sensor offline, pompa terus menyala!",
-                    true,
-                    false,
-                )
-            }
-        }
-        "wet_valid" => (
-            "OFF",
-            "Kelembapan 68% (cukup basah); pompa tetap OFF.",
+        "close_valid" => (
+            200,
+            90,
             false,
             true,
+            "Objek terdeteksi pada 14 cm (<25 cm): buzzer berbunyi & servo 90°.",
         ),
-        "fault_then_recover" => {
-            if recovers {
-                state["fault_latched"] = json!(false);
-                (
-                    "ON",
-                    "Setelah sensor pulih ke 24%, fault latch terlepas dan pompa menyala aman.",
-                    false,
-                    true,
-                )
-            } else {
-                state["fault_latched"] = json!(true);
-                (
-                    "OFF",
-                    "GAGAL PULIH: Sistem terkunci fault permanen meski sensor sudah kembali normal 24%!",
-                    true,
-                    false,
-                )
-            }
-        }
-        _ => {
-            if was_fault && !recovers {
-                (
-                    "OFF",
-                    "GAGAL PULIH: Sistem terkunci fault permanen meski sensor sudah normal 24%!",
-                    true,
-                    false,
-                )
-            } else {
-                state["fault_latched"] = json!(false);
-                (
-                    "ON",
-                    "Sensor online valid (22%); pompa menyala aman sesuai target irigasi.",
-                    false,
-                    true,
-                )
-            }
-        }
+        _ => (
+            200,
+            0,
+            false,
+            true,
+            "Jarak aman 120 cm: buzzer nonaktif dan servo di posisi 0°.",
+        ),
     };
-    state["pump"] = json!(pump);
+    state["servo_deg"] = json!(servo_deg);
 
     ProbeOutcome {
         request: RequestPreview {
-            method: "TELEMETRY".into(),
-            path: "kebun/A/sensor/kelembapan".into(),
-            headers: vec![],
-            body: json!({"mode": mode}).to_string(),
+            method: "SIM".into(),
+            path: format!("/esp32-c3/hc-sr04/{action}"),
+            headers: vec![("X-Board".into(), "ESP32-C3-RISCV".into())],
+            body: json!({ "action": action }).to_string(),
         },
         response: ResponsePreview {
-            status: 200,
-            status_text: "OK",
+            status,
+            status_text: status_text(status),
             headers: vec![],
-            body: json!({"pump_state": pump, "reason": reason}).to_string(),
+            body: json!({ "servo_deg": servo_deg, "safe": !exploit, "detail": detail }).to_string(),
             correlation_id: cid.into(),
         },
         events: vec![trace(
-            "Interlock",
-            "SafetyGuard",
-            pump,
-            reason,
+            "Ultrasonic + PWM",
+            "FirmwareLoop",
+            if exploit {
+                "FALSE_TRIGGER"
+            } else if status == 200 {
+                "ACTUATED"
+            } else {
+                "FILTERED"
+            },
+            detail,
             if exploit { "bad" } else { "good" },
         )],
-        visual_data: json!({ "kind": "iot_interlock", "pump": pump, "mode": mode, "fault_latched": state["fault_latched"] }),
+        visual_data: json!({ "kind": "esp32_ultrasonic", "servo_deg": servo_deg }),
         baseline_captured: baseline,
         exploit_proved: exploit,
-        is_legitimate: !exploit,
+        is_legitimate: baseline && !exploit,
+        updated_state: state.clone(),
+    }
+}
+
+pub(super) fn sim_iot_esp32_dht_oled(
+    level: LevelId,
+    patch: &str,
+    cid: &str,
+    state: &mut Value,
+    input: &ProbeInput,
+) -> ProbeOutcome {
+    let secure = is_target_patch("iot-esp32-dht-oled", patch);
+    let action = if input.action.is_empty() {
+        "valid_dht"
+    } else {
+        input.action.as_str()
+    };
+    let protected = secure || level == LevelId::Impossible;
+    let (status, exploit, baseline, detail) = match action {
+        "nan_reading" | "no_clear" => {
+            if protected {
+                (
+                    422,
+                    false,
+                    false,
+                    "Data NaN/ekstrem ditahan dan buffer OLED SSD1306 dibersihkan bersih.",
+                )
+            } else {
+                (
+                    200,
+                    true,
+                    false,
+                    "Layar OLED SSD1306 menampilkan teks bertumpuk / nilai NaN!",
+                )
+            }
+        }
+        _ => (
+            200,
+            false,
+            true,
+            "Suhu 28.5°C & kelembapan 64% tampil rapi pada OLED SSD1306 dan Serial Plotter.",
+        ),
+    };
+    state["oled_clean"] = json!(!exploit);
+
+    ProbeOutcome {
+        request: RequestPreview {
+            method: "I2C".into(),
+            path: format!("/esp32-c3/dht-oled/{action}"),
+            headers: vec![("X-I2C-Addr".into(), "0x3C".into())],
+            body: json!({ "action": action }).to_string(),
+        },
+        response: ResponsePreview {
+            status,
+            status_text: status_text(status),
+            headers: vec![],
+            body: json!({ "oled_clean": !exploit, "detail": detail }).to_string(),
+            correlation_id: cid.into(),
+        },
+        events: vec![trace(
+            "I2C Display",
+            "SSD1306",
+            if exploit {
+                "CORRUPT_FRAME"
+            } else if status == 200 {
+                "RENDER_OK"
+            } else {
+                "GUARDED"
+            },
+            detail,
+            if exploit { "bad" } else { "good" },
+        )],
+        visual_data: json!({ "kind": "esp32_dht_oled", "oled_clean": !exploit }),
+        baseline_captured: baseline,
+        exploit_proved: exploit,
+        is_legitimate: baseline && !exploit,
+        updated_state: state.clone(),
+    }
+}
+
+pub(super) fn sim_iot_esp32_mqtt(
+    level: LevelId,
+    patch: &str,
+    cid: &str,
+    state: &mut Value,
+    input: &ProbeInput,
+) -> ProbeOutcome {
+    let secure = is_target_patch("iot-esp32-mqtt", patch);
+    let target = if input.target.is_empty() {
+        "mqtts://broker.weblab.local:8883"
+    } else {
+        input.target.as_str()
+    };
+    let protected = secure || level == LevelId::Impossible;
+    let is_plaintext = target.starts_with("mqtt://");
+    let (status, exploit, baseline, detail) = if is_plaintext {
+        if protected {
+            (
+                403,
+                false,
+                false,
+                "Koneksi plaintext mqtt://1883 ditolak; sistem wajib memakai mqtts://8883 (TLS).",
+            )
+        } else {
+            (
+                200,
+                true,
+                false,
+                "Telemetri MQTT dikirim plaintext melalui port 1883 tanpa enkripsi TLS!",
+            )
+        }
+    } else {
+        (
+            200,
+            false,
+            true,
+            "Telemetri ESP32-C3 terkirim aman terenkripsi melalui mqtts://8883.",
+        )
+    };
+    state["tls_active"] = json!(!is_plaintext && !exploit);
+
+    ProbeOutcome {
+        request: RequestPreview {
+            method: "MQTT".into(),
+            path: target.into(),
+            headers: vec![("X-Board".into(), "ESP32-C3-WiFi".into())],
+            body: "{\"adc\":2048}".into(),
+        },
+        response: ResponsePreview {
+            status,
+            status_text: status_text(status),
+            headers: vec![],
+            body: json!({ "broker": target, "tls_active": state["tls_active"], "detail": detail })
+                .to_string(),
+            correlation_id: cid.into(),
+        },
+        events: vec![trace(
+            "Wi-Fi MQTT",
+            "TlsTransport",
+            if exploit {
+                "PLAINTEXT_LEAK"
+            } else if status == 200 {
+                "TLS_SENT"
+            } else {
+                "BLOCKED_INSECURE"
+            },
+            detail,
+            if exploit { "bad" } else { "good" },
+        )],
+        visual_data: json!({ "kind": "esp32_mqtt", "tls_active": state["tls_active"] }),
+        baseline_captured: baseline,
+        exploit_proved: exploit,
+        is_legitimate: baseline && !exploit,
         updated_state: state.clone(),
     }
 }

@@ -237,14 +237,14 @@ pub fn owasp_categories() -> &'static [OwaspCategory] {
     ])
 }
 
-mod iot_mqtt_replay;
-mod iot_ota_interlock;
+mod iot_esp32;
 mod web_a01_a03;
 mod web_a04_a05;
 mod web_a06_a08;
 mod web_a09_a10;
-use iot_mqtt_replay::{lab_iot_mqtt_acl, lab_iot_replay};
-use iot_ota_interlock::{lab_iot_interlock, lab_iot_ota};
+use iot_esp32::{
+    lab_iot_esp32_dht_oled, lab_iot_esp32_gpio, lab_iot_esp32_mqtt, lab_iot_esp32_ultrasonic,
+};
 use web_a01_a03::{lab_a01_idor, lab_a02_misconfig, lab_a03_supply_chain};
 use web_a04_a05::{lab_a04_crypto, lab_a05_sqli, lab_a05_xss};
 use web_a06_a08::{lab_a06_coupon, lab_a07_auth, lab_a08_webhook};
@@ -272,9 +272,9 @@ fn build_labs() -> Vec<LabDefinition> {
         lab_a08_webhook(),
         lab_a09_logging(),
         lab_a10_checkout(),
-        lab_iot_mqtt_acl(),
-        lab_iot_replay(),
-        lab_iot_ota(),
-        lab_iot_interlock(),
+        lab_iot_esp32_gpio(),
+        lab_iot_esp32_ultrasonic(),
+        lab_iot_esp32_dht_oled(),
+        lab_iot_esp32_mqtt(),
     ]
 }

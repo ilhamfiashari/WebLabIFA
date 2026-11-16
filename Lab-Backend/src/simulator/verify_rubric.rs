@@ -542,174 +542,108 @@ fn build_verification_cases(lab_id: &str) -> Vec<CaseTuple> {
                 |o| !o.exploit_proved,
             ),
         ],
-        "iot-mqtt-acl" => vec![
+        "iot-esp32-gpio" => vec![
             (
-                "IOT-ACL-POS".into(),
+                "ESP-GPIO-POS".into(),
                 "Positif",
-                "Sensor sah publish ke topik kelembapan sendiri".into(),
-                "sensor-tanah-01 PUB sensor".into(),
-                "ALLOW".into(),
+                "LED dengan resistor 220Ω menyala stabil di GPIO2".into(),
+                "blink_resistor".into(),
+                "SAFE_HIGH".into(),
                 ProbeInput {
-                    action: "publish".into(),
-                    actor: "sensor-tanah-01".into(),
-                    target: "kebun/A/sensor/kelembapan".into(),
+                    action: "blink_resistor".into(),
                     ..Default::default()
                 },
                 |o| o.response.status == 200 && !o.exploit_proved,
             ),
             (
-                "IOT-ACL-NEG".into(),
+                "ESP-GPIO-NEG".into(),
                 "Negatif",
-                "Node asing / sensor dilarang perintah pompa".into(),
-                "sensor-tamu-99 PUB aktuator".into(),
-                "DENY 403".into(),
+                "Keluaran langsung tanpa resistor ditahan proteksi".into(),
+                "direct_no_resistor".into(),
+                "BLOCKED 422".into(),
                 ProbeInput {
-                    action: "publish".into(),
-                    actor: "sensor-tamu-99".into(),
-                    target: "kebun/A/aktuator/pompa".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 403 && !o.exploit_proved,
-            ),
-            (
-                "IOT-ACL-REG".into(),
-                "Regresi",
-                "Wildcard subscribe lintas kebun ditolak".into(),
-                "sensor-tamu-99 SUB kebun/+/sensor/#".into(),
-                "DENY 403".into(),
-                ProbeInput {
-                    action: "subscribe".into(),
-                    actor: "sensor-tamu-99".into(),
-                    target: "kebun/+/sensor/#".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 403 && !o.exploit_proved,
-            ),
-        ],
-        "iot-replay" => vec![
-            (
-                "IOT-REP-POS".into(),
-                "Positif",
-                "Perintah segar bertanda tangan sah diterima".into(),
-                "fresh_signed".into(),
-                "ACCEPT".into(),
-                ProbeInput {
-                    action: "fresh_signed".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 200 && !o.exploit_proved,
-            ),
-            (
-                "IOT-REP-NEG".into(),
-                "Negatif",
-                "Replay nonce lama ditolak aktuator".into(),
-                "replay_recorded".into(),
-                "REJECT 403".into(),
-                ProbeInput {
-                    action: "replay_recorded".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 403 && !o.exploit_proved,
-            ),
-            (
-                "IOT-REP-REG".into(),
-                "Regresi",
-                "Timestamp kedaluwarsa ditolak".into(),
-                "expired_ts".into(),
-                "REJECT 403".into(),
-                ProbeInput {
-                    action: "expired_ts".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 403 && !o.exploit_proved,
-            ),
-        ],
-        "iot-ota" => vec![
-            (
-                "IOT-OTA-POS".into(),
-                "Positif",
-                "Firmware resmi v2.2.0 bertanda tangan terpasang".into(),
-                "official-v2.2.0".into(),
-                "200 terpasang".into(),
-                ProbeInput {
-                    target: "official-v2.2.0".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 200 && !o.exploit_proved,
-            ),
-            (
-                "IOT-OTA-NEG".into(),
-                "Negatif",
-                "Firmware dimodifikasi ditolak bootloader".into(),
-                "tampered-bin".into(),
-                "422 ditolak, tetap aman".into(),
-                ProbeInput {
-                    target: "tampered-bin".into(),
-                    ..Default::default()
-                },
-                |o| o.response.status == 422 && !o.exploit_proved,
-            ),
-            (
-                "IOT-OTA-REG".into(),
-                "Regresi",
-                "Downgrade v1.0.0 ditolak anti-rollback".into(),
-                "downgrade-v1.0.0".into(),
-                "422 ditolak".into(),
-                ProbeInput {
-                    target: "downgrade-v1.0.0".into(),
+                    action: "direct_no_resistor".into(),
                     ..Default::default()
                 },
                 |o| o.response.status == 422 && !o.exploit_proved,
             ),
         ],
-        "iot-interlock" => vec![
+        "iot-esp32-ultrasonic" => vec![
             (
-                "IOT-INT-POS".into(),
+                "ESP-ULTRA-POS".into(),
                 "Positif",
-                "Kelembapan sah 22% menyalakan pompa".into(),
-                "dry_valid".into(),
-                "Pompa ON".into(),
+                "Objek dekat valid mengaktifkan alarm & servo 90°".into(),
+                "close_valid".into(),
+                "200 ACTUATED".into(),
                 ProbeInput {
-                    action: "dry_valid".into(),
+                    action: "close_valid".into(),
                     ..Default::default()
                 },
-                |o| !o.exploit_proved && o.response.body.contains("\"ON\""),
+                |o| o.response.status == 200 && !o.exploit_proved,
             ),
             (
-                "IOT-INT-NEG".into(),
+                "ESP-ULTRA-NEG".into(),
                 "Negatif",
-                "Nilai cacat -50% membawa pompa ke SAFE_OFF".into(),
-                "out_of_range".into(),
-                "Pompa SAFE_OFF".into(),
+                "Nilai timeout 0 cm difilter tanpa memicu servo".into(),
+                "timeout_zero".into(),
+                "422 FILTERED".into(),
                 ProbeInput {
-                    action: "out_of_range".into(),
+                    action: "timeout_zero".into(),
                     ..Default::default()
                 },
-                |o| !o.exploit_proved && o.response.body.contains("SAFE_OFF"),
+                |o| o.response.status == 422 && !o.exploit_proved,
+            ),
+        ],
+        "iot-esp32-dht-oled" => vec![
+            (
+                "ESP-OLED-POS".into(),
+                "Positif",
+                "Pembacaan suhu & kelembapan tampil bersih di SSD1306".into(),
+                "valid_dht".into(),
+                "200 RENDER_OK".into(),
+                ProbeInput {
+                    action: "valid_dht".into(),
+                    ..Default::default()
+                },
+                |o| o.response.status == 200 && !o.exploit_proved,
             ),
             (
-                "IOT-INT-OFFLINE".into(),
+                "ESP-OLED-NEG".into(),
                 "Negatif",
-                "Sensor offline memicu SAFE_OFF".into(),
-                "sensor_offline".into(),
-                "SAFE_OFF saat putus".into(),
+                "Data NaN dan layar tidak dibersihkan dicegah".into(),
+                "nan_reading".into(),
+                "422 GUARDED".into(),
                 ProbeInput {
-                    action: "sensor_offline".into(),
+                    action: "nan_reading".into(),
                     ..Default::default()
                 },
-                |o| !o.exploit_proved && o.response.body.contains("SAFE_OFF"),
+                |o| o.response.status == 422 && !o.exploit_proved,
+            ),
+        ],
+        "iot-esp32-mqtt" => vec![
+            (
+                "ESP-MQTT-POS".into(),
+                "Positif",
+                "Telemetri ESP32 dikirim melalui mqtts://8883 TLS".into(),
+                "mqtts://broker.weblab.local:8883".into(),
+                "200 TLS_SENT".into(),
+                ProbeInput {
+                    target: "mqtts://broker.weblab.local:8883".into(),
+                    ..Default::default()
+                },
+                |o| o.response.status == 200 && !o.exploit_proved,
             ),
             (
-                "IOT-INT-REG".into(),
-                "Regresi",
-                "Setelah fault selesai, sensor valid 24% memulihkan pompa".into(),
-                "fault_then_recover".into(),
-                "Pulih -> Pompa ON".into(),
+                "ESP-MQTT-NEG".into(),
+                "Negatif",
+                "Broker plaintext mqtt://1883 ditolak".into(),
+                "mqtt://broker.weblab.local:1883".into(),
+                "403 BLOCKED_INSECURE".into(),
                 ProbeInput {
-                    action: "fault_then_recover".into(),
+                    target: "mqtt://broker.weblab.local:1883".into(),
                     ..Default::default()
                 },
-                |o| !o.exploit_proved && o.response.body.contains("\"ON\""),
+                |o| o.response.status == 403 && !o.exploit_proved,
             ),
         ],
         _ => vec![],

@@ -9,7 +9,9 @@ use probes_a01_a04::{sim_a01, sim_a02, sim_a03, sim_a04};
 use probes_a05::{sim_a05_sqli, sim_a05_xss};
 use probes_a06_a08::{sim_a06_coupon, sim_a07_auth, sim_a08_webhook};
 use probes_a09_a10::{sim_a09_logging, sim_a10_checkout};
-use probes_iot::{sim_iot_interlock, sim_iot_mqtt_acl, sim_iot_ota, sim_iot_replay};
+use probes_iot::{
+    sim_iot_esp32_dht_oled, sim_iot_esp32_gpio, sim_iot_esp32_mqtt, sim_iot_esp32_ultrasonic,
+};
 pub use verify_rubric::{RubricInput, calculate_rubric, run_verification};
 
 use crate::simulator_catalog::{LevelId, find_lab};
@@ -118,16 +120,10 @@ pub fn default_state(lab_id: &str, level: LevelId) -> Value {
         "a10-checkout" => {
             json!({ "stock": 10, "orders": [], "idempotency": {}, "tx_mode": level.as_str() })
         }
-        "iot-mqtt-acl" => json!({ "pump": "OFF", "moisture": 26, "broker_log": [] }),
-        "iot-replay" => {
-            json!({ "pump": "OFF", "clock_sec": 1000, "seen_nonces": ["n-1001"], "last_packet": { "cmd": "PUMP_ON", "ts": 1000, "nonce": "n-1001" } })
-        }
-        "iot-ota" => {
-            json!({ "active_version": "v2.1.0", "min_version": "v2.1.0", "operational": true, "ota_log": [] })
-        }
-        "iot-interlock" => {
-            json!({ "pump": "OFF", "moisture": 42, "online": true, "fault_latched": false })
-        }
+        "iot-esp32-gpio" => json!({ "gpio2": "LOW", "resistor_ok": true }),
+        "iot-esp32-ultrasonic" => json!({ "distance_cm": 120, "servo_deg": 0 }),
+        "iot-esp32-dht-oled" => json!({ "temp_c": 28.5, "humidity": 64.0, "oled_clean": true }),
+        "iot-esp32-mqtt" => json!({ "wifi": "connected", "tls_active": true }),
         _ => json!({ "level": level.as_str(), "probes": 0 }),
     }
 }
@@ -205,10 +201,12 @@ pub fn execute_probe(
         "a08-webhook" => sim_a08_webhook(level, patch, &cid, &mut next_state, input),
         "a09-logging" => sim_a09_logging(level, patch, &cid, &mut next_state, input),
         "a10-checkout" => sim_a10_checkout(level, patch, &cid, &mut next_state, input),
-        "iot-mqtt-acl" => sim_iot_mqtt_acl(level, patch, &cid, &mut next_state, input),
-        "iot-replay" => sim_iot_replay(level, patch, &cid, &mut next_state, input),
-        "iot-ota" => sim_iot_ota(level, patch, &cid, &mut next_state, input),
-        "iot-interlock" => sim_iot_interlock(level, patch, &cid, &mut next_state, input),
+        "iot-esp32-gpio" => sim_iot_esp32_gpio(level, patch, &cid, &mut next_state, input),
+        "iot-esp32-ultrasonic" => {
+            sim_iot_esp32_ultrasonic(level, patch, &cid, &mut next_state, input)
+        }
+        "iot-esp32-dht-oled" => sim_iot_esp32_dht_oled(level, patch, &cid, &mut next_state, input),
+        "iot-esp32-mqtt" => sim_iot_esp32_mqtt(level, patch, &cid, &mut next_state, input),
         _ => ProbeOutcome {
             request: RequestPreview {
                 method: "GET".into(),
