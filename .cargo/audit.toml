@@ -1,0 +1,7 @@
+[advisories]
+ignore = [
+  # Not compiled or linked: sqlx uses default-features = false with postgres only (no sqlite feature).
+  "RUSTSEC-2026-0459",
+  # Transitive via openidconnect 4.1.0 (JWS public-key verification only; RSA decryption oracle unused).
+  "RUSTSEC-2023-0071",
+]

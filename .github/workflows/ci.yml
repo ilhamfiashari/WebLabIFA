@@ -93,10 +93,12 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Validate Compose definitions
+        env:
+          POSTGRES_MIGRATOR_PASSWORD: ci-check-only # pragma: allowlist secret -- disposable CI fixture
         run: |
           docker compose --profile app config --quiet
           cp deploy/production.env.example deploy/production.env
-          POSTGRES_MIGRATOR_PASSWORD=ci-check-only docker compose -f deploy/compose.prod.yaml config --quiet # pragma: allowlist secret -- disposable CI fixture
+          docker compose -f deploy/compose.prod.yaml config --quiet
           rm -f deploy/production.env
       - name: Build backend & frontend containers
         run: |
