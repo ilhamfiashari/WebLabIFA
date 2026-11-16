@@ -31,7 +31,8 @@ import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../share
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
-import { IotCatalogPage, LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
+import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
+import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
 import { LeaderboardSection } from '../lecturer/LeaderboardSection'
 import { LabWorkspace } from '../simulator/LabWorkspace'
 import { simApi, type LevelId, type StudentDashboardResponse, type StudentLeaderboardResponse } from '../simulator/api'
@@ -39,7 +40,7 @@ import { simApi, type LevelId, type StudentDashboardResponse, type StudentLeader
 const PAGES: NavPage[] = [
   { key: 'beranda', path: '/lab', label: 'Beranda', icon: House },
   { key: 'web', path: '/lab/web', label: 'Keamanan Web', icon: ShieldAlert },
-  { key: 'iot', path: '/lab/iot', label: 'IoT Studio', icon: Cpu },
+  { key: 'iot', path: '/lab/iot', label: 'IoT Simulator', icon: Cpu },
   { key: 'tugas', path: '/lab/tugas', label: 'Tugas & Nilai', icon: ClipboardList },
   { key: 'progres', path: '/lab/pencapaian', label: 'Pencapaian', icon: Award },
   { key: 'peringkat', path: '/lab/peringkat', label: 'Peringkat', icon: Trophy },
@@ -158,11 +159,7 @@ export function StudentApp(props: Props) {
           <WebCatalogPage categoryFilter={webParts[0]} go={go} />
         )
       ) : path.startsWith('/lab/iot') ? (
-        iotLabId ? (
-          <LabDetailPage labId={iotLabId} csrf={props.user.csrf_token} theme={theme} go={go} />
-        ) : (
-          <IotCatalogPage go={go} />
-        )
+        <IotSimulatorStudio csrf={props.user.csrf_token} initialLabId={iotLabId} mode="mahasiswa" />
       ) : active === 'tugas' ? (
         <StudentAssignmentsPage dashQ={dashQ} csrf={props.user.csrf_token} go={go} />
       ) : active === 'riwayat' ? (

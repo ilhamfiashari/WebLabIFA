@@ -155,51 +155,6 @@ export function WebCatalogPage({
   )
 }
 
-export function IotCatalogPage({
-  go,
-  mode = 'mahasiswa',
-  presentationToggle,
-}: {
-  go: (to: string) => void
-  mode?: 'mahasiswa' | 'dosen'
-  presentationToggle?: React.ReactNode
-}) {
-  const basePath = mode === 'dosen' ? '/lab/dosen' : '/lab'
-  const catQ = useQuery({
-    queryKey: ['labs-catalog', mode, 'iot'],
-    queryFn: () => simApi.getCatalog({ track: 'iot' }),
-  })
-
-  if (catQ.isLoading || catQ.isError || !catQ.data) {
-    return <LoadState error={catQ.isError} onRetry={() => void catQ.refetch()} />
-  }
-
-  return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <PageHead
-        title="IoT Studio · Smart Irrigation Kebun A"
-        description={
-          mode === 'dosen'
-            ? 'Simulasi topologi sensor kelembapan, ESP32, broker MQTT ACL, firmware OTA, dan safety interlock untuk demo Dosen (semua level terbuka).'
-            : 'Simulasi topologi sensor kelembapan, ESP32, broker MQTT ACL, firmware OTA, dan safety interlock pompa air.'
-        }
-        actions={
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            {presentationToggle}
-            <Badge tone="info"><Cpu size={14} /> 4 Modul · 16 Level</Badge>
-          </div>
-        }
-      />
-
-      <div className="sim-lab-grid">
-        {catQ.data.labs.map((lab) => (
-          <LabCatalogCard key={lab.id} lab={lab} mode={mode} onOpen={() => go(`${basePath}/iot/${lab.id}`)} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function LabCatalogCard({
   lab,
   mode = 'mahasiswa',

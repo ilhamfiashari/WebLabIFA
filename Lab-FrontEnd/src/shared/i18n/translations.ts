@@ -25,7 +25,7 @@ export const TRANSLATIONS = {
       student: {
         beranda: 'Beranda',
         web: 'Keamanan Web',
-        iot: 'IoT Studio',
+        iot: 'IoT Simulator',
         tugas: 'Tugas & Nilai',
         progres: 'Pencapaian',
         peringkat: 'Peringkat',
@@ -37,7 +37,7 @@ export const TRANSLATIONS = {
       lecturer: {
         beranda: 'Beranda',
         web: 'Simulasi OWASP Web',
-        iot: 'IoT Studio',
+        iot: 'IoT Simulator',
         kelas: 'Kelas & Ekspor',
         leaderboard: 'Leaderboard',
         penugasan: 'Penugasan',
@@ -196,7 +196,7 @@ export const TRANSLATIONS = {
     },
     simulator: {
       webTitle: 'Laboratorium Keamanan Web · OWASP Top 10:2025',
-      iotTitle: 'IoT Studio · Keamanan Perangkat & Telemetri',
+      iotTitle: 'Simulator Hardware IoT & ESP32',
       resumeSession: 'Lanjutkan Sesi Terakhir',
       searchPlaceholder: 'Cari modul (IDOR, SQLi, XSS, CWE...)',
       allOwasp: 'Semua (A01–A10)',
@@ -241,7 +241,7 @@ export const TRANSLATIONS = {
       student: {
         beranda: 'Home',
         web: 'Web Security',
-        iot: 'IoT Studio',
+        iot: 'IoT Simulator',
         tugas: 'Assignments',
         progres: 'Achievements',
         peringkat: 'Leaderboard',
@@ -253,7 +253,7 @@ export const TRANSLATIONS = {
       lecturer: {
         beranda: 'Home',
         web: 'OWASP Web Sim',
-        iot: 'IoT Studio',
+        iot: 'IoT Simulator',
         kelas: 'Classes & Export',
         leaderboard: 'Leaderboard',
         penugasan: 'Assignments',
@@ -412,7 +412,7 @@ export const TRANSLATIONS = {
     },
     simulator: {
       webTitle: 'Web Security Laboratory · OWASP Top 10:2025',
-      iotTitle: 'IoT Studio · Device & Telemetry Security',
+      iotTitle: 'IoT Hardware & ESP32 Simulator',
       resumeSession: 'Resume Last Session',
       searchPlaceholder: 'Search module (IDOR, SQLi, XSS, CWE...)',
       allOwasp: 'All (A01–A10)',

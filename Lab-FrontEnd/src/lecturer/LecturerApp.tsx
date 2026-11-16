@@ -34,7 +34,8 @@ import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../share
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
-import { IotCatalogPage, LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
+import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
+import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
 import { LabWorkspace } from '../simulator/LabWorkspace'
 import { simApi, type InstructorDashboardResponse, type LevelId } from '../simulator/api'
 import { LeaderboardSection } from './LeaderboardSection'
@@ -43,7 +44,7 @@ const PAGES: NavPage[] = [
   { key: 'beranda', path: '/lab/dosen', label: 'Beranda', icon: House },
   { key: 'leaderboard', path: '/lab/dosen/leaderboard', label: 'Leaderboard', icon: Trophy },
   { key: 'web', path: '/lab/dosen/web', label: 'Simulasi OWASP Web', icon: ShieldAlert },
-  { key: 'iot', path: '/lab/dosen/iot', label: 'IoT Studio', icon: Cpu },
+  { key: 'iot', path: '/lab/dosen/iot', label: 'IoT Simulator', icon: Cpu },
   { key: 'kelas', path: '/lab/dosen/kelas', label: 'Kelas & Ekspor', icon: Users },
   { key: 'penugasan', path: '/lab/dosen/penugasan', label: 'Penugasan', icon: ClipboardPlus },
   { key: 'progres', path: '/lab/dosen/progres', label: 'Progres & Nilai', icon: BarChart3 },
@@ -186,18 +187,7 @@ export function LecturerApp(props: Props) {
           />
         )
       ) : active === 'iot' ? (
-        iotLabId ? (
-          <LabDetailPage
-            labId={iotLabId}
-            csrf={props.user.csrf_token}
-            theme={theme}
-            go={go}
-            mode="dosen"
-            presentationToggle={presentation}
-          />
-        ) : (
-          <IotCatalogPage go={go} mode="dosen" presentationToggle={presentation} />
-        )
+        <IotSimulatorStudio csrf={props.user.csrf_token} initialLabId={iotLabId} mode="dosen" />
       ) : active === 'panduan' ? (
         <PanduanPage role="dosen" />
       ) : active === 'pengaturan' ? (

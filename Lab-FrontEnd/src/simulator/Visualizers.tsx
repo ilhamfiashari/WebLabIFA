@@ -98,30 +98,6 @@ function getMissionSpec(labId: string): WebGoatMissionSpec {
         goal: 'Picu kegagalan transaksi setelah reservasi stok atau timeout + retry untuk mendeteksi stok hilang / double order.',
         lessonTip: 'Bandingkan mode non-atomik terhadap transaksi DB atomik + idempotency key.',
       }
-    case 'iot-mqtt-acl':
-      return {
-        badge: 'IoT Studio · Broker MQTT & Topic ACL',
-        goal: 'Gunakan node tamu (sensor-tamu-99) untuk mempublikasikan perintah pompa atau wildcard subscribe lintas kebun.',
-        lessonTip: 'Setiap clientId hanya boleh publish/subscribe pada topik yang sesuai otorisasinya.',
-      }
-    case 'iot-replay':
-      return {
-        badge: 'IoT Studio · Anti-Replay Nonce & Timestamp',
-        goal: 'Kirim ulang paket perintah lama (n-1001) atau paket kedaluwarsa untuk menguji proteksi aktuator pompa.',
-        lessonTip: 'Perintah harus memvalidasi HMAC, freshness timestamp, dan nonce unik sekali pakai.',
-      }
-    case 'iot-ota':
-      return {
-        badge: 'IoT Studio · OTA Firmware Signature & Rollback',
-        goal: 'Uji pemasangan firmware palsu (tampered-bin) atau versi lama rentan (downgrade-v1.0.0) ke ESP32.',
-        lessonTip: 'Bootloader aman wajib memverifikasi tanda tangan digital & anti-rollback monotonic counter.',
-      }
-    case 'iot-interlock':
-      return {
-        badge: 'IoT Studio · Fail-Safe Sensor Interlock',
-        goal: 'Kirim nilai sensor di luar rentang (-50%) atau putuskan sensor agar pompa masuk mode aman SAFE_OFF.',
-        lessonTip: 'Uji pemulihan setelah kondisi fault agar pompa tidak menyala tanpa konfirmasi aman.',
-      }
     default:
       return {
         badge: 'WebGoat Track · Interactive Security Lab',
@@ -400,102 +376,6 @@ function getPresets(labId: string): PresetBtn[] {
           input: { action: 'timeout_retry', target: 'idem-demo' },
         },
       ]
-    case 'iot-mqtt-acl':
-      return [
-        {
-          label: 'Baseline: Sensor publish kelembapan',
-          hint: 'Publish ke topik sensor milik kebun A',
-          tone: 'baseline',
-          input: { action: 'publish', actor: 'sensor-tanah-01', target: 'kebun/A/sensor/kelembapan' },
-        },
-        {
-          label: 'Uji Rogue Node perintah Pompa',
-          hint: 'Node sensor menyalakan topik aktuator',
-          tone: 'attack',
-          input: { action: 'publish', actor: 'sensor-tamu-99', target: 'kebun/A/aktuator/pompa' },
-        },
-        {
-          label: 'Uji Wildcard Subscribe Lintas Kebun',
-          hint: 'Subscribe kebun/+/sensor/# tanpa ACL',
-          tone: 'attack',
-          input: { action: 'subscribe', actor: 'sensor-tamu-99', target: 'kebun/+/sensor/#' },
-        },
-      ]
-    case 'iot-replay':
-      return [
-        {
-          label: 'Baseline: Perintah Segar Bertanda Tangan',
-          hint: 'Nonce baru & timestamp di dalam jendela aman',
-          tone: 'baseline',
-          input: { action: 'fresh_signed' },
-        },
-        {
-          label: 'Uji Replay Paket Lama (n-1001)',
-          hint: 'Kirim ulang paket PUMP_ON yang disadap',
-          tone: 'attack',
-          input: { action: 'replay_recorded' },
-        },
-        {
-          label: 'Uji Timestamp Kedaluwarsa (+10m)',
-          hint: 'Paket lama di luar toleransi 60 detik',
-          tone: 'attack',
-          input: { action: 'expired_ts' },
-        },
-        {
-          label: 'Uji Forged Cmd Tanpa HMAC',
-          hint: 'Perintah palsu tanpa tanda tangan valid',
-          tone: 'attack',
-          input: { action: 'forged_cmd' },
-        },
-      ]
-    case 'iot-ota':
-      return [
-        {
-          label: 'Baseline: Flash Firmware Resmi v2.2.0',
-          hint: 'Update resmi dengan signature Ed25519 sah',
-          tone: 'baseline',
-          input: { target: 'official-v2.2.0' },
-        },
-        {
-          label: 'Uji Binary Dimodifikasi (tampered-bin)',
-          hint: 'Firmware dimodifikasi penyerang',
-          tone: 'attack',
-          input: { target: 'tampered-bin' },
-        },
-        {
-          label: 'Uji Downgrade Rollback v1.0.0',
-          hint: 'Paksa turun ke versi lama yang rentan',
-          tone: 'attack',
-          input: { target: 'downgrade-v1.0.0' },
-        },
-      ]
-    case 'iot-interlock':
-      return [
-        {
-          label: 'Baseline: Kelembapan Valid 22% (Kering)',
-          hint: 'Data valid memicu penyiraman terukur',
-          tone: 'baseline',
-          input: { action: 'dry_valid' },
-        },
-        {
-          label: 'Uji Nilai Cacat Sensor (-50%)',
-          hint: 'Out-of-range harus masuk SAFE_OFF',
-          tone: 'attack',
-          input: { action: 'out_of_range' },
-        },
-        {
-          label: 'Uji Sensor Terputus (Offline)',
-          hint: 'Hilang heartbeat memicu fail-safe SAFE_OFF',
-          tone: 'attack',
-          input: { action: 'sensor_offline' },
-        },
-        {
-          label: 'Uji Pemulihan Setelah Fault (24%)',
-          hint: 'Sensor kembali stabil pasca pemulihan',
-          tone: 'neutral',
-          input: { action: 'fault_then_recover' },
-        },
-      ]
     default:
       return []
   }
@@ -506,14 +386,11 @@ export function ProbeConsole({ labId, sessionState, outcome, busy, onProbe }: Pr
   const mission = getMissionSpec(labId)
   const [testedLabels, setTestedLabels] = useState<string[]>([])
   const [payload, setPayload] = useState(labId === 'a05-xss' ? '<img src=x onerror=demoAlert()>' : "' OR '1'='1")
-  const [target, setTarget] = useState(
-    labId === 'a01-idor' ? '102' : labId === 'iot-mqtt-acl' ? 'kebun/A/aktuator/pompa' : 'name_asc',
-  )
-  const [actor, setActor] = useState(labId === 'iot-mqtt-acl' ? 'sensor-tamu-99' : 'rani')
+  const [target, setTarget] = useState(labId === 'a01-idor' ? '102' : 'name_asc')
+  const [actor, setActor] = useState('rani')
   const [action, setAction] = useState(labId === 'a01-idor' ? 'orders' : 'publish')
 
   const showIdorControls = labId === 'a01-idor'
-  const showMqttControls = labId === 'iot-mqtt-acl'
 
   const runPreset = (p: PresetBtn) => {
     setTestedLabels((prev) => (prev.includes(p.label) ? prev : [...prev, p.label]))
@@ -669,49 +546,6 @@ export function ProbeConsole({ labId, sessionState, outcome, busy, onProbe }: Pr
         </form>
       ) : null}
 
-      {showMqttControls ? (
-        <form
-          className="sim-vis-box"
-          onSubmit={(e) => {
-            e.preventDefault()
-            onProbe({ actor, target, action })
-          }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-            <div className="sim-form-field">
-              <label htmlFor="mqtt-client">Client MQTT</label>
-              <select id="mqtt-client" className="sim-select-full" value={actor} onChange={(e) => setActor(e.target.value)}>
-                <option value="sensor-tanah-01">sensor-tanah-01 (Node Sensor)</option>
-                <option value="controller-kebun-a">controller-kebun-a (Controller)</option>
-                <option value="sensor-tamu-99">sensor-tamu-99 (Node Rogue)</option>
-              </select>
-            </div>
-            <div className="sim-form-field">
-              <label htmlFor="mqtt-op">Operasi</label>
-              <select id="mqtt-op" className="sim-select-full" value={action} onChange={(e) => setAction(e.target.value)}>
-                <option value="publish">PUBLISH</option>
-                <option value="subscribe">SUBSCRIBE</option>
-              </select>
-            </div>
-            <div className="sim-form-field">
-              <label htmlFor="mqtt-topic">Topik MQTT</label>
-              <input
-                id="mqtt-topic"
-                className="sim-input"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder="kebun/A/aktuator/pompa"
-              />
-            </div>
-          </div>
-          <div>
-            <button type="submit" className="btn-primary" disabled={busy}>
-              <Play size={15} /> Uji Kebijakan Broker ACL
-            </button>
-          </div>
-        </form>
-      ) : null}
-
       <LabStateVisualizer labId={labId} sessionState={sessionState} outcome={outcome} />
     </div>
   )
@@ -851,36 +685,6 @@ function LabStateVisualizer({
         <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>
           Invarian: Setiap 1 transaksi sukses mengurangi tepat 1 stok dan menciptakan tepat 1 order.
         </p>
-      </div>
-    )
-  }
-
-  if (labId.startsWith('iot-') || kind.startsWith('iot_')) {
-    const pump = String(vis.pump ?? sessionState.pump ?? 'OFF')
-    const activeVer = String(vis.active_version ?? sessionState.active_version ?? 'v2.1.0')
-    const clockSec = Number(vis.clock_sec ?? sessionState.clock_sec ?? 1000)
-    const logItems = Array.isArray(vis.broker_log)
-      ? (vis.broker_log as string[])
-      : Array.isArray(sessionState.broker_log)
-        ? (sessionState.broker_log as string[])
-        : []
-    return (
-      <div className="sim-vis-box">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 13 }}>Telemetri Smart Irrigation Kebun A</strong>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Badge tone={pump === 'SAFE_OFF' ? 'good' : pump === 'ON' && outcome?.exploit_proved ? 'bad' : 'muted'}>
-              Pompa: {pump}
-            </Badge>
-            {labId === 'iot-ota' ? <Badge tone="muted">Firmware: {activeVer}</Badge> : null}
-            {labId === 'iot-replay' ? <Badge tone="muted">Jam Node: t={clockSec}s</Badge> : null}
-          </div>
-        </div>
-        {logItems.length > 0 ? (
-          <div className="sim-http-pre" style={{ maxHeight: 120 }}>
-            {logItems.slice(-5).join('\n')}
-          </div>
-        ) : null}
       </div>
     )
   }
