@@ -890,11 +890,29 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByText('Arduino Mega', { exact: true })).toBeVisible()
   await expect(page.getByText('Breadboard', { exact: true })).toBeVisible()
 
-  // Klik kabel memilih kabel (tidak langsung menghapus)
+  // Klik kabel memilih kabel (tidak langsung menghapus) dan mendukung tarik kabel langsung dari pin
   const wireCountBefore = await page.locator('.iot-wire-group').count()
   await page.locator('.iot-wire-group').first().dispatchEvent('click')
   await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore)
   await expect(page.getByRole('button', { name: 'Hapus Kabel' })).toBeVisible()
+
+  const pinFrom = page.locator('.iot-pin[data-node-id="board"][data-pin-id="GPIO5"] .iot-pin-hit')
+  const pinTo = page.locator('.iot-pin[data-node-id="res-1"][data-pin-id="P2"] .iot-pin-hit')
+  await pinFrom.scrollIntoViewIfNeeded()
+  const boxFrom = await pinFrom.boundingBox()
+  const boxTo = await pinTo.boundingBox()
+  expect(boxFrom && boxTo).toBeTruthy()
+  if (boxFrom && boxTo) {
+    await page.mouse.move(boxFrom.x + boxFrom.width / 2, boxFrom.y + boxFrom.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(boxTo.x + boxTo.width / 2, boxTo.y + boxTo.height / 2, { steps: 6 })
+    await page.mouse.up()
+  }
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+  await page.locator('.iot-wire-group').last().dispatchEvent('click')
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+  await page.getByRole('button', { name: 'Hapus Kabel' }).click()
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore)
 
   // Cek Rangkaian & Koding lalu jalankan simulasi Blink + Resistor default
   await page.getByRole('button', { name: 'Cek', exact: true }).click()
