@@ -1,12 +1,14 @@
 mod admin;
 mod catalog;
 mod instructor;
+mod iot_projects;
 mod sessions;
 mod student;
 
 pub use admin::*;
 pub use catalog::*;
 pub use instructor::*;
+pub use iot_projects::*;
 pub use sessions::*;
 pub use student::*;
 
@@ -50,9 +52,9 @@ pub(super) async fn ensure_default_assignments(
                 21,
             ),
             (
-                "Tugas 4 · IoT ACL Topik MQTT Smart Irrigation",
-                "iot-mqtt-acl",
-                "medium",
+                "Tugas 4 · ESP32-C3: Kontrol GPIO, LED & Resistor",
+                "iot-esp32-gpio",
+                "easy",
                 28,
             ),
         ];

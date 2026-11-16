@@ -100,6 +100,18 @@ pub fn router(state: AppState) -> Router {
         .route("/api/student/history", get(portal::student_history))
         .route("/api/student/leaderboard", get(portal::student_leaderboard))
         .route(
+            "/api/iot/projects",
+            get(portal::list_iot_projects).post(portal::save_iot_project),
+        )
+        .route(
+            "/api/iot/projects/{project_id}",
+            delete(portal::delete_iot_project),
+        )
+        .route(
+            "/api/iot/missions/submit",
+            post(portal::submit_iot_mission),
+        )
+        .route(
             "/api/dashboard/instructor",
             get(portal::instructor_dashboard),
         )
