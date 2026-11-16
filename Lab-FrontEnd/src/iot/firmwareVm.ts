@@ -404,6 +404,7 @@ export function createInitialSimulation(
     lcdRows: {},
     serialLog: [],
     plotHistory: [],
+    logicHistory: [],
     mqttMessages: [],
     wifiConnected: false,
     wifiIp: '0.0.0.0',
@@ -527,7 +528,7 @@ function evalExpr(
     if (fn === 'Serial.readString') return ctx.serialRxQueue.shift() ?? ''
     if (fn === 'digitalRead') {
       const gpio = Number(args[0] ?? 0)
-      const btn = findConnectedComponent(ctx, components, gpio, 'pushbutton')
+      const btn = findConnectedComponent(ctx, components, gpio, 'pushbutton') ?? findConnectedComponent(ctx, components, gpio, 'slide-switch')
       if (btn) return btn.props.pressed || btn.props.latched ? 0 : 1
       const pir = findConnectedComponent(ctx, components, gpio, 'pir')
       if (pir) return pir.props.motion ? 1 : 0
@@ -538,6 +539,8 @@ function evalExpr(
       const maxAdc = BOARDS[ctx.boardId].logicVoltage === 5 ? 1023 : 4095
       const pot = findConnectedComponent(ctx, components, gpio, 'potentiometer') ?? findConnectedComponent(ctx, components, gpio, 'slide-pot')
       if (pot) return Math.round(((pot.props.potPct ?? 50) / 100) * maxAdc)
+      const joy = findConnectedComponent(ctx, components, gpio, 'joystick')
+      if (joy) return Math.round(((joy.props.joyX ?? 512) / 1023) * maxAdc)
       const ldr = findConnectedComponent(ctx, components, gpio, 'ldr')
       if (ldr) return Math.round(((ldr.props.lux ?? 500) / 1000) * maxAdc)
       const mq2 = findConnectedComponent(ctx, components, gpio, 'mq2')
@@ -756,8 +759,9 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
     } else if (fn === 'lcd.setCursor') {
       ctx.vars.__lcdRow = Number(args[1] ?? 0)
     } else if (fn === 'WiFi.begin' && BOARDS[ctx.boardId].hasWifi) {
+      const ssid = String(args[0] ?? 'Wokwi-GUEST')
       ctx.sim.wifiConnected = true
-      ctx.sim.wifiIp = '192.168.4.42'
+      ctx.sim.wifiIp = ssid.toLowerCase().includes('wokwi') ? '10.13.37.2' : '192.168.4.42'
     } else if (fn === 'mqtt.begin') {
       const url = String(args[0] ?? 'mqtt://broker.weblab.local:1883')
       ctx.vars.__mqttBroker = url
@@ -843,6 +847,13 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
       }
     }
   }
+
+  // Record 8-channel digital logic sample for Wokwi Logic Analyzer & VCD export
+  const channels: Record<number, 0 | 1> = {}
+  for (const g of Object.values(ctx.sim.gpioStates)) {
+    channels[g.gpio] = g.digital
+  }
+  ctx.sim.logicHistory = [...ctx.sim.logicHistory.slice(-47), { timeMs: ctx.sim.elapsedMs, channels }]
 }
 
 function emitBootBanner(ctx: VmContext) {

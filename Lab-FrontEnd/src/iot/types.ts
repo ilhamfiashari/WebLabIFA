@@ -43,10 +43,12 @@ export type ComponentKind =
   | 'led'
   | 'rgb-led'
   | 'pushbutton'
+  | 'slide-switch'
   | 'resistor'
   | 'breadboard'
   | 'potentiometer'
   | 'slide-pot'
+  | 'joystick'
   | 'rotary-encoder'
   | 'keypad-4x4'
   | 'dip-switch'
@@ -61,6 +63,7 @@ export type ComponentKind =
   | 'pir'
   | 'mpu6050'
   | 'bmp180'
+  | 'hx711'
   | 'rfid-rc522'
   | 'rtc-ds1307'
   | 'oled-ssd1306'
@@ -69,10 +72,12 @@ export type ComponentKind =
   | 'seven-seg'
   | 'seven-seg-4'
   | 'led-bar-graph'
+  | 'max7219-matrix'
   | 'neopixel-ring'
   | 'neopixel-strip'
   | 'tft-ili9341'
   | 'servo'
+  | 'stepper'
   | 'buzzer'
   | 'relay'
 
@@ -104,6 +109,8 @@ export interface PlacedComponent {
   boardId?: BoardId
   x: number
   y: number
+  /** Rotation in 90-degree increments matching Wokwi diagram.json (0, 90, 180, 270) */
+  rotate?: number
   label: string
   color?: 'red' | 'green' | 'yellow' | 'blue'
   ohms?: number
@@ -120,6 +127,9 @@ export interface PlacedComponent {
     gasPpm?: number
     pressureHpa?: number
     tiltDeg?: number
+    weightKg?: number
+    joyX?: number
+    joyY?: number
     dipBits?: number[]
     encoderStep?: number
     lastKey?: string
@@ -195,6 +205,11 @@ export interface MqttMessage {
   tls: boolean
 }
 
+export interface LogicSample {
+  timeMs: number
+  channels: Record<number, 0 | 1>
+}
+
 export interface SimulationState {
   running: boolean
   elapsedMs: number
@@ -208,6 +223,7 @@ export interface SimulationState {
   lcdRows: Record<string, [string, string]>
   serialLog: SerialEntry[]
   plotHistory: PlotPoint[]
+  logicHistory: LogicSample[]
   mqttMessages: MqttMessage[]
   wifiConnected: boolean
   wifiIp: string

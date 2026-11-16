@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Activity, Cpu, Lock, Send, ShieldAlert, Terminal, Trash2, Wifi } from 'lucide-react'
+import { Activity, Cpu, Download, Lock, Send, ShieldAlert, Terminal, Trash2, Waves, Wifi } from 'lucide-react'
 import { Badge } from '../portal/ui'
+import { buildVcdExport } from './wokwiFormat'
 import type { SimulationState } from './types'
 
 const PLOT_COLORS = ['#22c55e', '#38bdf8', '#f59e0b', '#f472b6']
@@ -18,8 +19,9 @@ export function TelemetryDock({
   onClearSerial: () => void
   onSendSerial: (text: string) => void
 }) {
-  const [tab, setTab] = useState<'serial' | 'plotter' | 'gpio' | 'mqtt'>('serial')
+  const [tab, setTab] = useState<'serial' | 'plotter' | 'logic' | 'gpio' | 'mqtt'>('serial')
   const [txInput, setTxInput] = useState('')
+  const logicChannels = Object.keys(sim.gpioStates).map(Number).slice(0, 8)
 
   const seriesKeys = Array.from(
     new Set(sim.plotHistory.flatMap((pt) => Object.keys(pt.series))),
@@ -47,6 +49,9 @@ export function TelemetryDock({
           </button>
           <button type="button" role="tab" aria-selected={tab === 'plotter'} className={`iot-tab ${tab === 'plotter' ? 'is-active' : ''}`} onClick={() => setTab('plotter')}>
             <Activity size={14} /> Serial Plotter
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'logic'} className={`iot-tab ${tab === 'logic' ? 'is-active' : ''}`} onClick={() => setTab('logic')}>
+            <Waves size={14} /> Logic Analyzer
           </button>
           <button type="button" role="tab" aria-selected={tab === 'gpio'} className={`iot-tab ${tab === 'gpio' ? 'is-active' : ''}`} onClick={() => setTab('gpio')}>
             <Cpu size={14} /> {lang === 'en' ? 'GPIO & Safety' : 'GPIO & Proteksi'}
@@ -145,6 +150,61 @@ export function TelemetryDock({
                 })}
               </svg>
             </>
+          )}
+        </div>
+      ) : tab === 'logic' ? (
+        <div className="iot-logic-pane">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {lang === 'en'
+                ? '8-Channel Digital Signal Analyzer (click Run to capture HIGH/LOW waveforms)'
+                : 'Logic Analyzer 8-Kanal (klik Jalankan untuk merekam bentuk gelombang HIGH/LOW)'}
+            </span>
+            <button
+              type="button"
+              className="btn-outline iot-mini-btn"
+              disabled={sim.logicHistory.length === 0}
+              onClick={() => {
+                const vcd = buildVcdExport(sim.logicHistory, logicChannels)
+                const blob = new Blob([vcd], { type: 'text/plain;charset=utf-8' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'wokwi-logic-trace.vcd'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              <Download size={12} /> Download .vcd
+            </button>
+          </div>
+          {sim.logicHistory.length === 0 ? (
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+              {lang === 'en' ? 'No captured samples yet.' : 'Belum ada sampel gelombang digital yang direkam.'}
+            </p>
+          ) : (
+            <div className="iot-logic-channels">
+              {logicChannels.map((gpio, chIdx) => {
+                const samples = sim.logicHistory
+                const stepW = Math.max(10, Math.floor(540 / Math.max(1, samples.length)))
+                let pathD = ''
+                samples.forEach((s, i) => {
+                  const val = s.channels[gpio] ?? 0
+                  const y = val ? 5 : 21
+                  const x = i * stepW
+                  if (i === 0) pathD = `M ${x} ${y} H ${x + stepW}`
+                  else pathD += ` V ${y} H ${x + stepW}`
+                })
+                return (
+                  <div key={`ch-${gpio}`} className="iot-logic-row">
+                    <span className="iot-logic-label">CH{chIdx} (D{gpio})</span>
+                    <svg viewBox={`0 0 ${Math.max(120, samples.length * stepW)} 26`} height={26} style={{ flex: 1 }}>
+                      <path d={pathD} fill="none" stroke={PLOT_COLORS[chIdx % PLOT_COLORS.length]} strokeWidth={2} />
+                    </svg>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       ) : tab === 'gpio' ? (

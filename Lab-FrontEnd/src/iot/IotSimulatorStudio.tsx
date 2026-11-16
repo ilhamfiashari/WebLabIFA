@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   Award,
+  BookOpen,
   CheckCircle2,
   Code2,
   Cpu,
+  Download,
+  FileJson,
   FolderOpen,
   Pin,
   Plus,
@@ -34,6 +37,12 @@ import {
 } from './firmwareVm'
 import { IOT_MISSIONS, IOT_PRESETS } from './presets'
 import { TelemetryDock } from './TelemetryDock'
+import {
+  WOKWI_LIBRARY_REGISTRY,
+  lintWokwiDiagram,
+  parseWokwiDiagramJson,
+  toWokwiDiagramJson,
+} from './wokwiFormat'
 import type {
   BoardId,
   CircuitDiagnosticItem,
@@ -90,7 +99,7 @@ export function IotSimulatorStudio({
     return IOT_PRESETS[0]
   }, [initialLabId])
 
-  const [leftTab, setLeftTab] = useState<'code' | 'components' | 'terminal'>('code')
+  const [leftTab, setLeftTab] = useState<'code' | 'diagram' | 'libraries' | 'components' | 'terminal'>('code')
   const [boardId, setBoardId] = useState<BoardId>(initialPreset.board)
   const [activePresetId, setActivePresetId] = useState<string>(initialPreset.id)
   const [activeMissionId, setActiveMissionId] = useState<string | null>(initialPreset.missionId ?? null)
@@ -99,6 +108,9 @@ export function IotSimulatorStudio({
   const [code, setCode] = useState(initialPreset.code)
   const [components, setComponents] = useState<PlacedComponent[]>(initialPreset.components)
   const [wires, setWires] = useState<Wire[]>(initialPreset.wires)
+  const [diagramText, setDiagramText] = useState('')
+  const [diagramError, setDiagramError] = useState<string | null>(null)
+  const [libSearch, setLibSearch] = useState('')
   const [wireColor, setWireColor] = useState(WIRE_COLORS[0].id)
   const [speed, setSpeed] = useState<0.5 | 1 | 2>(1)
   const [audioOn, setAudioOn] = useState(false)
@@ -386,14 +398,53 @@ export function IotSimulatorStudio({
         gasPpm: kind === 'mq2' ? 280 : undefined,
         pressureHpa: kind === 'bmp180' ? 1013 : undefined,
         tiltDeg: kind === 'mpu6050' ? 0 : undefined,
+        weightKg: kind === 'hx711' ? 1.2 : undefined,
+        joyX: kind === 'joystick' ? 512 : undefined,
+        joyY: kind === 'joystick' ? 512 : undefined,
         dipBits: kind === 'dip-switch' ? [0, 0, 0, 0, 0, 0, 0, 0] : undefined,
-        pressed: kind === 'pushbutton' ? false : undefined,
+        pressed: kind === 'pushbutton' || kind === 'slide-switch' ? false : undefined,
         motion: kind === 'pir' ? false : undefined,
       },
     }
     const nextComps = [...components, newComp]
     setComponents(nextComps)
     setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+  }
+
+  const duplicateNode = (nodeId: string) => {
+    const src = components.find((c) => c.id === nodeId)
+    if (!src) return
+    const copy: PlacedComponent = {
+      ...src,
+      id: nextUid(src.kind === 'mcu' ? 'mcu' : src.kind),
+      x: Math.min(760, src.x + 32),
+      y: Math.min(410, src.y + 28),
+      props: { ...src.props },
+    }
+    const nextComps = [...components, copy]
+    setComponents(nextComps)
+    setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+  }
+
+  const openDiagramTab = () => {
+    const json = JSON.stringify(toWokwiDiagramJson(boardId, components, wires, projectTitle), null, 2)
+    setDiagramText(json)
+    setDiagramError(null)
+    setLeftTab('diagram')
+  }
+
+  const applyDiagramJson = () => {
+    const parsed = parseWokwiDiagramJson(diagramText)
+    if (!parsed.ok) {
+      setDiagramError(parsed.error)
+      return
+    }
+    setDiagramError(null)
+    setBoardId(parsed.boardId)
+    setComponents(parsed.components)
+    setWires(parsed.wires)
+    setSimState(createInitialSimulation(parsed.boardId, parsed.components, parsed.wires))
+    setStatusNotice(en ? 'Applied diagram.json to circuit canvas.' : 'diagram.json berhasil diterapkan ke kanvas.')
   }
 
   const togglePin = (kind: ComponentKind) => {
@@ -634,6 +685,24 @@ export function IotSimulatorStudio({
             <button
               type="button"
               role="tab"
+              aria-selected={leftTab === 'diagram'}
+              className={`iot-left-tab ${leftTab === 'diagram' ? 'is-active' : ''}`}
+              onClick={openDiagramTab}
+            >
+              diagram.json
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={leftTab === 'libraries'}
+              className={`iot-left-tab ${leftTab === 'libraries' ? 'is-active' : ''}`}
+              onClick={() => setLeftTab('libraries')}
+            >
+              Libraries
+            </button>
+            <button
+              type="button"
+              role="tab"
               aria-selected={leftTab === 'components'}
               className={`iot-left-tab ${leftTab === 'components' ? 'is-active' : ''}`}
               onClick={() => setLeftTab('components')}
@@ -677,6 +746,103 @@ export function IotSimulatorStudio({
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                 />
+              </div>
+            </div>
+          ) : leftTab === 'diagram' ? (
+            (() => {
+              const lint = lintWokwiDiagram(diagramText || JSON.stringify(toWokwiDiagramJson(boardId, components, wires, projectTitle)))
+              return (
+                <div className="iot-diagram-pane">
+                  <div className="iot-panel-head">
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
+                      <FileJson size={14} /> diagram.json (Wokwi v1)
+                    </span>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button type="button" className="btn-outline iot-mini-btn" onClick={openDiagramTab}>
+                        Reset Sync
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-outline iot-mini-btn"
+                        onClick={() => {
+                          const blob = new Blob([diagramText], { type: 'application/json;charset=utf-8' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = 'diagram.json'
+                          a.click()
+                          URL.revokeObjectURL(url)
+                        }}
+                      >
+                        <Download size={12} /> JSON
+                      </button>
+                      <button type="button" className="btn-primary iot-mini-btn" onClick={applyDiagramJson}>
+                        {en ? 'Apply diagram.json' : 'Terapkan ke Kanvas'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="iot-diagram-lint-bar">
+                    <Badge tone={lint.valid ? 'good' : 'bad'}>
+                      {lint.valid ? 'wokwi-cli lint: OK (0 errors)' : `Lint Errors: ${lint.errors.length}`}
+                    </Badge>
+                    {!lint.valid || diagramError ? (
+                      <span className="iot-lint-err">{diagramError ?? lint.errors[0]}</span>
+                    ) : null}
+                  </div>
+                  <textarea
+                    aria-label="Wokwi diagram.json editor"
+                    className="iot-diagram-textarea"
+                    spellCheck={false}
+                    value={diagramText}
+                    onChange={(e) => setDiagramText(e.target.value)}
+                  />
+                </div>
+              )
+            })()
+          ) : leftTab === 'libraries' ? (
+            <div className="iot-libs-pane">
+              <div className="iot-panel-head">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
+                  <BookOpen size={14} /> Library Manager (libraries.txt)
+                </span>
+              </div>
+              <div className="search" style={{ width: '100%' }}>
+                <Search size={14} />
+                <input
+                  value={libSearch}
+                  onChange={(e) => setLibSearch(e.target.value)}
+                  placeholder={en ? 'Search Arduino / ESP32 libraries...' : 'Cari library Arduino / ESP32...'}
+                />
+              </div>
+              <div className="iot-lib-list">
+                {WOKWI_LIBRARY_REGISTRY.filter(
+                  (l) =>
+                    !libSearch.trim() ||
+                    l.name.toLowerCase().includes(libSearch.toLowerCase()) ||
+                    l.include.toLowerCase().includes(libSearch.toLowerCase()),
+                ).map((lib) => {
+                  const installed = code.includes(lib.include)
+                  return (
+                    <div key={lib.id} className="iot-lib-item">
+                      <div>
+                        <strong>{lib.name}</strong> <span className="muted">v{lib.version}</span>
+                        <small style={{ display: 'block', color: 'var(--ink-2)' }}>{en ? lib.descriptionEn : lib.descriptionId}</small>
+                        <code style={{ fontSize: 11 }}>{lib.include}</code>
+                      </div>
+                      <button
+                        type="button"
+                        className={installed ? 'btn-outline iot-mini-btn' : 'btn-primary iot-mini-btn'}
+                        disabled={installed}
+                        onClick={() => {
+                          setCode((prev) => `${lib.include}\n${prev}`)
+                          setStatusNotice(`${lib.name} (${lib.include}) ditambahkan ke Main.ino.`)
+                        }}
+                      >
+                        {installed ? (en ? 'Added ✓' : 'Terpasang ✓') : en ? '+ Include' : '+ Pasang'}
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ) : leftTab === 'components' ? (
@@ -881,6 +1047,7 @@ export function IotSimulatorStudio({
               setWires(nextWires)
               setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, nextWires), running: prev.running }))
             }}
+            onDuplicateNode={duplicateNode}
             onSelectPrimaryBoard={switchBoard}
           />
 

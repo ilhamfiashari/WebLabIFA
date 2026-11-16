@@ -975,3 +975,87 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12.5px;
 }
+
+.iot-popover-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+/* diagram.json, Library Manager, & 8-Channel Logic Analyzer styles */
+.iot-diagram-pane,
+.iot-libs-pane {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.iot-diagram-lint-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.iot-lint-err {
+  font-size: 12px;
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.iot-diagram-textarea {
+  width: 100%;
+  min-height: 360px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.iot-lib-list {
+  display: grid;
+  gap: 8px;
+  max-height: 410px;
+  overflow-y: auto;
+}
+
+.iot-lib-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.iot-logic-channels {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #0b1322;
+  border: 1px solid #1e293b;
+}
+
+.iot-logic-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iot-logic-label {
+  width: 72px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+}

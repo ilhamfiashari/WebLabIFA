@@ -947,10 +947,21 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('ESP-ROM:esp32c3-api1-20210207')
 
+  // Tab diagram.json (skema Wokwi v1 + linter), Library Manager & Logic Analyzer
+  await page.getByRole('tab', { name: 'diagram.json' }).click()
+  await expect(page.getByText('wokwi-cli lint: OK (0 errors)')).toBeVisible()
+  await expect(page.getByLabel('Wokwi diagram.json editor')).toHaveValue(/wokwi-esp32-c3-devkitm-1/)
+
+  await page.getByRole('tab', { name: 'Libraries' }).click()
+  await expect(page.getByText('Adafruit SSD1306')).toBeVisible()
+
   await page.getByRole('tab', { name: 'Terminal' }).click()
   const serialLog = page.getByRole('log')
   await expect(serialLog.getByText('ESP32-C3 GPIO Siap!', { exact: true })).toBeVisible()
   await expect(serialLog.getByText('LED_STATE:1', { exact: true }).first()).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Logic Analyzer' }).click()
+  await expect(page.getByRole('button', { name: /Download \.vcd/ })).toBeEnabled()
 
   await page.getByRole('button', { name: 'Kumpulkan Misi (+50 XP)' }).click()
   await expect(page.getByText(/Misi berhasil diverifikasi! Skor 100\/100 tercatat/)).toBeVisible()

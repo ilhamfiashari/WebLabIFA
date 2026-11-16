@@ -1,5 +1,5 @@
 import type { BoardId, BoardSpec, ComponentKind, PlacedComponent, SimulationState, WireEndpoint } from './types'
-import { decodeResistorBands, formatOhms, getComponentSpec } from './boards'
+import { decodeResistorBands, formatOhms, getComponentSpec, rotatePointAroundBox } from './boards'
 import { RealBoardBodySvg, WokwiExtendedPartSvg, WokwiPartThumbnail } from './WokwiPartsSvg'
 
 export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
@@ -391,19 +391,20 @@ export function ComponentHardwareView({
         onStartDrag(comp.id, e.clientX, e.clientY)
       }}
     >
-      <rect
-        x={-4}
-        y={-4}
-        width={spec.width + 8}
-        height={spec.height + 8}
-        rx={10}
-        fill="transparent"
-        stroke={selectedComp ? '#16a34a' : 'transparent'}
-        strokeWidth={1.8}
-        strokeDasharray="4 2"
-      />
+      <g transform={comp.rotate ? `rotate(${comp.rotate}, ${spec.width / 2}, ${spec.height / 2})` : undefined}>
+        <rect
+          x={-4}
+          y={-4}
+          width={spec.width + 8}
+          height={spec.height + 8}
+          rx={10}
+          fill="transparent"
+          stroke={selectedComp ? '#16a34a' : 'transparent'}
+          strokeWidth={1.8}
+          strokeDasharray="4 2"
+        />
 
-      {comp.kind === 'led' || comp.kind === 'rgb-led' ? (
+        {comp.kind === 'led' || comp.kind === 'rgb-led' ? (
         <g>
           {/* Metallic bent LED wire legs */}
           <path d={`M ${spec.width / 2 - 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
@@ -710,6 +711,7 @@ export function ComponentHardwareView({
       ) : (
         <WokwiExtendedPartSvg comp={comp} sim={sim} onUpdateProps={onUpdateProps} />
       )}
+      </g>
 
       {showLabels ? (
         <text x={spec.width / 2} y={-8} textAnchor="middle" fontSize="9.5" fontWeight={700} fill={labelColor}>
@@ -718,6 +720,7 @@ export function ComponentHardwareView({
       ) : null}
 
       {spec.pins.map((p) => {
+        const rot = rotatePointAroundBox(p.dx, p.dy, spec.width, spec.height, comp.rotate)
         const isSel = selectedPin?.nodeId === comp.id && selectedPin?.pinId === p.id
         const color = isSel ? '#f59e0b' : p.role === 'power' ? '#ef4444' : p.role === 'gnd' || p.role === 'cathode' ? '#475569' : '#38bdf8'
         const shortTag = p.id === 'A' ? '+' : p.id === 'K' ? '-' : p.id
@@ -737,13 +740,13 @@ export function ComponentHardwareView({
               onPinPointerUp({ nodeId: comp.id, pinId: p.id })
             }}
           >
-            <circle className="iot-pin-hit" cx={p.dx} cy={p.dy} r={10} fill="transparent" />
-            <circle cx={p.dx} cy={p.dy} r={isSel ? 6.5 : 5} fill="#0f172a" stroke={color} strokeWidth={2} />
-            <circle cx={p.dx} cy={p.dy} r={2} fill={color} />
+            <circle className="iot-pin-hit" cx={rot.dx} cy={rot.dy} r={10} fill="transparent" />
+            <circle cx={rot.dx} cy={rot.dy} r={isSel ? 6.5 : 5} fill="#0f172a" stroke={color} strokeWidth={2} />
+            <circle cx={rot.dx} cy={rot.dy} r={2} fill={color} />
             {showLabels ? (
               <text
-                x={p.dx}
-                y={p.dy + 13}
+                x={rot.dx}
+                y={rot.dy + 13}
                 textAnchor="middle"
                 fontSize="7.5"
                 fontFamily="monospace"
