@@ -878,8 +878,30 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByRole('heading', { level: 1, name: 'Simulator Hardware IoT & ESP32' })).toBeVisible()
   await expect(page.getByText('ESP32-C3', { exact: true }).first()).toBeVisible()
 
-  // Jalankan simulasi Blink + Resistor default dan verifikasi output Serial Monitor & Misi
-  await page.getByRole('button', { name: 'Jalankan Simulasi' }).click()
+  // Background kode putih pada mode terang
+  const codeBg = await page.locator('.iot-code-wrap').evaluate((el) => getComputedStyle(el).backgroundColor)
+  expect(codeBg).toBe('rgb(255, 255, 255)')
+
+  // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive
+  await page.getByRole('tab', { name: 'Components' }).click()
+  await expect(page.getByRole('button', { name: 'Microcontrollers' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sensors' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Input Devices' })).toBeVisible()
+  await expect(page.getByText('Arduino Mega', { exact: true })).toBeVisible()
+  await expect(page.getByText('Breadboard', { exact: true })).toBeVisible()
+
+  // Klik kabel memilih kabel (tidak langsung menghapus)
+  const wireCountBefore = await page.locator('.iot-wire-group').count()
+  await page.locator('.iot-wire-group').first().dispatchEvent('click')
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore)
+  await expect(page.getByRole('button', { name: 'Hapus Kabel' })).toBeVisible()
+
+  // Cek Rangkaian & Koding lalu jalankan simulasi Blink + Resistor default
+  await page.getByRole('button', { name: 'Cek', exact: true }).click()
+  await expect(page.getByText('Hasil Pemeriksaan Rangkaian & Koding')).toBeVisible()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+
+  await page.getByRole('tab', { name: 'Terminal' }).click()
   const serialLog = page.getByRole('log')
   await expect(serialLog.getByText('ESP32-C3 GPIO Siap!', { exact: true })).toBeVisible()
   await expect(serialLog.getByText('LED_STATE:1', { exact: true }).first()).toBeVisible()
@@ -889,7 +911,7 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
 
   // Uji ganti preset ke Sensor Suhu DHT22 + OLED SSD1306 + Serial Plotter
   await page.getByLabel('Pilih template atau misi').selectOption('esp32-c3-dht-oled')
-  await page.getByRole('button', { name: 'Jalankan Simulasi' }).click()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.getByText('ESP32 ENV MONITOR', { exact: true })).toBeVisible()
   await expect(page.getByText('Temp: 28 C', { exact: true })).toBeVisible()
   await page.getByRole('tab', { name: /Serial Plotter/ }).click()
