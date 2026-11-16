@@ -54,7 +54,10 @@ pub struct SubmitMissionReq {
 }
 
 fn valid_board(board: &str) -> bool {
-    matches!(board, "esp32-c3" | "esp32" | "arduino-uno" | "pico-w")
+    matches!(
+        board,
+        "esp32-c3" | "esp32" | "arduino-uno" | "arduino-mega" | "pico-w"
+    )
 }
 
 pub async fn list_iot_projects(

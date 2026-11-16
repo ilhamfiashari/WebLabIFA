@@ -1,6 +1,7 @@
 import { BOARDS, getBoardPin } from './boards'
 import type {
   BoardId,
+  CircuitDiagnosticItem,
   GpioRuntime,
   HardwareAlert,
   MqttMessage,
@@ -245,10 +246,13 @@ function buildNetGraph(wires: Wire[], components: PlacedComponent[]): NetGraph {
     adj.set(kb, [...(adj.get(kb) ?? []), a])
   }
   for (const w of wires) addEdge(w.from, w.to)
-  // Resistors conduct bidirectionally between P1 and P2 in series
+  // Resistors & breadboard terminal pairs conduct across their linked pins
   for (const c of components) {
     if (c.kind === 'resistor') {
       addEdge({ nodeId: c.id, pinId: 'P1' }, { nodeId: c.id, pinId: 'P2' })
+    } else if (c.kind === 'breadboard') {
+      addEdge({ nodeId: c.id, pinId: 'A1' }, { nodeId: c.id, pinId: 'A2' })
+      addEdge({ nodeId: c.id, pinId: 'B1' }, { nodeId: c.id, pinId: 'B2' })
     }
   }
   return { adj }
@@ -850,4 +854,94 @@ export function stepLoop(ctx: VmContext, components: PlacedComponent[], wires: W
   ctx.sim.elapsedMs += delayMs
   syncCircuitActuators(ctx, components, wires)
   return delayMs
+}
+
+export function verifyCircuitAndCode(
+  boardId: BoardId,
+  code: string,
+  components: PlacedComponent[],
+  wires: Wire[],
+): CircuitDiagnosticItem[] {
+  const items: CircuitDiagnosticItem[] = []
+  const compiled = compileArduinoSketch(code)
+
+  if (compiled.compileError) {
+    items.push({
+      id: 'diag-compile',
+      status: 'error',
+      textId: compiled.compileError,
+      textEn: compiled.compileError,
+    })
+  } else {
+    items.push({
+      id: 'diag-compile',
+      status: 'ok',
+      textId: `Kompilasi Arduino C++ valid (${compiled.setupStmts.length} setup · ${compiled.loopStmts.length} loop).`,
+      textEn: `Arduino C++ sketch compiled cleanly (${compiled.setupStmts.length} setup · ${compiled.loopStmts.length} loop).`,
+    })
+  }
+
+  const safetyAlerts = analyzeCircuitSafety(boardId, components, wires)
+  for (const a of safetyAlerts) {
+    items.push({
+      id: a.id,
+      status: a.severity === 'error' ? 'error' : 'warn',
+      textId: a.messageId,
+      textEn: a.messageEn,
+    })
+  }
+  if (safetyAlerts.length === 0) {
+    items.push({
+      id: 'diag-safety',
+      status: 'ok',
+      textId: `Pemeriksaan keamanan ${BOARDS[boardId].logicVoltage}V bersih (0 korsleting / over-voltage).`,
+      textEn: `${BOARDS[boardId].logicVoltage}V electrical safety passed (0 shorts / over-voltage).`,
+    })
+  }
+
+  const activeParts = components.filter((c) => c.kind !== 'breadboard')
+  if (activeParts.length === 0) {
+    items.push({
+      id: 'diag-parts',
+      status: 'warn',
+      textId: 'Belum ada komponen elektronik di kanvas. Tambahkan LED/sensor dari tab Components.',
+      textEn: 'No active parts placed on canvas yet. Add an LED or sensor from the Components tab.',
+    })
+    return items
+  }
+
+  const graph = buildNetGraph(wires, components)
+  const unwiredParts = activeParts.filter((c) => !wires.some((w) => w.from.nodeId === c.id || w.to.nodeId === c.id))
+  if (unwiredParts.length > 0) {
+    items.push({
+      id: 'diag-unwired',
+      status: 'warn',
+      textId: `Komponen belum terpasang kabel: ${unwiredParts.map((u) => u.label).join(', ')}.`,
+      textEn: `Unwired components: ${unwiredParts.map((u) => u.label).join(', ')}.`,
+    })
+  } else {
+    // Check LED ground return
+    const ungroundedLed = activeParts.find((c) => {
+      if (c.kind !== 'led') return false
+      const reach = traceReachable(graph, { nodeId: c.id, pinId: 'K' })
+      return !reach.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind === 'gnd')
+    })
+    if (ungroundedLed) {
+      items.push({
+        id: 'diag-led-gnd',
+        status: 'warn',
+        textId: `Katoda (-) pada ${ungroundedLed.label} belum tersambung ke pin GND.`,
+        textEn: `${ungroundedLed.label} cathode (-) is not wired to GND.`,
+      })
+    } else {
+      items.push({
+        id: 'diag-wiring-ok',
+        status: 'ok',
+        textId: `Rangkaian terhubung (${activeParts.length} komponen, ${wires.length} kabel jumper valid).`,
+        textEn: `Circuit wiring valid (${activeParts.length} parts, ${wires.length} jumper wires).`,
+      })
+    }
+  }
+
+  return items
 }

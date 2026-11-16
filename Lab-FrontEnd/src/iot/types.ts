@@ -1,4 +1,4 @@
-export type BoardId = 'esp32-c3' | 'esp32' | 'arduino-uno' | 'pico-w'
+export type BoardId = 'esp32-c3' | 'esp32' | 'arduino-uno' | 'arduino-mega' | 'pico-w'
 
 export type PinKind = 'power' | 'gnd' | 'gpio' | 'adc' | 'pwm' | 'i2c' | 'uart'
 
@@ -31,6 +31,7 @@ export interface BoardSpec {
 }
 
 export type ComponentCategory =
+  | 'microcontrollers'
   | 'sensors'
   | 'inputs'
   | 'displays'
@@ -42,6 +43,7 @@ export type ComponentKind =
   | 'rgb-led'
   | 'pushbutton'
   | 'resistor'
+  | 'breadboard'
   | 'potentiometer'
   | 'hc-sr04'
   | 'dht22'
@@ -105,6 +107,9 @@ export interface Wire {
   from: WireEndpoint
   to: WireEndpoint
   color: string
+  /** Optional user-adjusted elbow coordinates for flexible routing */
+  bendX?: number
+  bendY?: number
 }
 
 export interface HardwareAlert {
@@ -112,6 +117,13 @@ export interface HardwareAlert {
   severity: 'error' | 'warn'
   messageId: string
   messageEn: string
+}
+
+export interface CircuitDiagnosticItem {
+  id: string
+  status: 'ok' | 'warn' | 'error'
+  textId: string
+  textEn: string
 }
 
 export interface GpioRuntime {
