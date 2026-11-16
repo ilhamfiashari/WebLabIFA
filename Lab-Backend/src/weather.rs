@@ -9,6 +9,7 @@ use std::{
 const DEFAULT_LAT: f64 = -5.3582;
 const DEFAULT_LON: f64 = 105.3148;
 const CACHE_TTL_SECS: u64 = 600;
+const OPEN_METEO_ENDPOINT: &str = "https://api.open-meteo.com/v1/forecast";
 
 #[derive(Clone, Debug, Serialize)]
 pub struct WeatherPayload {
@@ -91,10 +92,24 @@ impl WeatherCache {
     }
 
     async fn fetch_open_meteo(&self, lat: f64, lon: f64) -> WeatherPayload {
-        let url = format!(
-            "https://api.open-meteo.com/v1/forecast?latitude={lat:.4}&longitude={lon:.4}&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset&timezone=auto&forecast_days=1"
-        );
-        let Ok(resp) = self.http.get(url).send().await else {
+        let lat_q = ((lat * 10.0).round() as i32).clamp(-900, 900);
+        let lon_q = ((lon * 10.0).round() as i32).clamp(-1800, 1800);
+        let lat_param = format!("{:.1}", f64::from(lat_q) / 10.0);
+        let lon_param = format!("{:.1}", f64::from(lon_q) / 10.0);
+        let Ok(resp) = self
+            .http
+            .get(OPEN_METEO_ENDPOINT)
+            .query(&[
+                ("latitude", lat_param.as_str()),
+                ("longitude", lon_param.as_str()),
+                ("current", "temperature_2m,weather_code,is_day"),
+                ("daily", "sunrise,sunset"),
+                ("timezone", "auto"),
+                ("forecast_days", "1"),
+            ])
+            .send()
+            .await
+        else {
             return fallback_payload();
         };
         if !resp.status().is_success() {
