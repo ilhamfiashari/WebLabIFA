@@ -1,5 +1,5 @@
 import type { BoardId, BoardSpec, ComponentKind, GpioRuntime, PlacedComponent, SimulationState, WireEndpoint } from './types'
-import { getComponentSpec } from './boards'
+import { decodeResistorBands, formatOhms, getComponentSpec } from './boards'
 
 export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
   const isArduino = boardId === 'arduino-uno' || boardId === 'arduino-mega'
@@ -172,25 +172,35 @@ export function PartThumbnail({ kind }: { kind: ComponentKind }) {
 }
 
 export function BoardHardwareView({
+  nodeId,
   board,
   boardX,
   boardY,
+  label,
+  isPrimary,
+  selectedBoard,
   sim,
   selectedPin,
   showLabels,
+  onStartDrag,
   onPinPointerDown,
   onPinPointerUp,
 }: {
+  nodeId: string
   board: BoardSpec
   boardX: number
   boardY: number
+  label: string
+  isPrimary: boolean
+  selectedBoard: boolean
   sim: SimulationState
   selectedPin: WireEndpoint | null
   showLabels: boolean
+  onStartDrag: (nodeId: string, clientX: number, clientY: number) => void
   onPinPointerDown: (ep: WireEndpoint, clientX: number, clientY: number) => void
   onPinPointerUp: (ep: WireEndpoint) => void
 }) {
-  const builtin: GpioRuntime | undefined = sim.gpioStates[board.builtinLedGpio]
+  const builtin: GpioRuntime | undefined = isPrimary ? sim.gpioStates[board.builtinLedGpio] : undefined
   const builtinOn = Boolean(builtin && builtin.digital === 1)
   const isArduino = board.id === 'arduino-uno' || board.id === 'arduino-mega'
   const isPico = board.id === 'pico-w'
@@ -199,9 +209,34 @@ export function BoardHardwareView({
   const h = board.height
 
   return (
-    <g transform={`translate(${boardX}, ${boardY})`}>
+    <g
+      transform={`translate(${boardX}, ${boardY})`}
+      style={{ cursor: 'grab' }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        onStartDrag(nodeId, e.clientX, e.clientY)
+      }}
+    >
+      {selectedBoard ? (
+        <rect
+          x={-5}
+          y={-5}
+          width={w + 10}
+          height={h + 10}
+          rx={13}
+          fill="none"
+          stroke="#16a34a"
+          strokeWidth={2}
+          strokeDasharray="5 3"
+        />
+      ) : null}
       {/* Realistic PCB Body */}
       <rect x={0} y={0} width={w} height={h} rx={10} fill={pcbColor} stroke="#334155" strokeWidth={2} />
+      {!isPrimary ? (
+        <text x={w / 2} y={-8} textAnchor="middle" fontSize="9" fontWeight={700} fill="#38bdf8">
+          {label}
+        </text>
+      ) : null}
 
       {/* Four brass corner mounting holes */}
       {[
@@ -307,8 +342,8 @@ export function BoardHardwareView({
 
       {/* Pin Headers cleanly positioned along outer left/right edges with short readable labels */}
       {board.pins.map((p) => {
-        const isSel = selectedPin?.nodeId === 'board' && selectedPin?.pinId === p.id
-        const activeGpio = p.gpio !== undefined ? sim.gpioStates[p.gpio] : undefined
+        const isSel = selectedPin?.nodeId === nodeId && selectedPin?.pinId === p.id
+        const activeGpio = isPrimary && p.gpio !== undefined ? sim.gpioStates[p.gpio] : undefined
         const isHigh = Boolean(activeGpio && activeGpio.digital === 1)
         const fill =
           isSel
@@ -325,16 +360,16 @@ export function BoardHardwareView({
           <g
             key={p.id}
             className="iot-pin"
-            data-node-id="board"
+            data-node-id={nodeId}
             data-pin-id={p.id}
             style={{ cursor: 'crosshair' }}
             onPointerDown={(e) => {
               e.stopPropagation()
-              onPinPointerDown({ nodeId: 'board', pinId: p.id }, e.clientX, e.clientY)
+              onPinPointerDown({ nodeId, pinId: p.id }, e.clientX, e.clientY)
             }}
             onPointerUp={(e) => {
               e.stopPropagation()
-              onPinPointerUp({ nodeId: 'board', pinId: p.id })
+              onPinPointerUp({ nodeId, pinId: p.id })
             }}
           >
             <circle className="iot-pin-hit" cx={p.x} cy={p.y} r={10} fill="transparent" />
@@ -450,14 +485,24 @@ export function ComponentHardwareView({
           ) : null}
         </g>
       ) : comp.kind === 'resistor' ? (
-        <g>
-          <line x1={6} y1={22} x2={84} y2={22} stroke="#94a3b8" strokeWidth={3} />
-          <path d="M20 12 Q26 12 31 14 H59 Q64 12 70 12 Q74 22 70 32 Q64 32 59 30 H31 Q26 32 20 32 Q16 22 20 12 Z" fill="#e6cfa3" stroke="#a16207" strokeWidth={1.3} />
-          <rect x={26} y={13} width={5} height={18} fill="#dc2626" />
-          <rect x={37} y={14} width={5} height={16} fill="#dc2626" />
-          <rect x={48} y={14} width={5} height={16} fill="#78350f" />
-          <rect x={60} y={13} width={4.5} height={18} fill="#eab308" />
-        </g>
+        (() => {
+          const decoded = decodeResistorBands(comp.ohms ?? 220)
+          return (
+            <g className="iot-resistor-body">
+              <line x1={6} y1={22} x2={84} y2={22} stroke="#94a3b8" strokeWidth={3} />
+              <path
+                d="M20 12 Q26 12 31 14 H59 Q64 12 70 12 Q74 22 70 32 Q64 32 59 30 H31 Q26 32 20 32 Q16 22 20 12 Z"
+                fill="#e6cfa3"
+                stroke={selectedComp ? '#f59e0b' : '#a16207'}
+                strokeWidth={selectedComp ? 1.8 : 1.3}
+              />
+              <rect x={26} y={13} width={5} height={18} fill={decoded.bands[0]} />
+              <rect x={37} y={14} width={5} height={16} fill={decoded.bands[1]} />
+              <rect x={48} y={14} width={5} height={16} fill={decoded.bands[2]} />
+              <rect x={60} y={13} width={4.5} height={18} fill={decoded.bands[3]} />
+            </g>
+          )
+        })()
       ) : comp.kind === 'breadboard' ? (
         <g>
           <rect x={0} y={0} width={170} height={112} rx={6} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.5} />
@@ -474,42 +519,56 @@ export function ComponentHardwareView({
           ))}
         </g>
       ) : comp.kind === 'pushbutton' ? (
-        <g>
-          <line x1={10} y1={22} x2={22} y2={22} stroke="#94a3b8" strokeWidth={3} />
-          <line x1={10} y1={48} x2={22} y2={48} stroke="#94a3b8" strokeWidth={3} />
-          <line x1={56} y1={22} x2={68} y2={22} stroke="#94a3b8" strokeWidth={3} />
-          <line x1={56} y1={48} x2={68} y2={48} stroke="#94a3b8" strokeWidth={3} />
-          <rect x={18} y={12} width={42} height={44} rx={5} fill="#e2e8f0" stroke="#334155" strokeWidth={2} />
-          <circle cx={23} cy={17} r={2} fill="#475569" />
-          <circle cx={55} cy={17} r={2} fill="#475569" />
-          <circle cx={23} cy={51} r={2} fill="#475569" />
-          <circle cx={55} cy={51} r={2} fill="#475569" />
-          <circle
-            className="iot-interactive-control"
-            cx={39}
-            cy={34}
-            r={13}
-            fill={comp.props.pressed ? '#16a34a' : '#dc2626'}
-            stroke="#7f1d1d"
-            strokeWidth={1.5}
-            style={{ cursor: 'pointer' }}
-            onPointerDown={(e) => {
-              e.stopPropagation()
-              onUpdateProps(comp.id, { pressed: true })
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation()
-              onUpdateProps(comp.id, { pressed: false })
-            }}
-            onClick={(e) => {
-              e.stopPropagation()
-              onUpdateProps(comp.id, { pressed: !comp.props.pressed })
-            }}
-          />
-          <text x={39} y={37} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700} style={{ pointerEvents: 'none' }}>
-            {comp.props.pressed ? 'ON' : 'PUSH'}
-          </text>
-        </g>
+        (() => {
+          const isDown = Boolean(comp.props.pressed || comp.props.latched)
+          return (
+            <g>
+              <line x1={10} y1={22} x2={22} y2={22} stroke="#94a3b8" strokeWidth={3} />
+              <line x1={10} y1={48} x2={22} y2={48} stroke={isDown ? '#22c55e' : '#94a3b8'} strokeWidth={3} />
+              <line x1={56} y1={22} x2={68} y2={22} stroke="#94a3b8" strokeWidth={3} />
+              <line x1={56} y1={48} x2={68} y2={48} stroke={isDown ? '#22c55e' : '#94a3b8'} strokeWidth={3} />
+              <rect x={18} y={12} width={42} height={44} rx={5} fill="#e2e8f0" stroke="#334155" strokeWidth={2} />
+              <circle cx={23} cy={17} r={2} fill="#475569" />
+              <circle cx={55} cy={17} r={2} fill="#475569" />
+              <circle cx={23} cy={51} r={2} fill="#475569" />
+              <circle cx={55} cy={51} r={2} fill="#475569" />
+              <circle
+                className="iot-interactive-control"
+                cx={39}
+                cy={isDown ? 35.5 : 34}
+                r={13}
+                fill={isDown ? '#16a34a' : '#dc2626'}
+                stroke={isDown ? '#14532d' : '#7f1d1d'}
+                strokeWidth={isDown ? 2.2 : 1.5}
+                style={{ cursor: 'pointer' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onUpdateProps(comp.id, { pressed: true })
+                  const release = () => {
+                    onUpdateProps(comp.id, { pressed: false })
+                    window.removeEventListener('pointerup', release)
+                  }
+                  window.addEventListener('pointerup', release)
+                }}
+              />
+              <text x={39} y={isDown ? 38.5 : 37} textAnchor="middle" fontSize="7" fill="#fff" fontWeight={700} style={{ pointerEvents: 'none' }}>
+                {comp.props.latched ? 'LOCK' : isDown ? 'ON' : 'HOLD'}
+              </text>
+              {/* Small latch toggle corner button for hands-free hold */}
+              <g
+                className="iot-interactive-control"
+                style={{ cursor: 'pointer' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onUpdateProps(comp.id, { latched: !comp.props.latched })
+                }}
+              >
+                <rect x={49} y={13} width={10} height={8} rx={2} fill={comp.props.latched ? '#16a34a' : '#94a3b8'} />
+                <title>Toggle latch lock ON/OFF</title>
+              </g>
+            </g>
+          )
+        })()
       ) : comp.kind === 'hc-sr04' ? (
         <g>
           <rect x={4} y={6} width={108} height={68} rx={7} fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.4} />
@@ -560,29 +619,52 @@ export function ComponentHardwareView({
           </foreignObject>
         </g>
       ) : comp.kind === 'potentiometer' ? (
-        <g>
-          <rect x={10} y={6} width={64} height={70} rx={8} fill="#0369a1" stroke="#38bdf8" strokeWidth={1.4} />
-          <circle cx={42} cy={32} r={19} fill="#e2e8f0" stroke="#475569" strokeWidth={2} />
-          <line
-            x1={42}
-            y1={32}
-            x2={42 + 14 * Math.cos((((comp.props.potPct ?? 50) / 100) * 260 - 220) * (Math.PI / 180))}
-            y2={32 + 14 * Math.sin((((comp.props.potPct ?? 50) / 100) * 260 - 220) * (Math.PI / 180))}
-            stroke="#0f172a"
-            strokeWidth={3}
-            strokeLinecap="round"
-          />
-          <foreignObject className="iot-interactive-control" x={12} y={54} width={60} height={20}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={comp.props.potPct ?? 50}
-              onChange={(e) => onUpdateProps(comp.id, { potPct: Number(e.target.value) })}
-              style={{ width: 58 }}
-            />
-          </foreignObject>
-        </g>
+        (() => {
+          const pct = comp.props.potPct ?? 50
+          const deg = (pct / 100) * 260 - 220
+          return (
+            <g>
+              <rect x={10} y={6} width={64} height={70} rx={8} fill="#0369a1" stroke="#38bdf8" strokeWidth={1.4} />
+              <g
+                className="iot-interactive-control"
+                style={{ cursor: 'ew-resize' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  const startX = e.clientX
+                  const startY = e.clientY
+                  const startVal = comp.props.potPct ?? 50
+                  const onMove = (ev: PointerEvent) => {
+                    const delta = ev.clientX - startX - (ev.clientY - startY) * 0.6
+                    const nextVal = Math.max(0, Math.min(100, Math.round(startVal + delta)))
+                    onUpdateProps(comp.id, { potPct: nextVal })
+                  }
+                  const onUp = () => {
+                    window.removeEventListener('pointermove', onMove)
+                    window.removeEventListener('pointerup', onUp)
+                  }
+                  window.addEventListener('pointermove', onMove)
+                  window.addEventListener('pointerup', onUp)
+                }}
+              >
+                <circle cx={42} cy={32} r={19} fill="#e2e8f0" stroke="#475569" strokeWidth={2} />
+                <line
+                  x1={42}
+                  y1={32}
+                  x2={42 + 14 * Math.cos(deg * (Math.PI / 180))}
+                  y2={32 + 14 * Math.sin(deg * (Math.PI / 180))}
+                  stroke="#0f172a"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                />
+                <circle cx={42} cy={32} r={4} fill="#0f172a" />
+                <title>Putar / geser kenop potensiometer ({pct}%)</title>
+              </g>
+              <text x={42} y={64} textAnchor="middle" fontSize="8.5" fontWeight={700} fill="#e0f2fe" style={{ pointerEvents: 'none' }}>
+                {pct}%
+              </text>
+            </g>
+          )
+        })()
       ) : comp.kind === 'ldr' ? (
         <g>
           <rect x={9} y={6} width={70} height={62} rx={8} fill="#78350f" stroke="#f59e0b" strokeWidth={1.4} />
@@ -675,8 +757,13 @@ export function ComponentHardwareView({
       ) : (
         <g>
           <rect x={8} y={6} width={80} height={60} rx={6} fill="#0284c7" stroke="#38bdf8" strokeWidth={1.4} />
-          <circle cx={24} cy={22} r={4.5} fill={relayOn ? '#22c55e' : '#334155'} />
-          <text x={50} y={39} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight={700}>
+          <circle cx={22} cy={20} r={4.5} fill={relayOn ? '#22c55e' : '#334155'} />
+          {/* Internal moving armature switch */}
+          <line x1={38} y1={22} x2={relayOn ? 68 : 64} y2={relayOn ? 14 : 26} stroke="#facc15" strokeWidth={2.5} strokeLinecap="round" />
+          <circle cx={38} cy={22} r={2.2} fill="#e2e8f0" />
+          <circle cx={68} cy={14} r={2.2} fill={relayOn ? '#22c55e' : '#94a3b8'} />
+          <circle cx={68} cy={26} r={2.2} fill={!relayOn ? '#ef4444' : '#94a3b8'} />
+          <text x={48} y={46} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight={700}>
             RELAY {relayOn ? 'ON' : 'OFF'}
           </text>
         </g>
@@ -684,7 +771,7 @@ export function ComponentHardwareView({
 
       {showLabels ? (
         <text x={spec.width / 2} y={-8} textAnchor="middle" fontSize="9.5" fontWeight={700} fill={labelColor}>
-          {comp.label}
+          {comp.kind === 'resistor' ? `${comp.label.split(' (')[0]} (${formatOhms(comp.ohms ?? 220)})` : comp.label}
         </text>
       ) : null}
 
