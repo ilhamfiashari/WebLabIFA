@@ -39,6 +39,7 @@ export type ComponentCategory =
   | 'passives'
 
 export type ComponentKind =
+  | 'mcu'
   | 'led'
   | 'rgb-led'
   | 'pushbutton'
@@ -79,14 +80,17 @@ export interface ComponentSpec {
 export interface PlacedComponent {
   id: string
   kind: ComponentKind
+  /** When kind === 'mcu', identifies which microcontroller board hardware spec to render */
+  boardId?: BoardId
   x: number
   y: number
   label: string
   color?: 'red' | 'green' | 'yellow' | 'blue'
-  ohms?: 220 | 1000 | 10000
+  ohms?: number
   /** Runtime interactive sensor / input values set by user on canvas */
   props: {
     pressed?: boolean
+    latched?: boolean
     distanceCm?: number
     tempC?: number
     humidity?: number
@@ -96,8 +100,13 @@ export interface PlacedComponent {
   }
 }
 
+export interface WireWaypoint {
+  x: number
+  y: number
+}
+
 export interface WireEndpoint {
-  /** 'board' or placed component id */
+  /** 'board', 'mcu-*', or placed component id */
   nodeId: string
   pinId: string
 }
@@ -107,7 +116,9 @@ export interface Wire {
   from: WireEndpoint
   to: WireEndpoint
   color: string
-  /** Optional user-adjusted elbow coordinates for flexible routing */
+  /** Flexible multi-point bend vertices along wire path */
+  waypoints?: WireWaypoint[]
+  /** Legacy single elbow point kept for backwards compatibility */
   bendX?: number
   bendY?: number
 }

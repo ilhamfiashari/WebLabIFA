@@ -268,9 +268,50 @@ export function IotSimulatorStudio({
 
   const switchBoard = (nextBoard: BoardId) => {
     setBoardId(nextBoard)
+    setComponents((prev) =>
+      prev.map((c) =>
+        c.kind === 'mcu' && c.id === 'board'
+          ? { ...c, boardId: nextBoard, label: BOARDS[nextBoard].shortName }
+          : c,
+      ),
+    )
     vmRef.current = null
     setDiagnostics(null)
     setSimState(createInitialSimulation(nextBoard, components, wires))
+  }
+
+  const addExtraBoard = (extraBoard: BoardId) => {
+    const hasPrimary = components.some((c) => c.kind === 'mcu' && c.id === 'board')
+    const idx = components.filter((c) => c.kind === 'mcu').length + (hasPrimary ? 1 : 2)
+    const spec = BOARDS[extraBoard]
+    const newMcu: PlacedComponent = {
+      id: nextUid('mcu'),
+      kind: 'mcu',
+      boardId: extraBoard,
+      x: 320 + ((idx - 1) % 3) * 40,
+      y: 76 + ((idx - 1) % 3) * 26,
+      label: `${spec.shortName} #${idx}`,
+      props: {},
+    }
+    const nextComps = [...components, newMcu]
+    setComponents(nextComps)
+    setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+  }
+
+  const moveBoardOrComponent = (nodeId: string, x: number, y: number) => {
+    setComponents((prev) => {
+      if (nodeId === 'board') {
+        const hasPrimary = prev.some((c) => c.kind === 'mcu' && c.id === 'board')
+        if (hasPrimary) {
+          return prev.map((c) => (c.kind === 'mcu' && c.id === 'board' ? { ...c, x, y } : c))
+        }
+        return [
+          ...prev,
+          { id: 'board', kind: 'mcu', boardId, x, y, label: BOARDS[boardId].shortName, props: {} },
+        ]
+      }
+      return prev.map((c) => (c.id === nodeId ? { ...c, x, y } : c))
+    })
   }
 
   const loadSavedProject = (p: SavedIotProject) => {
@@ -710,12 +751,23 @@ export function IotSimulatorStudio({
                       <div
                         key={b.id}
                         className={`iot-part-card ${boardId === b.id ? 'is-selected-board' : ''}`}
-                        onClick={() => switchBoard(b.id)}
                       >
-                        <div className="iot-card-thumb">
+                        <button
+                          type="button"
+                          className="iot-card-add-btn"
+                          title={en ? `Add extra ${b.shortName} to design` : `Tambah ${b.shortName} ke desain`}
+                          aria-label={en ? `Add ${b.shortName} to canvas` : `Tambah ${b.shortName} ke kanvas`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            addExtraBoard(b.id)
+                          }}
+                        >
+                          <Plus size={12} />
+                        </button>
+                        <div className="iot-card-thumb" onClick={() => switchBoard(b.id)}>
                           <BoardThumbnail boardId={b.id} />
                         </div>
-                        <strong>{b.shortName}</strong>
+                        <strong onClick={() => switchBoard(b.id)}>{b.shortName}</strong>
                         <small>{boardId === b.id ? (en ? 'Active on canvas' : 'Aktif di kanvas') : 'Microcontrollers'}</small>
                       </div>
                     ))}
@@ -795,8 +847,10 @@ export function IotSimulatorStudio({
             onStartStop={toggleStartStop}
             onReset={resetSimulation}
             onCheckCircuit={runCheckCircuit}
-            onMoveComponent={(id, x, y) => {
-              setComponents((prev) => prev.map((c) => (c.id === id ? { ...c, x, y } : c)))
+            onMoveBoardOrComponent={moveBoardOrComponent}
+            onUpdateComponent={(id, patch) => {
+              const nextComps = components.map((c) => (c.id === id ? { ...c, ...patch } : c))
+              setComponents(nextComps)
             }}
             onUpdateProps={(id, patch) => {
               setComponents((prev) => prev.map((c) => (c.id === id ? { ...c, props: { ...c.props, ...patch } } : c)))
@@ -815,13 +869,15 @@ export function IotSimulatorStudio({
               setWires(nextWires)
               setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, components, nextWires), running: prev.running }))
             }}
-            onDeleteComponent={(id) => {
-              const nextComps = components.filter((c) => c.id !== id)
-              const nextWires = wires.filter((w) => w.from.nodeId !== id && w.to.nodeId !== id)
+            onDeleteNode={(nodeId) => {
+              if (nodeId === 'board') return
+              const nextComps = components.filter((c) => c.id !== nodeId)
+              const nextWires = wires.filter((w) => w.from.nodeId !== nodeId && w.to.nodeId !== nodeId)
               setComponents(nextComps)
               setWires(nextWires)
               setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, nextWires), running: prev.running }))
             }}
+            onSelectPrimaryBoard={switchBoard}
           />
 
           {/* Compact Diagnostics & Live Serial Bar beneath Canvas */}

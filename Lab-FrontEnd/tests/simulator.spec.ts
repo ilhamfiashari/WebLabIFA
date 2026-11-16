@@ -911,8 +911,32 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
   await page.locator('.iot-wire-group').last().dispatchEvent('click')
   await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+  // Kabel terpilih menampilkan pegangan colokan cabut-pindah & multi titik belok
+  await expect(page.locator('.iot-wire-plug-handle')).toHaveCount(2)
+  await expect(page.locator('.iot-wire-vertex-handle').first()).toBeVisible()
   await page.getByRole('button', { name: 'Hapus Kabel' }).click()
   await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore)
+
+  // Klik badan resistor membuka pop-up gelang warna inline di kanvas
+  const resistorBody = page.locator('.iot-resistor-body')
+  const rBox = await resistorBody.boundingBox()
+  expect(rBox).toBeTruthy()
+  if (rBox) {
+    await page.mouse.click(rBox.x + rBox.width / 2, rBox.y + rBox.height / 2)
+  }
+  await expect(page.getByRole('dialog', { name: 'Pengaturan komponen' })).toBeVisible()
+  await page.getByRole('button', { name: '1kΩ', exact: true }).click()
+  await expect(page.getByText('R1 (1kΩ)')).toBeVisible()
+  await page.getByRole('button', { name: '220Ω', exact: true }).click()
+  await page.getByRole('button', { name: 'Tutup', exact: true }).click()
+
+  // Bisa menambah lebih dari 1 mikrokontroler ke dalam 1 desain & menghapus tambahan MCU
+  await page.getByRole('button', { name: 'Tambah Arduino Uno ke kanvas' }).click()
+  await expect(page.getByText('Arduino Uno #2')).toBeVisible()
+  await page.getByText('Arduino Uno #2').dispatchEvent('pointerdown')
+  await page.getByText('Arduino Uno #2').dispatchEvent('pointerup')
+  await page.getByRole('button', { name: 'Hapus Komponen' }).click()
+  await expect(page.getByText('Arduino Uno #2')).toHaveCount(0)
 
   // Cek Rangkaian & Koding lalu jalankan simulasi Blink + Resistor default
   await page.getByRole('button', { name: 'Cek', exact: true }).click()

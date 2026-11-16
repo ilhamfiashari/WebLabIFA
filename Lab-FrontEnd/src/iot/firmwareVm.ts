@@ -1,4 +1,4 @@
-import { BOARDS, getBoardPin } from './boards'
+import { BOARDS, getBoardInstances, getBoardPin, resolveNodeBoardId } from './boards'
 import type {
   BoardId,
   CircuitDiagnosticItem,
@@ -258,18 +258,30 @@ function buildNetGraph(wires: Wire[], components: PlacedComponent[]): NetGraph {
   return { adj }
 }
 
-function traceReachable(graph: NetGraph, start: WireEndpoint): { endpoints: WireEndpoint[]; crossedResistor: boolean } {
+function traceReachable(
+  graph: NetGraph,
+  start: WireEndpoint,
+  components: PlacedComponent[] = [],
+): { endpoints: WireEndpoint[]; crossedResistor: boolean; minResistorOhms: number | null } {
   const visited = new Set<string>([epKey(start)])
   const queue: WireEndpoint[] = [start]
   const endpoints: WireEndpoint[] = []
   let crossedResistor = false
+  let minResistorOhms: number | null = null
 
   while (queue.length > 0) {
     const cur = queue.shift()!
     endpoints.push(cur)
     const neighbors = graph.adj.get(epKey(cur)) ?? []
     for (const next of neighbors) {
-      if (next.nodeId === cur.nodeId) crossedResistor = true
+      if (next.nodeId === cur.nodeId) {
+        crossedResistor = true
+        const comp = components.find((c) => c.id === cur.nodeId)
+        if (comp?.kind === 'resistor') {
+          const val = comp.ohms ?? 220
+          minResistorOhms = minResistorOhms === null ? val : Math.min(minResistorOhms, val)
+        }
+      }
       const nk = epKey(next)
       if (!visited.has(nk)) {
         visited.add(nk)
@@ -277,7 +289,7 @@ function traceReachable(graph: NetGraph, start: WireEndpoint): { endpoints: Wire
       }
     }
   }
-  return { endpoints, crossedResistor }
+  return { endpoints, crossedResistor, minResistorOhms }
 }
 
 export function analyzeCircuitSafety(
@@ -286,51 +298,66 @@ export function analyzeCircuitSafety(
   wires: Wire[],
 ): HardwareAlert[] {
   const alerts: HardwareAlert[] = []
-  const board = BOARDS[boardId]
   const graph = buildNetGraph(wires, components)
+  const boardNodes = getBoardInstances(boardId, components)
 
-  // Check Power <-> GND direct short circuit
-  const powerPins = board.pins.filter((p) => p.kind === 'power')
-  const gndPins = board.pins.filter((p) => p.kind === 'gnd')
-  for (const pwr of powerPins) {
-    const reach = traceReachable(graph, { nodeId: 'board', pinId: pwr.id })
-    const hitsGnd = reach.endpoints.some((e) => e.nodeId === 'board' && gndPins.some((g) => g.id === e.pinId))
-    if (hitsGnd && !reach.crossedResistor) {
-      alerts.push({
-        id: `short-${pwr.id}`,
-        severity: 'error',
-        messageId: `Short-Circuit! Jalur ${pwr.label} terhubung langsung ke GND tanpa beban/resistor.`,
-        messageEn: `Short-Circuit! ${pwr.label} is wired directly to GND without a load or resistor.`,
+  // Check Power <-> GND direct short circuit across every placed MCU
+  for (const inst of boardNodes) {
+    const board = BOARDS[inst.boardId]
+    const powerPins = board.pins.filter((p) => p.kind === 'power')
+    const gndPins = board.pins.filter((p) => p.kind === 'gnd')
+    for (const pwr of powerPins) {
+      const reach = traceReachable(graph, { nodeId: inst.nodeId, pinId: pwr.id }, components)
+      const hitsGnd = reach.endpoints.some((e) => {
+        const eb = resolveNodeBoardId(boardId, components, e.nodeId)
+        if (!eb) return false
+        return getBoardPin(eb, e.pinId)?.kind === 'gnd' || (e.nodeId === inst.nodeId && gndPins.some((g) => g.id === e.pinId))
       })
-    }
-    if (pwr.voltage === 5 && board.logicVoltage === 3.3) {
-      const hitsGpio = reach.endpoints.some((e) => {
-        if (e.nodeId !== 'board') return false
-        const bp = getBoardPin(boardId, e.pinId)
-        return bp && bp.gpio !== undefined
-      })
-      if (hitsGpio) {
+      if (hitsGnd && !reach.crossedResistor) {
         alerts.push({
-          id: `overvolt-${pwr.id}`,
+          id: `short-${inst.nodeId}-${pwr.id}`,
           severity: 'error',
-          messageId: `Bahaya Tegangan 5V! Pin 5V tidak boleh disambung ke GPIO 3.3V pada ${board.shortName}.`,
-          messageEn: `5V Over-Voltage! 5V rail must not connect to a 3.3V GPIO pin on ${board.shortName}.`,
+          messageId: `Short-Circuit (${inst.label})! Jalur ${pwr.label} terhubung langsung ke GND tanpa beban/resistor.`,
+          messageEn: `Short-Circuit (${inst.label})! ${pwr.label} is wired directly to GND without a load or resistor.`,
         })
+      }
+      if (pwr.voltage === 5 && board.logicVoltage === 3.3) {
+        const hitsGpio = reach.endpoints.some((e) => {
+          const eb = resolveNodeBoardId(boardId, components, e.nodeId)
+          if (!eb) return false
+          const bp = getBoardPin(eb, e.pinId)
+          return bp && bp.gpio !== undefined && BOARDS[eb].logicVoltage === 3.3
+        })
+        if (hitsGpio) {
+          alerts.push({
+            id: `overvolt-${inst.nodeId}-${pwr.id}`,
+            severity: 'error',
+            messageId: `Bahaya Tegangan 5V! Pin 5V tidak boleh disambung ke GPIO 3.3V pada ${inst.label}.`,
+            messageEn: `5V Over-Voltage! 5V rail must not connect to a 3.3V GPIO pin on ${inst.label}.`,
+          })
+        }
       }
     }
   }
 
-  // Check LED missing current-limiting resistor
+  // Check LED missing or undersized current-limiting resistor
   for (const c of components) {
     if (c.kind === 'led') {
-      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' })
-      const hitsSource = reachA.endpoints.some((e) => e.nodeId === 'board')
+      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' }, components)
+      const hitsSource = reachA.endpoints.some((e) => resolveNodeBoardId(boardId, components, e.nodeId) !== null)
       if (hitsSource && !reachA.crossedResistor) {
         alerts.push({
           id: `no-res-${c.id}`,
           severity: 'warn',
           messageId: `${c.label} belum memakai resistor seri (220Ω). Tambahkan resistor agar arus aman.`,
           messageEn: `${c.label} lacks a series 220Ω resistor. Add one to limit LED current.`,
+        })
+      } else if (hitsSource && reachA.minResistorOhms !== null && reachA.minResistorOhms < 47) {
+        alerts.push({
+          id: `low-res-${c.id}`,
+          severity: 'warn',
+          messageId: `Nilai resistor seri pada ${c.label} terlalu kecil (${reachA.minResistorOhms}Ω < 47Ω) — berisiko arus berlebih!`,
+          messageEn: `Series resistor on ${c.label} is too low (${reachA.minResistorOhms}Ω < 47Ω) — risk of over-current!`,
         })
       }
     }
@@ -501,7 +528,7 @@ function evalExpr(
     if (fn === 'digitalRead') {
       const gpio = Number(args[0] ?? 0)
       const btn = findConnectedComponent(ctx, components, gpio, 'pushbutton')
-      if (btn) return btn.props.pressed ? 0 : 1
+      if (btn) return btn.props.pressed || btn.props.latched ? 0 : 1
       const pir = findConnectedComponent(ctx, components, gpio, 'pir')
       if (pir) return pir.props.motion ? 1 : 0
       return ctx.sim.gpioStates[gpio]?.digital ?? 0
@@ -752,28 +779,30 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
   ctx.graph = buildNetGraph(wires, components)
   ctx.sim.alerts = analyzeCircuitSafety(ctx.boardId, components, wires)
 
-  const readPinDuty = (ep: WireEndpoint): { duty: number; hasResistor: boolean } => {
-    const reach = traceReachable(ctx.graph, ep)
+  const readPinDuty = (ep: WireEndpoint): { duty: number; hasResistor: boolean; minResistorOhms: number | null } => {
+    const reach = traceReachable(ctx.graph, ep, components)
     let duty = 0
     for (const r of reach.endpoints) {
-      if (r.nodeId !== 'board') continue
-      const bp = getBoardPin(ctx.boardId, r.pinId)
+      const rb = resolveNodeBoardId(ctx.boardId, components, r.nodeId)
+      if (!rb) continue
+      const bp = getBoardPin(rb, r.pinId)
       if (!bp) continue
       if (bp.kind === 'power') duty = Math.max(duty, 1)
-      else if (bp.gpio !== undefined) {
+      else if (bp.gpio !== undefined && r.nodeId === 'board') {
         const gs = ctx.sim.gpioStates[bp.gpio]
         if (gs && gs.mode === 'OUTPUT') duty = Math.max(duty, gs.digital)
         else if (gs && gs.mode === 'PWM') duty = Math.max(duty, gs.pwmDuty / 255)
       }
     }
-    return { duty, hasResistor: reach.crossedResistor }
+    return { duty, hasResistor: reach.crossedResistor, minResistorOhms: reach.minResistorOhms }
   }
 
   const hitsGround = (ep: WireEndpoint): boolean => {
-    const reach = traceReachable(ctx.graph, ep)
+    const reach = traceReachable(ctx.graph, ep, components)
     return reach.endpoints.some((r) => {
-      if (r.nodeId !== 'board') return false
-      const bp = getBoardPin(ctx.boardId, r.pinId)
+      const rb = resolveNodeBoardId(ctx.boardId, components, r.nodeId)
+      if (!rb) return false
+      const bp = getBoardPin(rb, r.pinId)
       return bp?.kind === 'gnd'
     })
   }
@@ -782,13 +811,17 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
     if (c.kind === 'led') {
       const a = readPinDuty({ nodeId: c.id, pinId: 'A' })
       const kGnd = hitsGround({ nodeId: c.id, pinId: 'K' })
-      const level = kGnd ? a.duty : 0
+      const baseLevel = kGnd ? a.duty : 0
+      const ohms = a.minResistorOhms ?? 220
+      const resistorScale =
+        !a.hasResistor || ohms < 47 ? 1 : ohms <= 470 ? 1 : ohms <= 2200 ? 0.65 : ohms <= 10000 ? 0.35 : 0.16
+      const level = baseLevel * resistorScale
       const clr = c.color ?? 'red'
       ctx.sim.ledBrightness[c.id] = {
         r: clr === 'red' || clr === 'yellow' ? level : 0,
         g: clr === 'green' || clr === 'yellow' ? level : 0,
         b: clr === 'blue' ? level : 0,
-        burned: level > 0 && !a.hasResistor,
+        burned: baseLevel > 0 && (!a.hasResistor || (a.minResistorOhms !== null && a.minResistorOhms < 47)),
       }
     } else if (c.kind === 'rgb-led') {
       const kGnd = hitsGround({ nodeId: c.id, pinId: 'GND' })
@@ -899,7 +932,7 @@ export function verifyCircuitAndCode(
     })
   }
 
-  const activeParts = components.filter((c) => c.kind !== 'breadboard')
+  const activeParts = components.filter((c) => c.kind !== 'breadboard' && c.kind !== 'mcu')
   if (activeParts.length === 0) {
     items.push({
       id: 'diag-parts',
@@ -920,19 +953,29 @@ export function verifyCircuitAndCode(
       textEn: `Unwired components: ${unwiredParts.map((u) => u.label).join(', ')}.`,
     })
   } else {
-    // Check LED polarity & ground return + sensor reverse polarity
+    // Check LED polarity & ground return + sensor reverse polarity across any placed MCU
+    const isBoardGnd = (ep: WireEndpoint): boolean => {
+      const eb = resolveNodeBoardId(boardId, components, ep.nodeId)
+      return eb ? getBoardPin(eb, ep.pinId)?.kind === 'gnd' : false
+    }
+    const isBoardPwrOrGpio = (ep: WireEndpoint): boolean => {
+      const eb = resolveNodeBoardId(boardId, components, ep.nodeId)
+      if (!eb) return false
+      const pin = getBoardPin(eb, ep.pinId)
+      return Boolean(pin && pin.kind !== 'gnd')
+    }
     const reversedLed = activeParts.find((c) => {
       if (c.kind !== 'led') return false
-      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' })
-      const reachK = traceReachable(graph, { nodeId: c.id, pinId: 'K' })
-      const aHitsGnd = reachA.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind === 'gnd')
-      const kHitsPwr = reachK.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind !== 'gnd')
+      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' }, components)
+      const reachK = traceReachable(graph, { nodeId: c.id, pinId: 'K' }, components)
+      const aHitsGnd = reachA.endpoints.some(isBoardGnd)
+      const kHitsPwr = reachK.endpoints.some(isBoardPwrOrGpio)
       return aHitsGnd && kHitsPwr
     })
     const ungroundedLed = activeParts.find((c) => {
       if (c.kind !== 'led') return false
-      const reach = traceReachable(graph, { nodeId: c.id, pinId: 'K' })
-      return !reach.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind === 'gnd')
+      const reach = traceReachable(graph, { nodeId: c.id, pinId: 'K' }, components)
+      return !reach.endpoints.some(isBoardGnd)
     })
     if (reversedLed) {
       items.push({

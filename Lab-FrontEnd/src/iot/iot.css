@@ -806,3 +806,124 @@
     max-width: 100%;
   }
 }
+
+/* Inline Component / Resistor Band Popover on Canvas */
+.iot-comp-popover {
+  position: absolute;
+  z-index: 20;
+  min-width: 224px;
+  max-width: 278px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.24);
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.iot-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.iot-popover-close {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.iot-popover-close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.iot-popover-body {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.iot-res-preview {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #e6cfa3;
+  border: 1px solid #a16207;
+}
+
+.iot-res-pill-band {
+  display: inline-block;
+  width: 9px;
+  height: 18px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+}
+
+.iot-res-val {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: #1e293b;
+}
+
+.iot-pop-field {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.iot-swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.iot-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.3);
+  cursor: pointer;
+}
+
+.iot-swatch.is-active {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.iot-pop-quick-vals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.iot-quick-val {
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.iot-quick-val.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+}
