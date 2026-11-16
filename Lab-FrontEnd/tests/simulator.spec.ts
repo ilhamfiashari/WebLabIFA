@@ -930,18 +930,22 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: '220Ω', exact: true }).click()
   await page.getByRole('button', { name: 'Tutup', exact: true }).click()
 
-  // Bisa menambah lebih dari 1 mikrokontroler ke dalam 1 desain & menghapus tambahan MCU
+  // Bisa menambah lebih dari 1 mikrokontroler ke dalam 1 desain dengan bentuk fisik berbeda & menghapus tambahan MCU
+  await expect(page.getByText('MQ2 Gas Sensor', { exact: true })).toBeVisible()
+  await expect(page.getByText('Keypad 4×4 Matrix', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Tambah Arduino Uno ke kanvas' }).click()
   await expect(page.getByText('Arduino Uno #2')).toBeVisible()
+  await expect(page.getByText('ATMEGA328P-PU', { exact: true })).toBeVisible()
   await page.getByText('Arduino Uno #2').dispatchEvent('pointerdown')
   await page.getByText('Arduino Uno #2').dispatchEvent('pointerup')
   await page.getByRole('button', { name: 'Hapus Komponen' }).click()
   await expect(page.getByText('Arduino Uno #2')).toHaveCount(0)
 
-  // Cek Rangkaian & Koding lalu jalankan simulasi Blink + Resistor default
+  // Cek Rangkaian & Koding lalu jalankan simulasi Blink + Resistor default & ROM bootloader terminal
   await page.getByRole('button', { name: 'Cek', exact: true }).click()
   await expect(page.getByText('Hasil Pemeriksaan Rangkaian & Koding')).toBeVisible()
   await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('ESP-ROM:esp32c3-api1-20210207')
 
   await page.getByRole('tab', { name: 'Terminal' }).click()
   const serialLog = page.getByRole('log')
