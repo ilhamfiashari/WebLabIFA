@@ -1,4 +1,4 @@
-import type { BoardId, BoardSpec, ComponentKind, ComponentSpec, PinDef } from './types'
+import type { BoardId, BoardSpec, ComponentKind, ComponentSpec, PinDef, PlacedComponent } from './types'
 
 const BOARD_W = 216
 const BOARD_H = 296
@@ -434,12 +434,138 @@ export const COMPONENT_CATALOG: ComponentSpec[] = [
   },
 ]
 
-export function getComponentSpec(kind: ComponentKind): ComponentSpec {
+export function getComponentSpec(kind: ComponentKind, boardId?: BoardId): ComponentSpec {
+  if (kind === 'mcu') {
+    const b = BOARDS[boardId ?? 'esp32-c3']
+    return {
+      kind: 'mcu',
+      category: 'microcontrollers',
+      nameId: b.shortName,
+      nameEn: b.shortName,
+      subtitleId: b.arch,
+      subtitleEn: b.arch,
+      width: b.width,
+      height: b.height,
+      pins: b.pins.map((p) => ({
+        id: p.id,
+        label: p.label,
+        dx: p.x,
+        dy: p.y,
+        role: p.kind === 'power' ? 'power' : p.kind === 'gnd' ? 'gnd' : 'signal',
+      })),
+    }
+  }
   return COMPONENT_CATALOG.find((c) => c.kind === kind) ?? COMPONENT_CATALOG[0]
 }
 
 export function getBoardPin(boardId: BoardId, pinId: string): PinDef | undefined {
   return BOARDS[boardId].pins.find((p) => p.id === pinId)
+}
+
+export interface BoardInstance {
+  nodeId: string
+  boardId: BoardId
+  x: number
+  y: number
+  label: string
+  isPrimary: boolean
+}
+
+export const DEFAULT_BOARD_X = 48
+export const DEFAULT_BOARD_Y = 76
+
+export function getBoardInstances(primaryBoardId: BoardId, components: PlacedComponent[]): BoardInstance[] {
+  const mcus = components.filter((c) => c.kind === 'mcu')
+  const primaryComp = mcus.find((c) => c.id === 'board')
+  const primary: BoardInstance = {
+    nodeId: 'board',
+    boardId: primaryComp?.boardId ?? primaryBoardId,
+    x: primaryComp?.x ?? DEFAULT_BOARD_X,
+    y: primaryComp?.y ?? DEFAULT_BOARD_Y,
+    label: primaryComp?.label ?? BOARDS[primaryBoardId].shortName,
+    isPrimary: true,
+  }
+  const extras: BoardInstance[] = mcus
+    .filter((c) => c.id !== 'board')
+    .map((c) => ({
+      nodeId: c.id,
+      boardId: c.boardId ?? 'esp32-c3',
+      x: c.x,
+      y: c.y,
+      label: c.label || BOARDS[c.boardId ?? 'esp32-c3'].shortName,
+      isPrimary: false,
+    }))
+  return [primary, ...extras]
+}
+
+export function resolveNodeBoardId(primaryBoardId: BoardId, components: PlacedComponent[], nodeId: string): BoardId | null {
+  if (nodeId === 'board') {
+    const primaryComp = components.find((c) => c.kind === 'mcu' && c.id === 'board')
+    return primaryComp?.boardId ?? primaryBoardId
+  }
+  const comp = components.find((c) => c.id === nodeId && c.kind === 'mcu')
+  return comp ? (comp.boardId ?? 'esp32-c3') : null
+}
+
+export interface ResistorColorBand {
+  digit?: number
+  multiplier?: number
+  nameId: string
+  nameEn: string
+  hex: string
+}
+
+export const RESISTOR_DIGIT_BANDS: ResistorColorBand[] = [
+  { digit: 0, nameId: 'Hitam (0)', nameEn: 'Black (0)', hex: '#18181b' },
+  { digit: 1, nameId: 'Cokelat (1)', nameEn: 'Brown (1)', hex: '#78350f' },
+  { digit: 2, nameId: 'Merah (2)', nameEn: 'Red (2)', hex: '#dc2626' },
+  { digit: 3, nameId: 'Oranye (3)', nameEn: 'Orange (3)', hex: '#ea580c' },
+  { digit: 4, nameId: 'Kuning (4)', nameEn: 'Yellow (4)', hex: '#eab308' },
+  { digit: 5, nameId: 'Hijau (5)', nameEn: 'Green (5)', hex: '#16a34a' },
+  { digit: 6, nameId: 'Biru (6)', nameEn: 'Blue (6)', hex: '#2563eb' },
+  { digit: 7, nameId: 'Ungu (7)', nameEn: 'Violet (7)', hex: '#7c3aed' },
+  { digit: 8, nameId: 'Abu-abu (8)', nameEn: 'Grey (8)', hex: '#64748b' },
+  { digit: 9, nameId: 'Putih (9)', nameEn: 'White (9)', hex: '#f8fafc' },
+]
+
+export const RESISTOR_MULTIPLIER_BANDS: ResistorColorBand[] = [
+  { multiplier: 1, nameId: 'Hitam (×1Ω)', nameEn: 'Black (×1Ω)', hex: '#18181b' },
+  { multiplier: 10, nameId: 'Cokelat (×10Ω)', nameEn: 'Brown (×10Ω)', hex: '#78350f' },
+  { multiplier: 100, nameId: 'Merah (×100Ω)', nameEn: 'Red (×100Ω)', hex: '#dc2626' },
+  { multiplier: 1000, nameId: 'Oranye (×1kΩ)', nameEn: 'Orange (×1kΩ)', hex: '#ea580c' },
+  { multiplier: 10000, nameId: 'Kuning (×10kΩ)', nameEn: 'Yellow (×10kΩ)', hex: '#eab308' },
+  { multiplier: 100000, nameId: 'Hijau (×100kΩ)', nameEn: 'Green (×100kΩ)', hex: '#16a34a' },
+  { multiplier: 1000000, nameId: 'Biru (×1MΩ)', nameEn: 'Blue (×1MΩ)', hex: '#2563eb' },
+]
+
+export const RESISTOR_QUICK_VALUES = [47, 100, 220, 330, 470, 1000, 2200, 4700, 10000, 100000]
+
+export function formatOhms(ohms: number): string {
+  if (ohms >= 1000000) return `${+(ohms / 1000000).toFixed(2)}MΩ`
+  if (ohms >= 1000) return `${+(ohms / 1000).toFixed(2)}kΩ`
+  return `${Math.round(ohms)}Ω`
+}
+
+export function decodeResistorBands(ohmsRaw: number): { d1: number; d2: number; multIdx: number; bands: [string, string, string, string] } {
+  const ohms = Math.max(10, Math.min(99000000, Math.round(ohmsRaw || 220)))
+  let exp = Math.floor(Math.log10(ohms)) - 1
+  if (exp < 0) exp = 0
+  if (exp > RESISTOR_MULTIPLIER_BANDS.length - 1) exp = RESISTOR_MULTIPLIER_BANDS.length - 1
+  const mult = RESISTOR_MULTIPLIER_BANDS[exp].multiplier ?? 1
+  const twoDigits = Math.max(10, Math.min(99, Math.round(ohms / mult)))
+  const d1 = Math.floor(twoDigits / 10)
+  const d2 = twoDigits % 10
+  return {
+    d1,
+    d2,
+    multIdx: exp,
+    bands: [
+      RESISTOR_DIGIT_BANDS[d1]?.hex ?? '#dc2626',
+      RESISTOR_DIGIT_BANDS[d2]?.hex ?? '#dc2626',
+      RESISTOR_MULTIPLIER_BANDS[exp]?.hex ?? '#78350f',
+      '#eab308', // ±5% Gold tolerance band
+    ],
+  }
 }
 
 export const WIRE_COLORS = [
