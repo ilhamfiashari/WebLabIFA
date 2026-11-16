@@ -773,7 +773,105 @@ export const COMPONENT_CATALOG: ComponentSpec[] = [
       { id: 'GND', label: 'GND', dx: 74, dy: 74, role: 'gnd' },
     ],
   },
+  {
+    kind: 'slide-switch',
+    category: 'inputs',
+    nameId: 'Slide Switch',
+    nameEn: 'Slide Switch (SPDT)',
+    subtitleId: 'Input Devices · Toggle ON/OFF',
+    subtitleEn: 'Input Devices · SPDT',
+    width: 72,
+    height: 54,
+    pins: [
+      { id: '1', label: 'VCC', dx: 16, dy: 48, role: 'power' },
+      { id: '2', label: 'COM', dx: 36, dy: 48, role: 'signal' },
+      { id: '3', label: 'GND', dx: 56, dy: 48, role: 'gnd' },
+    ],
+  },
+  {
+    kind: 'joystick',
+    category: 'inputs',
+    nameId: 'Analog Joystick',
+    nameEn: 'Analog Joystick',
+    subtitleId: 'Input Devices · X/Y/SEL',
+    subtitleEn: 'Input Devices · 2-Axis',
+    width: 96,
+    height: 98,
+    pins: [
+      { id: 'GND', label: 'GND', dx: 14, dy: 92, role: 'gnd' },
+      { id: 'VCC', label: '5V', dx: 32, dy: 92, role: 'power' },
+      { id: 'HORZ', label: 'VRX', dx: 52, dy: 92, role: 'signal' },
+      { id: 'VERT', label: 'VRY', dx: 70, dy: 92, role: 'signal' },
+      { id: 'SEL', label: 'SW', dx: 86, dy: 92, role: 'signal' },
+    ],
+  },
+  {
+    kind: 'hx711',
+    category: 'sensors',
+    nameId: 'HX711 Load Cell (5kg)',
+    nameEn: 'HX711 Load Cell',
+    subtitleId: 'Sensors · Timbangan Digital',
+    subtitleEn: 'Sensors · 5kg Bridge',
+    width: 108,
+    height: 76,
+    pins: [
+      { id: 'VCC', label: 'VCC', dx: 20, dy: 70, role: 'power' },
+      { id: 'DT', label: 'DT', dx: 44, dy: 70, role: 'signal' },
+      { id: 'SCK', label: 'SCK', dx: 68, dy: 70, role: 'signal' },
+      { id: 'GND', label: 'GND', dx: 90, dy: 70, role: 'gnd' },
+    ],
+  },
+  {
+    kind: 'max7219-matrix',
+    category: 'displays',
+    nameId: 'MAX7219 LED Dot Matrix',
+    nameEn: 'LED Dot Matrix (MAX7219)',
+    subtitleId: 'Displays · 8×8 Matrix SPI',
+    subtitleEn: 'Displays · 8×8 Matrix',
+    width: 98,
+    height: 98,
+    pins: [
+      { id: 'VCC', label: 'VCC', dx: 18, dy: 92, role: 'power' },
+      { id: 'GND', label: 'GND', dx: 38, dy: 92, role: 'gnd' },
+      { id: 'DIN', label: 'DIN', dx: 58, dy: 92, role: 'signal' },
+      { id: 'CLK', label: 'CLK', dx: 80, dy: 92, role: 'signal' },
+    ],
+  },
+  {
+    kind: 'stepper',
+    category: 'actuators',
+    nameId: 'Stepper Motor (NEMA-17)',
+    nameEn: 'Stepper Motor (NEMA-17)',
+    subtitleId: 'Actuators · Step/Dir 1.8°',
+    subtitleEn: 'Actuators · Bipolar',
+    width: 96,
+    height: 98,
+    pins: [
+      { id: 'A-', label: 'A-', dx: 20, dy: 92, role: 'signal' },
+      { id: 'A+', label: 'A+', dx: 40, dy: 92, role: 'signal' },
+      { id: 'B+', label: 'B+', dx: 60, dy: 92, role: 'signal' },
+      { id: 'B-', label: 'B-', dx: 80, dy: 92, role: 'signal' },
+    ],
+  },
 ]
+
+export function rotatePointAroundBox(
+  dx: number,
+  dy: number,
+  width: number,
+  height: number,
+  rotateDeg = 0,
+): { dx: number; dy: number } {
+  const r = ((Math.round(rotateDeg) % 360) + 360) % 360
+  const cx = width / 2
+  const cy = height / 2
+  const vx = dx - cx
+  const vy = dy - cy
+  if (r === 90) return { dx: Math.round(cx - vy), dy: Math.round(cy + vx) }
+  if (r === 180) return { dx: Math.round(cx - vx), dy: Math.round(cy - vy) }
+  if (r === 270) return { dx: Math.round(cx + vy), dy: Math.round(cy - vx) }
+  return { dx, dy }
+}
 
 export function getComponentSpec(kind: ComponentKind, boardId?: BoardId): ComponentSpec {
   if (kind === 'mcu') {
