@@ -4,7 +4,6 @@ FROM rust:1-bookworm AS builder
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-COPY docs/openapi.json docs/openapi.json
 COPY Lab-Backend/Cargo.toml Lab-Backend/Cargo.toml
 COPY Lab-Backend/migrations Lab-Backend/migrations
 COPY Lab-Backend/content Lab-Backend/content

@@ -920,13 +920,28 @@ export function verifyCircuitAndCode(
       textEn: `Unwired components: ${unwiredParts.map((u) => u.label).join(', ')}.`,
     })
   } else {
-    // Check LED ground return
+    // Check LED polarity & ground return + sensor reverse polarity
+    const reversedLed = activeParts.find((c) => {
+      if (c.kind !== 'led') return false
+      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' })
+      const reachK = traceReachable(graph, { nodeId: c.id, pinId: 'K' })
+      const aHitsGnd = reachA.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind === 'gnd')
+      const kHitsPwr = reachK.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind !== 'gnd')
+      return aHitsGnd && kHitsPwr
+    })
     const ungroundedLed = activeParts.find((c) => {
       if (c.kind !== 'led') return false
       const reach = traceReachable(graph, { nodeId: c.id, pinId: 'K' })
       return !reach.endpoints.some((e) => e.nodeId === 'board' && getBoardPin(boardId, e.pinId)?.kind === 'gnd')
     })
-    if (ungroundedLed) {
+    if (reversedLed) {
+      items.push({
+        id: 'diag-led-polarity',
+        status: 'error',
+        textId: `Polaritas ${reversedLed.label} terbalik! Anoda (+) harus menuju GPIO/3V3 dan Katoda (-) menuju GND.`,
+        textEn: `${reversedLed.label} polarity reversed! Wire Anode (+) to GPIO/3V3 and Cathode (-) to GND.`,
+      })
+    } else if (ungroundedLed) {
       items.push({
         id: 'diag-led-gnd',
         status: 'warn',

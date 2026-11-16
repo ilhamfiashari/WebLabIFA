@@ -35,8 +35,8 @@ void loop() {
       {
         id: 'res-1',
         kind: 'resistor',
-        x: 310,
-        y: 190,
+        x: 340,
+        y: 205,
         label: 'R1 (220Ω)',
         ohms: 220,
         props: {},
@@ -44,8 +44,8 @@ void loop() {
       {
         id: 'led-1',
         kind: 'led',
-        x: 450,
-        y: 155,
+        x: 495,
+        y: 165,
         label: 'LED Status',
         color: 'green',
         props: {},
@@ -54,7 +54,7 @@ void loop() {
     wires: [
       { id: 'w-gpio2-res', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'res-1', pinId: 'P1' }, color: '#10b981' },
       { id: 'w-res-led', from: { nodeId: 'res-1', pinId: 'P2' }, to: { nodeId: 'led-1', pinId: 'A' }, color: '#f59e0b' },
-      { id: 'w-led-gnd', from: { nodeId: 'led-1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-led-gnd', from: { nodeId: 'led-1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
     ],
   },
   {

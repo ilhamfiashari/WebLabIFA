@@ -178,7 +178,8 @@ export function BoardHardwareView({
   sim,
   selectedPin,
   showLabels,
-  onPinClick,
+  onPinPointerDown,
+  onPinPointerUp,
 }: {
   board: BoardSpec
   boardX: number
@@ -186,7 +187,8 @@ export function BoardHardwareView({
   sim: SimulationState
   selectedPin: WireEndpoint | null
   showLabels: boolean
-  onPinClick: (ep: WireEndpoint) => void
+  onPinPointerDown: (ep: WireEndpoint, clientX: number, clientY: number) => void
+  onPinPointerUp: (ep: WireEndpoint) => void
 }) {
   const builtin: GpioRuntime | undefined = sim.gpioStates[board.builtinLedGpio]
   const builtinOn = Boolean(builtin && builtin.digital === 1)
@@ -322,14 +324,22 @@ export function BoardHardwareView({
         return (
           <g
             key={p.id}
-            style={{ cursor: 'pointer' }}
-            onClick={(e) => {
+            className="iot-pin"
+            data-node-id="board"
+            data-pin-id={p.id}
+            style={{ cursor: 'crosshair' }}
+            onPointerDown={(e) => {
               e.stopPropagation()
-              onPinClick({ nodeId: 'board', pinId: p.id })
+              onPinPointerDown({ nodeId: 'board', pinId: p.id }, e.clientX, e.clientY)
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation()
+              onPinPointerUp({ nodeId: 'board', pinId: p.id })
             }}
           >
+            <circle className="iot-pin-hit" cx={p.x} cy={p.y} r={10} fill="transparent" />
             <circle cx={p.x} cy={p.y} r={isSel ? 7 : 5.5} fill="#0f172a" stroke={fill} strokeWidth={2.2} />
-            <circle cx={p.x} cy={p.y} r={2} fill={fill} />
+            <circle cx={p.x} cy={p.y} r={2.2} fill={fill} />
             {showLabels ? (
               <text
                 x={p.side === 'left' ? p.x + 10 : p.x - 10}
@@ -358,7 +368,8 @@ export function ComponentHardwareView({
   showLabels,
   isDark,
   onStartDrag,
-  onPinClick,
+  onPinPointerDown,
+  onPinPointerUp,
   onUpdateProps,
 }: {
   comp: PlacedComponent
@@ -368,7 +379,8 @@ export function ComponentHardwareView({
   showLabels: boolean
   isDark: boolean
   onStartDrag: (compId: string, clientX: number, clientY: number) => void
-  onPinClick: (ep: WireEndpoint) => void
+  onPinPointerDown: (ep: WireEndpoint, clientX: number, clientY: number) => void
+  onPinPointerUp: (ep: WireEndpoint) => void
   onUpdateProps: (compId: string, patch: Partial<PlacedComponent['props']>) => void
 }) {
   const spec = getComponentSpec(comp.kind)
@@ -679,17 +691,40 @@ export function ComponentHardwareView({
       {spec.pins.map((p) => {
         const isSel = selectedPin?.nodeId === comp.id && selectedPin?.pinId === p.id
         const color = isSel ? '#f59e0b' : p.role === 'power' ? '#ef4444' : p.role === 'gnd' || p.role === 'cathode' ? '#475569' : '#38bdf8'
+        const shortTag = p.id === 'A' ? '+' : p.id === 'K' ? '-' : p.id
         return (
           <g
             key={p.id}
-            style={{ cursor: 'pointer' }}
-            onClick={(e) => {
+            className="iot-pin"
+            data-node-id={comp.id}
+            data-pin-id={p.id}
+            style={{ cursor: 'crosshair' }}
+            onPointerDown={(e) => {
               e.stopPropagation()
-              onPinClick({ nodeId: comp.id, pinId: p.id })
+              onPinPointerDown({ nodeId: comp.id, pinId: p.id }, e.clientX, e.clientY)
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation()
+              onPinPointerUp({ nodeId: comp.id, pinId: p.id })
             }}
           >
+            <circle className="iot-pin-hit" cx={p.dx} cy={p.dy} r={10} fill="transparent" />
             <circle cx={p.dx} cy={p.dy} r={isSel ? 6.5 : 5} fill="#0f172a" stroke={color} strokeWidth={2} />
             <circle cx={p.dx} cy={p.dy} r={2} fill={color} />
+            {showLabels ? (
+              <text
+                x={p.dx}
+                y={p.dy + 13}
+                textAnchor="middle"
+                fontSize="7.5"
+                fontFamily="monospace"
+                fontWeight={700}
+                fill={labelColor}
+                style={{ pointerEvents: 'none' }}
+              >
+                {shortTag}
+              </text>
+            ) : null}
             <title>{p.label}</title>
           </g>
         )

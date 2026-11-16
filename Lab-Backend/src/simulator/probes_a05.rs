@@ -22,6 +22,7 @@ pub(super) fn sim_a05_sqli(
         let password = input.secondary.as_str();
         let u_lower = username.to_ascii_lowercase();
         let p_lower = password.to_ascii_lowercase();
+        const DEMO_RANI_PASSWORD: &str = "praktikum2026"; // pragma: allowlist secret -- educational SQLi demo fixture
 
         let (status, query_preview, ast_tokens, logged_user, events, exploit, baseline) =
             if !where_parameterized {
@@ -106,11 +107,11 @@ pub(super) fn sim_a05_sqli(
                         true,
                         false,
                     )
-                } else if username == "rani" && password == "praktikum2026" {
+                } else if username == "rani" && password == DEMO_RANI_PASSWORD {
                     (
                         200,
                         format!(
-                            "SELECT id, username, role FROM accounts WHERE username='{filtered_u}' AND password_hash='sha256(...)'"
+                            "SELECT id, username, role FROM accounts WHERE username='{filtered_u}' AND password_hash='sha256(...)'" // pragma: allowlist secret -- educational SQLi demo fixture
                         ),
                         vec![
                             "SELECT".into(),
@@ -157,7 +158,7 @@ pub(super) fn sim_a05_sqli(
                         false,
                     )
                 }
-            } else if username == "rani" && password == "praktikum2026" {
+            } else if username == "rani" && password == DEMO_RANI_PASSWORD {
                 (
                     200,
                     "SELECT id, username, role FROM accounts WHERE username = $1 AND password_hash = $2 [bind $1 = \"rani\"]".into(),

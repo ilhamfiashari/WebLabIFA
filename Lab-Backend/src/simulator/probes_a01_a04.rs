@@ -484,7 +484,7 @@ pub(super) fn sim_a04(
             } else if level == LevelId::Easy && patch == "vulnerable" {
                 ("Plaintext (Tanpa hash)", password, password, true)
             } else if patch == "sha256-global-salt" || level == LevelId::Medium {
-                ("SHA-256 Tanpa Salt Unik", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", true)
+                ("SHA-256 Tanpa Salt Unik", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", true) // pragma: allowlist secret -- educational SHA-256 demo fixture
             } else {
                 ("Campuran Legacy + Argon2id", "sha256$9f86d08188...", "$argon2id$v=19$...", true)
             };
