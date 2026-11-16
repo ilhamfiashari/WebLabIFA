@@ -6,7 +6,7 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
-const BASE32_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const BASE32_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; // pragma: allowlist secret -- RFC 4648 Base32 alphabet
 
 pub fn base32_encode(data: &[u8]) -> String {
     let mut out = String::new();
@@ -188,7 +188,7 @@ pub fn generate_totp_secret() -> String {
 }
 
 pub fn generate_backup_codes(count: usize) -> Vec<String> {
-    const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // pragma: allowlist secret -- unambiguous backup code charset
     let mut rng = rand::thread_rng();
     (0..count)
         .map(|_| {

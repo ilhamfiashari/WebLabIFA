@@ -95,7 +95,7 @@ jobs:
         run: |
           docker compose --profile app config --quiet
           cp deploy/production.env.example deploy/production.env
-          POSTGRES_MIGRATOR_PASSWORD=ci-check-only docker compose -f deploy/compose.prod.yaml config --quiet
+          POSTGRES_MIGRATOR_PASSWORD=ci-check-only docker compose -f deploy/compose.prod.yaml config --quiet # pragma: allowlist secret -- disposable CI fixture
           rm -f deploy/production.env
       - name: Build backend & frontend containers
         run: |
@@ -106,7 +106,7 @@ jobs:
           test "$(docker inspect --format '{{.Config.User}}' ifa-lab-backend:ci)" = "10001:10001"
           test -n "$(docker inspect --format '{{.Config.User}}' ifa-lab-frontend:ci)"
       - name: Container vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ifa-lab-backend:ci
           format: table
@@ -114,7 +114,7 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
       - name: Frontend container vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ifa-lab-frontend:ci
           format: table

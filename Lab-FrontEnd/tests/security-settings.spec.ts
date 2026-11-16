@@ -131,7 +131,7 @@ test('pengaturan keamanan akun mahasiswa: email, TOTP, passkey, backup codes, se
   await page.route('**/api/account/security/totp/enroll', (route) =>
     route.fulfill({
       json: {
-        secret: 'JBSWY3DPEHPK3PXP',
+        secret: 'JBSWY3DPEHPK3PXP', // pragma: allowlist secret -- RFC 6238 test fixture
         otpauth_uri: 'otpauth://totp/WebLabIFA:123140051@student.itera.ac.id?secret=JBSWY3DPEHPK3PXP',
         issuer: 'WebLabIFA',
         account: student.email,
