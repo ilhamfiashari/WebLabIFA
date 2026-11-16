@@ -1,5 +1,175 @@
-import type { BoardSpec, GpioRuntime, PlacedComponent, SimulationState, WireEndpoint } from './types'
+import type { BoardId, BoardSpec, ComponentKind, GpioRuntime, PlacedComponent, SimulationState, WireEndpoint } from './types'
 import { getComponentSpec } from './boards'
+
+export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
+  const isArduino = boardId === 'arduino-uno' || boardId === 'arduino-mega'
+  const isPico = boardId === 'pico-w'
+  const pcb = isArduino ? '#0e6990' : isPico ? '#156035' : '#1b1e23'
+  return (
+    <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+      <rect x={22} y={8} width={66} height={48} rx={5} fill={pcb} stroke="#475569" strokeWidth={1.2} />
+      {isArduino ? (
+        <>
+          <rect x={16} y={14} width={12} height={14} rx={2} fill="#cbd5e1" stroke="#64748b" />
+          <rect x={16} y={36} width={10} height={12} rx={2} fill="#1e293b" />
+          <rect x={44} y={24} width={28} height={16} rx={2} fill="#0f172a" stroke="#94a3b8" strokeWidth={0.8} />
+          <rect x={34} y={10} width={44} height={4} fill="#1e293b" />
+          <rect x={34} y={50} width={44} height={4} fill="#1e293b" />
+        </>
+      ) : (
+        <>
+          <rect x={40} y={12} width={30} height={22} rx={2} fill="#94a3b8" stroke="#cbd5e1" strokeWidth={0.9} />
+          <rect x={47} y={48} width={16} height={8} rx={2} fill="#cbd5e1" />
+          <path d="M44 10 V5 H49 V10 H54 V5 H59 V10 H65 V5" fill="none" stroke="#eab308" strokeWidth={1.2} />
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <g key={i}>
+              <circle cx={27} cy={14 + i * 7} r={1.8} fill="#facc15" />
+              <circle cx={83} cy={14 + i * 7} r={1.8} fill="#facc15" />
+            </g>
+          ))}
+        </>
+      )}
+    </svg>
+  )
+}
+
+export function PartThumbnail({ kind }: { kind: ComponentKind }) {
+  return (
+    <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+      {kind === 'led' ? (
+        <g transform="translate(36, 4)">
+          <path d="M10 38 V16 A10 10 0 0 1 30 16 V38 Z" fill="#ef4444" stroke="#991b1b" strokeWidth={1.2} />
+          <rect x={8} y={36} width={24} height={4} rx={1.5} fill="#dc2626" />
+          <ellipse cx={16} cy={18} rx={3} ry={6} fill="rgba(255,255,255,0.45)" />
+          <line x1={15} y1={40} x2={15} y2={56} stroke="#94a3b8" strokeWidth={2.4} />
+          <line x1={25} y1={40} x2={25} y2={52} stroke="#94a3b8" strokeWidth={2.4} />
+        </g>
+      ) : kind === 'rgb-led' ? (
+        <g transform="translate(34, 4)">
+          <path d="M11 38 V16 A10 10 0 0 1 31 16 V38 Z" fill="url(#thumb-rgb)" stroke="#475569" strokeWidth={1.2} />
+          <defs>
+            <linearGradient id="thumb-rgb" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#ef4444" />
+              <stop offset="50%" stopColor="#22c55e" />
+              <stop offset="100%" stopColor="#3b82f6" />
+            </linearGradient>
+          </defs>
+          {[12, 18, 24, 30].map((lx) => (
+            <line key={lx} x1={lx} y1={38} x2={lx} y2={54} stroke="#94a3b8" strokeWidth={2} />
+          ))}
+        </g>
+      ) : kind === 'pushbutton' ? (
+        <g transform="translate(23, 8)">
+          <rect x={14} y={6} width={36} height={36} rx={4} fill="#e2e8f0" stroke="#334155" strokeWidth={1.8} />
+          <line x1={2} y1={14} x2={14} y2={14} stroke="#64748b" strokeWidth={3} />
+          <line x1={2} y1={34} x2={14} y2={34} stroke="#64748b" strokeWidth={3} />
+          <line x1={50} y1={14} x2={62} y2={14} stroke="#64748b" strokeWidth={3} />
+          <line x1={50} y1={34} x2={62} y2={34} stroke="#64748b" strokeWidth={3} />
+          <circle cx={32} cy={24} r={12} fill="#ef4444" stroke="#991b1b" strokeWidth={1.4} />
+          <circle cx={29} cy={21} r={4} fill="rgba(255,255,255,0.28)" />
+        </g>
+      ) : kind === 'resistor' ? (
+        <g transform="translate(8, 18)">
+          <line x1={4} y1={14} x2={90} y2={14} stroke="#94a3b8" strokeWidth={3.2} />
+          <path d="M22 6 Q28 6 32 8 H62 Q66 6 72 6 Q76 14 72 22 Q66 22 62 20 H32 Q28 22 22 22 Q18 14 22 6 Z" fill="#e6cfa3" stroke="#a16207" strokeWidth={1.2} />
+          <rect x={28} y={6.5} width={5} height={15} fill="#dc2626" />
+          <rect x={39} y={7.5} width={5} height={13} fill="#dc2626" />
+          <rect x={50} y={7.5} width={5} height={13} fill="#78350f" />
+          <rect x={63} y={6.5} width={4} height={15} fill="#eab308" />
+        </g>
+      ) : kind === 'breadboard' ? (
+        <g transform="translate(18, 6)">
+          <rect x={0} y={0} width={74} height={52} rx={3} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.2} />
+          <line x1={4} y1={6} x2={70} y2={6} stroke="#ef4444" strokeWidth={1.2} />
+          <line x1={4} y1={46} x2={70} y2={46} stroke="#3b82f6" strokeWidth={1.2} />
+          <rect x={3} y={24} width={68} height={4} fill="#e2e8f0" />
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((c) => (
+            <g key={c}>
+              <circle cx={9 + c * 7} cy={14} r={1.2} fill="#334155" />
+              <circle cx={9 + c * 7} cy={20} r={1.2} fill="#334155" />
+              <circle cx={9 + c * 7} cy={32} r={1.2} fill="#334155" />
+              <circle cx={9 + c * 7} cy={38} r={1.2} fill="#334155" />
+            </g>
+          ))}
+        </g>
+      ) : kind === 'potentiometer' ? (
+        <g transform="translate(27, 4)">
+          <rect x={6} y={4} width={44} height={44} rx={5} fill="#0369a1" stroke="#0284c7" strokeWidth={1.4} />
+          <circle cx={28} cy={24} r={15} fill="#e2e8f0" stroke="#64748b" strokeWidth={1.6} />
+          <line x1={28} y1={24} x2={37} y2={14} stroke="#0f172a" strokeWidth={2.8} strokeLinecap="round" />
+          {[16, 28, 40].map((px) => (
+            <line key={px} x1={px} y1={48} x2={px} y2={56} stroke="#94a3b8" strokeWidth={2.5} />
+          ))}
+        </g>
+      ) : kind === 'hc-sr04' ? (
+        <g transform="translate(13, 8)">
+          <rect x={2} y={4} width={80} height={38} rx={4} fill="#1d4ed8" stroke="#60a5fa" strokeWidth={1.4} />
+          <circle cx={24} cy={23} r={12} fill="#cbd5e1" stroke="#475569" strokeWidth={1.8} />
+          <circle cx={24} cy={23} r={7} fill="#0f172a" />
+          <circle cx={60} cy={23} r={12} fill="#cbd5e1" stroke="#475569" strokeWidth={1.8} />
+          <circle cx={60} cy={23} r={7} fill="#0f172a" />
+          {[28, 36, 44, 52].map((px) => (
+            <line key={px} x1={px} y1={42} x2={px} y2={50} stroke="#facc15" strokeWidth={2} />
+          ))}
+        </g>
+      ) : kind === 'dht22' ? (
+        <g transform="translate(28, 5)">
+          <rect x={6} y={2} width={42} height={42} rx={4} fill="#f8fafc" stroke="#94a3b8" strokeWidth={1.4} />
+          <rect x={12} y={8} width={30} height={24} rx={2} fill="#e2e8f0" stroke="#cbd5e1" />
+          {[14, 20, 26].map((gy) => (
+            <line key={gy} x1={15} y1={gy} x2={39} y2={gy} stroke="#94a3b8" strokeWidth={1.5} />
+          ))}
+          {[16, 27, 38].map((px) => (
+            <line key={px} x1={px} y1={44} x2={px} y2={53} stroke="#94a3b8" strokeWidth={2} />
+          ))}
+        </g>
+      ) : kind === 'lcd-1602' ? (
+        <g transform="translate(11, 8)">
+          <rect x={2} y={4} width={84} height={40} rx={3} fill="#0f766e" stroke="#115e59" strokeWidth={1.4} />
+          <rect x={8} y={10} width={72} height={28} rx={2} fill="#84cc16" stroke="#1e293b" strokeWidth={2} />
+          <line x1={12} y1={19} x2={68} y2={19} stroke="#365314" strokeWidth={2} strokeDasharray="3 2" />
+          <line x1={12} y1={28} x2={56} y2={28} stroke="#365314" strokeWidth={2} strokeDasharray="3 2" />
+        </g>
+      ) : kind === 'oled-ssd1306' ? (
+        <g transform="translate(17, 6)">
+          <rect x={4} y={4} width={68} height={46} rx={4} fill="#1e3a8a" stroke="#60a5fa" strokeWidth={1.4} />
+          <rect x={10} y={13} width={56} height={30} rx={2} fill="#020617" />
+          <text x={38} y={31} textAnchor="middle" fontSize="8.5" fontFamily="monospace" fill="#38bdf8">128×64</text>
+        </g>
+      ) : kind === 'servo' ? (
+        <g transform="translate(16, 8)">
+          <path d="M2 24 H14 M2 28 H14 M2 32 H14" stroke="#f97316" strokeWidth={2.5} />
+          <rect x={14} y={12} width={56} height={30} rx={4} fill="#334155" stroke="#1e293b" strokeWidth={1.4} />
+          <circle cx={52} cy={27} r={10} fill="#cbd5e1" stroke="#475569" />
+          <rect x={48} y={2} width={8} height={26} rx={4} fill="#f8fafc" stroke="#64748b" strokeWidth={1.2} />
+        </g>
+      ) : kind === 'buzzer' ? (
+        <g transform="translate(28, 6)">
+          <circle cx={27} cy={26} r={21} fill="#1e293b" stroke="#475569" strokeWidth={1.8} />
+          <circle cx={27} cy={26} r={6} fill="#cbd5e1" />
+        </g>
+      ) : kind === 'ldr' ? (
+        <g transform="translate(27, 8)">
+          <circle cx={28} cy={20} r={16} fill="#fde68a" stroke="#b45309" strokeWidth={2} />
+          <path d="M18 20 Q23 13 28 20 T38 20" fill="none" stroke="#b45309" strokeWidth={2} />
+          <line x1={21} y1={35} x2={21} y2={50} stroke="#94a3b8" strokeWidth={2} />
+          <line x1={35} y1={35} x2={35} y2={50} stroke="#94a3b8" strokeWidth={2} />
+        </g>
+      ) : kind === 'pir' ? (
+        <g transform="translate(27, 6)">
+          <rect x={6} y={6} width={44} height={40} rx={5} fill="#0f766e" />
+          <circle cx={28} cy={26} r={15} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.5} />
+        </g>
+      ) : (
+        <g transform="translate(22, 8)">
+          <rect x={6} y={6} width={54} height={38} rx={4} fill="#0284c7" stroke="#38bdf8" strokeWidth={1.4} />
+          <circle cx={18} cy={18} r={3.5} fill="#22c55e" />
+          <text x={36} y={32} textAnchor="middle" fontSize="8.5" fill="#fff" fontWeight={700}>RELAY</text>
+        </g>
+      )}
+    </svg>
+  )
+}
 
 export function BoardHardwareView({
   board,
@@ -7,6 +177,7 @@ export function BoardHardwareView({
   boardY,
   sim,
   selectedPin,
+  showLabels,
   onPinClick,
 }: {
   board: BoardSpec
@@ -14,69 +185,125 @@ export function BoardHardwareView({
   boardY: number
   sim: SimulationState
   selectedPin: WireEndpoint | null
+  showLabels: boolean
   onPinClick: (ep: WireEndpoint) => void
 }) {
   const builtin: GpioRuntime | undefined = sim.gpioStates[board.builtinLedGpio]
   const builtinOn = Boolean(builtin && builtin.digital === 1)
-  const pcbColor =
-    board.id === 'arduino-uno' ? '#0f5c7a' : board.id === 'pico-w' ? '#14532d' : '#182436'
+  const isArduino = board.id === 'arduino-uno' || board.id === 'arduino-mega'
+  const isPico = board.id === 'pico-w'
+  const pcbColor = isArduino ? '#0d6e96' : isPico ? '#14532d' : '#181b20'
+  const w = board.width
+  const h = board.height
 
   return (
     <g transform={`translate(${boardX}, ${boardY})`}>
-      {/* PCB body */}
-      <rect x={0} y={0} width={board.width} height={board.height} rx={12} fill={pcbColor} stroke="#334155" strokeWidth={2} />
-      {/* RF Antenna for Wi-Fi boards */}
+      {/* Realistic PCB Body */}
+      <rect x={0} y={0} width={w} height={h} rx={10} fill={pcbColor} stroke="#334155" strokeWidth={2} />
+
+      {/* Four brass corner mounting holes */}
+      {[
+        [10, 10],
+        [w - 10, 10],
+        [10, h - 10],
+        [w - 10, h - 10],
+      ].map(([cx, cy], idx) => (
+        <g key={idx}>
+          <circle cx={cx} cy={cy} r={4} fill="#0f172a" stroke="#eab308" strokeWidth={1.5} />
+        </g>
+      ))}
+
+      {/* Top Wi-Fi meander PCB antenna (for ESP32 / Pico W) */}
       {board.hasWifi ? (
         <g>
-          <rect x={44} y={-10} width={80} height={24} rx={4} fill="#0f172a" stroke="#64748b" strokeWidth={1.2} />
-          <path d="M56 6 V-4 H66 V4 H76 V-4 H86 V4 H96 V-4 H110" fill="none" stroke="#eab308" strokeWidth={2} />
+          <rect x={w / 2 - 42} y={4} width={84} height={22} rx={3} fill="#111317" stroke="#475569" strokeWidth={1} />
+          <path
+            d={`M ${w / 2 - 32} 20 V 9 H ${w / 2 - 22} V 20 H ${w / 2 - 12} V 9 H ${w / 2 - 2} V 20 H ${w / 2 + 8} V 9 H ${w / 2 + 22}`}
+            fill="none"
+            stroke="#eab308"
+            strokeWidth={2}
+          />
         </g>
       ) : null}
-      {/* USB Connector at bottom */}
-      <rect x={board.width / 2 - 20} y={board.height - 14} width={40} height={20} rx={4} fill="#cbd5e1" stroke="#475569" strokeWidth={1.5} />
-      <text x={board.width / 2} y={board.height - 1} textAnchor="middle" fontSize="8" fill="#1e293b" fontWeight={700}>
-        {board.id === 'arduino-uno' ? 'USB-B' : 'USB-C'}
-      </text>
 
-      {/* Main SoC package */}
-      <rect x={board.width / 2 - 28} y={64} width={56} height={56} rx={5} fill="#0f172a" stroke="#94a3b8" strokeWidth={1.2} />
-      <text x={board.width / 2} y={89} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="#e2e8f0">
+      {/* Brushed silver RF shield / AVR MCU package safely centered inside pin columns */}
+      <rect
+        x={w / 2 - 38}
+        y={32}
+        width={76}
+        height={64}
+        rx={5}
+        fill={isArduino ? '#1e293b' : '#cbd5e1'}
+        stroke="#64748b"
+        strokeWidth={1.4}
+      />
+      <text
+        x={w / 2}
+        y={62}
+        textAnchor="middle"
+        fontSize="10"
+        fontWeight={800}
+        fill={isArduino ? '#e2e8f0' : '#0f172a'}
+      >
         {board.shortName}
       </text>
-      <text x={board.width / 2} y={102} textAnchor="middle" fontSize="7.5" fill="#94a3b8">
+      <text
+        x={w / 2}
+        y={76}
+        textAnchor="middle"
+        fontSize="7.5"
+        fill={isArduino ? '#94a3b8' : '#334155'}
+        fontWeight={600}
+      >
         {board.logicVoltage}V · {board.clockMhz}MHz
       </text>
 
-      {/* PWR LED + Built-in LED */}
-      <circle cx={42} cy={36} r={4} fill={sim.running ? '#22c55e' : '#14532d'} />
-      <text x={50} y={39} fontSize="8" fill="#cbd5e1">PWR</text>
+      {/* Secondary IC & Regulator well inside center corridor */}
+      <rect x={w / 2 - 14} y={114} width={28} height={28} rx={3} fill="#0f172a" stroke="#475569" strokeWidth={1} />
+      <text x={w / 2} y={131} textAnchor="middle" fontSize="6.5" fill="#94a3b8">UART</text>
+
+      {/* Power LED & Built-in LED cleanly centered above EN/BOOT */}
+      <circle cx={w / 2 - 20} cy={166} r={4} fill={sim.running ? '#ef4444' : '#450a0a'} style={sim.running ? { filter: 'drop-shadow(0 0 5px #ef4444)' } : undefined} />
+      <text x={w / 2 - 20} y={178} textAnchor="middle" fontSize="7" fill="#cbd5e1">PWR</text>
 
       <circle
-        cx={112}
-        cy={36}
-        r={builtinOn ? 5 : 4}
-        fill={builtinOn ? '#f59e0b' : '#451a03'}
-        style={builtinOn ? { filter: 'drop-shadow(0 0 6px #f59e0b)' } : undefined}
+        cx={w / 2 + 20}
+        cy={166}
+        r={builtinOn ? 4.8 : 4}
+        fill={builtinOn ? '#22c55e' : '#14532d'}
+        style={builtinOn ? { filter: 'drop-shadow(0 0 6px #22c55e)' } : undefined}
       />
-      <text x={120} y={39} fontSize="8" fill="#cbd5e1">LED</text>
+      <text x={w / 2 + 20} y={178} textAnchor="middle" fontSize="7" fill="#cbd5e1">LED</text>
 
-      {/* BOOT & RST micro-buttons */}
-      <rect x={44} y={134} width={22} height={14} rx={3} fill="#e2e8f0" />
-      <text x={55} y={158} textAnchor="middle" fontSize="7" fill="#94a3b8">RST</text>
-      <rect x={102} y={134} width={22} height={14} rx={3} fill="#e2e8f0" />
-      <text x={113} y={158} textAnchor="middle" fontSize="7" fill="#94a3b8">BOOT</text>
-
-      {/* Wi-Fi IP status tag on board */}
+      {/* Wi-Fi IP status tag in lower-center corridor (no pin overlap) */}
       {board.hasWifi && sim.wifiConnected ? (
         <g>
-          <rect x={34} y={170} width={100} height={18} rx={4} fill="#064e3b" stroke="#10b981" strokeWidth={1} />
-          <text x={84} y={182} textAnchor="middle" fontSize="8" fill="#a7f3d0" fontWeight={600}>
-            WiFi {sim.wifiIp}
+          <rect x={w / 2 - 44} y={190} width={88} height={18} rx={4} fill="#064e3b" stroke="#10b981" strokeWidth={1} />
+          <text x={w / 2} y={202} textAnchor="middle" fontSize="7.5" fill="#a7f3d0" fontWeight={700}>
+            {sim.wifiIp}
           </text>
         </g>
       ) : null}
 
-      {/* Pin Headers */}
+      {/* EN & BOOT tactile switches cleanly near bottom corners well below last pin (y=222) */}
+      <g transform={`translate(28, ${h - 46})`}>
+        <rect x={0} y={0} width={24} height={22} rx={3} fill="#cbd5e1" stroke="#475569" strokeWidth={1} />
+        <circle cx={12} cy={11} r={5} fill="#334155" />
+        <text x={12} y={32} textAnchor="middle" fontSize="7.5" fontWeight={700} fill="#cbd5e1">EN</text>
+      </g>
+      <g transform={`translate(${w - 52}, ${h - 46})`}>
+        <rect x={0} y={0} width={24} height={22} rx={3} fill="#cbd5e1" stroke="#475569" strokeWidth={1} />
+        <circle cx={12} cy={11} r={5} fill="#334155" />
+        <text x={12} y={32} textAnchor="middle" fontSize="7.5" fontWeight={700} fill="#cbd5e1">BOOT</text>
+      </g>
+
+      {/* Metallic USB Port at bottom edge */}
+      <rect x={w / 2 - 20} y={h - 16} width={40} height={20} rx={4} fill="#cbd5e1" stroke="#475569" strokeWidth={1.6} />
+      <text x={w / 2} y={h - 3} textAnchor="middle" fontSize="7.5" fill="#1e293b" fontWeight={800}>
+        {isArduino ? 'USB-B' : 'USB-C'}
+      </text>
+
+      {/* Pin Headers cleanly positioned along outer left/right edges with short readable labels */}
       {board.pins.map((p) => {
         const isSel = selectedPin?.nodeId === 'board' && selectedPin?.pinId === p.id
         const activeGpio = p.gpio !== undefined ? sim.gpioStates[p.gpio] : undefined
@@ -87,7 +314,7 @@ export function BoardHardwareView({
             : p.kind === 'power'
               ? '#ef4444'
               : p.kind === 'gnd'
-                ? '#334155'
+                ? '#475569'
                 : isHigh
                   ? '#22c55e'
                   : '#eab308'
@@ -102,18 +329,20 @@ export function BoardHardwareView({
             }}
           >
             <circle cx={p.x} cy={p.y} r={isSel ? 7 : 5.5} fill="#0f172a" stroke={fill} strokeWidth={2.2} />
-            <circle cx={p.x} cy={p.y} r={2.2} fill={fill} />
-            <text
-              x={p.side === 'left' ? p.x + 10 : p.x - 10}
-              y={p.y + 3}
-              textAnchor={p.side === 'left' ? 'start' : 'end'}
-              fontSize="8.5"
-              fontFamily="monospace"
-              fontWeight={600}
-              fill={isHigh ? '#86efac' : '#e2e8f0'}
-            >
-              {p.label}
-            </text>
+            <circle cx={p.x} cy={p.y} r={2} fill={fill} />
+            {showLabels ? (
+              <text
+                x={p.side === 'left' ? p.x + 10 : p.x - 10}
+                y={p.y + 3}
+                textAnchor={p.side === 'left' ? 'start' : 'end'}
+                fontSize="8.5"
+                fontFamily="monospace"
+                fontWeight={700}
+                fill={isHigh ? '#86efac' : '#f1f5f9'}
+              >
+                {p.label}
+              </text>
+            ) : null}
           </g>
         )
       })}
@@ -126,6 +355,8 @@ export function ComponentHardwareView({
   sim,
   selectedPin,
   selectedComp,
+  showLabels,
+  isDark,
   onStartDrag,
   onPinClick,
   onUpdateProps,
@@ -134,6 +365,8 @@ export function ComponentHardwareView({
   sim: SimulationState
   selectedPin: WireEndpoint | null
   selectedComp: boolean
+  showLabels: boolean
+  isDark: boolean
   onStartDrag: (compId: string, clientX: number, clientY: number) => void
   onPinClick: (ep: WireEndpoint) => void
   onUpdateProps: (compId: string, patch: Partial<PlacedComponent['props']>) => void
@@ -147,10 +380,10 @@ export function ComponentHardwareView({
   const lcdText = sim.lcdRows[comp.id] ?? ['LCD 16x2 I2C    ', 'Siap...         ']
 
   const ledFill = (() => {
-    if (!led) return comp.color === 'green' ? '#166534' : comp.color === 'blue' ? '#1e40af' : comp.color === 'yellow' ? '#854d0e' : '#7f1d1d'
+    if (!led) return comp.color === 'green' ? '#16a34a' : comp.color === 'blue' ? '#2563eb' : comp.color === 'yellow' ? '#ca8a04' : '#dc2626'
     const lvl = Math.max(led.r, led.g, led.b)
     if (lvl <= 0.05) {
-      return comp.color === 'green' ? '#166534' : comp.color === 'blue' ? '#1e40af' : comp.color === 'yellow' ? '#854d0e' : '#7f1d1d'
+      return comp.color === 'green' ? '#166534' : comp.color === 'blue' ? '#1e40af' : comp.color === 'yellow' ? '#854d0e' : '#991b1b'
     }
     if (comp.kind === 'rgb-led') {
       return `rgb(${Math.round(led.r * 255)}, ${Math.round(led.g * 255)}, ${Math.round(led.b * 255)})`
@@ -159,6 +392,7 @@ export function ComponentHardwareView({
   })()
 
   const isGlowing = Boolean(led && Math.max(led.r, led.g, led.b) > 0.05)
+  const labelColor = isDark ? '#e2e8f0' : '#1e293b'
 
   return (
     <g
@@ -170,7 +404,6 @@ export function ComponentHardwareView({
         onStartDrag(comp.id, e.clientX, e.clientY)
       }}
     >
-      {/* Selection outline */}
       <rect
         x={-4}
         y={-4}
@@ -183,46 +416,69 @@ export function ComponentHardwareView({
         strokeDasharray="4 2"
       />
 
-      {/* Component body artwork */}
       {comp.kind === 'led' || comp.kind === 'rgb-led' ? (
         <g>
-          <rect x={8} y={6} width={spec.width - 16} height={spec.height - 20} rx={8} fill="#1e293b" stroke="#475569" strokeWidth={1.2} />
-          <circle
-            cx={spec.width / 2}
-            cy={32}
-            r={isGlowing ? 16 : 14}
+          {/* Metallic bent LED wire legs */}
+          <path d={`M ${spec.width / 2 - 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
+          <path d={`M ${spec.width / 2 + 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
+          {/* Realistic 3D Glossy LED Dome */}
+          <path
+            d={`M ${spec.width / 2 - 14} 44 V 24 A 14 14 0 0 1 ${spec.width / 2 + 14} 24 V 44 Z`}
             fill={ledFill}
-            stroke="#e2e8f0"
+            stroke={isGlowing ? '#fef08a' : '#7f1d1d'}
             strokeWidth={1.5}
-            style={isGlowing ? { filter: `drop-shadow(0 0 12px ${ledFill})` } : undefined}
+            style={isGlowing ? { filter: `drop-shadow(0 0 14px ${ledFill})` } : undefined}
           />
+          <rect x={spec.width / 2 - 17} y={42} width={34} height={6} rx={2} fill={ledFill} stroke="#475569" strokeWidth={0.8} />
+          <ellipse cx={spec.width / 2 - 5} cy={22} rx={3.5} ry={7} fill="rgba(255,255,255,0.42)" />
           {led?.burned ? (
-            <text x={spec.width / 2} y={14} textAnchor="middle" fontSize="8" fill="#fca5a5" fontWeight={700}>
+            <text x={spec.width / 2} y={8} textAnchor="middle" fontSize="8" fill="#ef4444" fontWeight={700}>
               ! NO RES
             </text>
           ) : null}
         </g>
       ) : comp.kind === 'resistor' ? (
         <g>
-          <line x1={6} y1={22} x2={76} y2={22} stroke="#94a3b8" strokeWidth={3} />
-          <rect x={18} y={12} width={46} height={20} rx={6} fill="#e7cfa0" stroke="#a16207" strokeWidth={1.2} />
-          <rect x={26} y={12} width={5} height={20} fill="#dc2626" />
-          <rect x={35} y={12} width={5} height={20} fill="#dc2626" />
-          <rect x={44} y={12} width={5} height={20} fill="#78350f" />
-          <rect x={54} y={12} width={4} height={20} fill="#eab308" />
+          <line x1={6} y1={22} x2={84} y2={22} stroke="#94a3b8" strokeWidth={3} />
+          <path d="M20 12 Q26 12 31 14 H59 Q64 12 70 12 Q74 22 70 32 Q64 32 59 30 H31 Q26 32 20 32 Q16 22 20 12 Z" fill="#e6cfa3" stroke="#a16207" strokeWidth={1.3} />
+          <rect x={26} y={13} width={5} height={18} fill="#dc2626" />
+          <rect x={37} y={14} width={5} height={16} fill="#dc2626" />
+          <rect x={48} y={14} width={5} height={16} fill="#78350f" />
+          <rect x={60} y={13} width={4.5} height={18} fill="#eab308" />
+        </g>
+      ) : comp.kind === 'breadboard' ? (
+        <g>
+          <rect x={0} y={0} width={170} height={112} rx={6} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.5} />
+          <line x1={8} y1={14} x2={162} y2={14} stroke="#ef4444" strokeWidth={1.6} />
+          <line x1={8} y1={26} x2={162} y2={26} stroke="#3b82f6" strokeWidth={1.6} />
+          <rect x={6} y={62} width={158} height={8} rx={2} fill="#e2e8f0" />
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((col) => (
+            <g key={col}>
+              <circle cx={26 + col * 12} cy={42} r={1.8} fill="#334155" />
+              <circle cx={26 + col * 12} cy={52} r={1.8} fill="#334155" />
+              <circle cx={26 + col * 12} cy={82} r={1.8} fill="#334155" />
+              <circle cx={26 + col * 12} cy={92} r={1.8} fill="#334155" />
+            </g>
+          ))}
         </g>
       ) : comp.kind === 'pushbutton' ? (
         <g>
-          <rect x={8} y={6} width={56} height={50} rx={6} fill="#334155" stroke="#64748b" strokeWidth={1.4} />
-          <rect
+          <line x1={10} y1={22} x2={22} y2={22} stroke="#94a3b8" strokeWidth={3} />
+          <line x1={10} y1={48} x2={22} y2={48} stroke="#94a3b8" strokeWidth={3} />
+          <line x1={56} y1={22} x2={68} y2={22} stroke="#94a3b8" strokeWidth={3} />
+          <line x1={56} y1={48} x2={68} y2={48} stroke="#94a3b8" strokeWidth={3} />
+          <rect x={18} y={12} width={42} height={44} rx={5} fill="#e2e8f0" stroke="#334155" strokeWidth={2} />
+          <circle cx={23} cy={17} r={2} fill="#475569" />
+          <circle cx={55} cy={17} r={2} fill="#475569" />
+          <circle cx={23} cy={51} r={2} fill="#475569" />
+          <circle cx={55} cy={51} r={2} fill="#475569" />
+          <circle
             className="iot-interactive-control"
-            x={18}
-            y={14}
-            width={36}
-            height={34}
-            rx={6}
+            cx={39}
+            cy={34}
+            r={13}
             fill={comp.props.pressed ? '#16a34a' : '#dc2626'}
-            stroke="#f8fafc"
+            stroke="#7f1d1d"
             strokeWidth={1.5}
             style={{ cursor: 'pointer' }}
             onPointerDown={(e) => {
@@ -238,19 +494,19 @@ export function ComponentHardwareView({
               onUpdateProps(comp.id, { pressed: !comp.props.pressed })
             }}
           />
-          <text x={36} y={34} textAnchor="middle" fontSize="8" fill="#fff" fontWeight={700} style={{ pointerEvents: 'none' }}>
+          <text x={39} y={37} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700} style={{ pointerEvents: 'none' }}>
             {comp.props.pressed ? 'ON' : 'PUSH'}
           </text>
         </g>
       ) : comp.kind === 'hc-sr04' ? (
         <g>
-          <rect x={4} y={6} width={104} height={66} rx={7} fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.4} />
-          <circle cx={30} cy={30} r={16} fill="#cbd5e1" stroke="#475569" strokeWidth={2} />
-          <circle cx={30} cy={30} r={9} fill="#1e293b" />
-          <circle cx={82} cy={30} r={16} fill="#cbd5e1" stroke="#475569" strokeWidth={2} />
-          <circle cx={82} cy={30} r={9} fill="#1e293b" />
-          <foreignObject className="iot-interactive-control" x={8} y={49} width={96} height={24}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#fff' }}>
+          <rect x={4} y={6} width={108} height={68} rx={7} fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.4} />
+          <circle cx={32} cy={30} r={16} fill="#cbd5e1" stroke="#475569" strokeWidth={2} />
+          <circle cx={32} cy={30} r={9} fill="#0f172a" />
+          <circle cx={84} cy={30} r={16} fill="#cbd5e1" stroke="#475569" strokeWidth={2} />
+          <circle cx={84} cy={30} r={9} fill="#0f172a" />
+          <foreignObject className="iot-interactive-control" x={10} y={50} width={96} height={24}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#fff', fontWeight: 600 }}>
               <input
                 type="range"
                 min={2}
@@ -265,13 +521,13 @@ export function ComponentHardwareView({
         </g>
       ) : comp.kind === 'dht22' ? (
         <g>
-          <rect x={6} y={4} width={84} height={68} rx={6} fill="#f8fafc" stroke="#94a3b8" strokeWidth={1.5} />
-          <rect x={14} y={10} width={68} height={24} rx={3} fill="#e2e8f0" stroke="#cbd5e1" />
-          <text x={48} y={25} textAnchor="middle" fontSize="9" fontWeight={700} fill="#0f172a">
-            DHT22 · {comp.props.tempC ?? 28}°C
+          <rect x={6} y={4} width={86} height={70} rx={6} fill="#f8fafc" stroke="#94a3b8" strokeWidth={1.5} />
+          <rect x={14} y={10} width={70} height={24} rx={3} fill="#e2e8f0" stroke="#cbd5e1" />
+          <text x={49} y={25} textAnchor="middle" fontSize="9" fontWeight={700} fill="#0f172a">
+            {comp.props.tempC ?? 28}°C · {comp.props.humidity ?? 60}%
           </text>
-          <foreignObject className="iot-interactive-control" x={10} y={36} width={76} height={36}>
-            <div style={{ display: 'grid', gap: 2, fontSize: 8.5, color: '#0f172a' }}>
+          <foreignObject className="iot-interactive-control" x={10} y={36} width={78} height={36}>
+            <div style={{ display: 'grid', gap: 2 }}>
               <input
                 type="range"
                 min={0}
@@ -293,8 +549,8 @@ export function ComponentHardwareView({
         </g>
       ) : comp.kind === 'potentiometer' ? (
         <g>
-          <rect x={10} y={6} width={64} height={68} rx={8} fill="#1e3a8a" stroke="#60a5fa" strokeWidth={1.4} />
-          <circle cx={42} cy={32} r={18} fill="#e2e8f0" stroke="#475569" strokeWidth={2} />
+          <rect x={10} y={6} width={64} height={70} rx={8} fill="#0369a1" stroke="#38bdf8" strokeWidth={1.4} />
+          <circle cx={42} cy={32} r={19} fill="#e2e8f0" stroke="#475569" strokeWidth={2} />
           <line
             x1={42}
             y1={32}
@@ -304,7 +560,7 @@ export function ComponentHardwareView({
             strokeWidth={3}
             strokeLinecap="round"
           />
-          <foreignObject className="iot-interactive-control" x={12} y={53} width={60} height={20}>
+          <foreignObject className="iot-interactive-control" x={12} y={54} width={60} height={20}>
             <input
               type="range"
               min={0}
@@ -317,26 +573,26 @@ export function ComponentHardwareView({
         </g>
       ) : comp.kind === 'ldr' ? (
         <g>
-          <rect x={8} y={6} width={70} height={60} rx={8} fill="#78350f" stroke="#f59e0b" strokeWidth={1.4} />
-          <circle cx={43} cy={28} r={14} fill="#fde68a" stroke="#b45309" strokeWidth={1.5} />
-          <path d="M35 28 H51 M35 23 H51 M35 33 H51" stroke="#b45309" strokeWidth={1.8} />
-          <foreignObject className="iot-interactive-control" x={12} y={45} width={62} height={20}>
+          <rect x={9} y={6} width={70} height={62} rx={8} fill="#78350f" stroke="#f59e0b" strokeWidth={1.4} />
+          <circle cx={44} cy={28} r={14} fill="#fde68a" stroke="#b45309" strokeWidth={1.5} />
+          <path d="M36 28 Q40 21 44 28 T52 28" fill="none" stroke="#b45309" strokeWidth={2} />
+          <foreignObject className="iot-interactive-control" x={12} y={46} width={64} height={20}>
             <input
               type="range"
               min={50}
               max={1000}
               value={comp.props.lux ?? 420}
               onChange={(e) => onUpdateProps(comp.id, { lux: Number(e.target.value) })}
-              style={{ width: 60 }}
+              style={{ width: 62 }}
               title="Cahaya Lux"
             />
           </foreignObject>
         </g>
       ) : comp.kind === 'pir' ? (
         <g>
-          <rect x={8} y={6} width={70} height={64} rx={8} fill="#1e293b" stroke="#94a3b8" strokeWidth={1.4} />
-          <circle cx={43} cy={30} r={18} fill={comp.props.motion ? '#f8fafc' : '#cbd5e1'} stroke="#64748b" />
-          <foreignObject className="iot-interactive-control" x={12} y={50} width={62} height={18}>
+          <rect x={10} y={6} width={70} height={66} rx={8} fill="#0f766e" stroke="#5eead4" strokeWidth={1.4} />
+          <circle cx={45} cy={30} r={18} fill={comp.props.motion ? '#f8fafc' : '#cbd5e1'} stroke="#64748b" />
+          <foreignObject className="iot-interactive-control" x={14} y={51} width={62} height={18}>
             <button
               type="button"
               onClick={(e) => {
@@ -347,7 +603,7 @@ export function ComponentHardwareView({
                 width: '100%',
                 fontSize: 8.5,
                 fontWeight: 700,
-                background: comp.props.motion ? '#ef4444' : '#334155',
+                background: comp.props.motion ? '#ef4444' : '#1e293b',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 4,
@@ -360,45 +616,45 @@ export function ComponentHardwareView({
         </g>
       ) : comp.kind === 'oled-ssd1306' ? (
         <g>
-          <rect x={4} y={4} width={116} height={76} rx={6} fill="#1e3a8a" stroke="#60a5fa" strokeWidth={1.5} />
-          <rect x={10} y={14} width={104} height={54} rx={3} fill="#020617" stroke="#334155" />
+          <rect x={4} y={4} width={118} height={78} rx={6} fill="#1e3a8a" stroke="#60a5fa" strokeWidth={1.5} />
+          <rect x={10} y={14} width={106} height={56} rx={3} fill="#020617" stroke="#334155" />
           {oledText.slice(0, 4).map((line, i) => (
-            <text key={i} x={14} y={26 + i * 11} fontSize="8" fontFamily="monospace" fill="#38bdf8">
+            <text key={i} x={14} y={27 + i * 11} fontSize="8" fontFamily="monospace" fill="#38bdf8">
               {line}
             </text>
           ))}
         </g>
       ) : comp.kind === 'lcd-1602' ? (
         <g>
-          <rect x={4} y={4} width={124} height={62} rx={6} fill="#064e3b" stroke="#34d399" strokeWidth={1.5} />
-          <rect x={10} y={12} width={112} height={42} rx={3} fill="#65a30d" stroke="#1a2e05" />
-          <text x={14} y={29} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">
+          <rect x={4} y={4} width={128} height={66} rx={5} fill="#0f766e" stroke="#115e59" strokeWidth={1.5} />
+          <rect x={10} y={12} width={116} height={46} rx={3} fill="#84cc16" stroke="#1e293b" strokeWidth={2} />
+          <text x={15} y={30} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">
             {lcdText[0]}
           </text>
-          <text x={14} y={45} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">
+          <text x={15} y={46} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">
             {lcdText[1]}
           </text>
         </g>
       ) : comp.kind === 'servo' ? (
         <g>
-          <rect x={10} y={14} width={82} height={56} rx={6} fill="#0284c7" stroke="#7dd3fc" strokeWidth={1.4} />
-          <circle cx={51} cy={38} r={14} fill="#f8fafc" stroke="#334155" strokeWidth={1.5} />
-          <g transform={`translate(51, 38) rotate(${servoAngle - 90})`}>
+          <rect x={12} y={16} width={84} height={56} rx={6} fill="#334155" stroke="#1e293b" strokeWidth={1.6} />
+          <circle cx={54} cy={40} r={14} fill="#e2e8f0" stroke="#475569" strokeWidth={1.5} />
+          <g transform={`translate(54, 40) rotate(${servoAngle - 90})`}>
             <rect x={-4} y={-24} width={8} height={28} rx={4} fill="#ffffff" stroke="#0f172a" strokeWidth={1.2} />
             <circle cx={0} cy={0} r={3.5} fill="#0f172a" />
           </g>
-          <text x={51} y={64} textAnchor="middle" fontSize="8" fill="#fff" fontWeight={700}>
+          <text x={54} y={66} textAnchor="middle" fontSize="8" fill="#f8fafc" fontWeight={700}>
             {servoAngle}°
           </text>
         </g>
       ) : comp.kind === 'buzzer' ? (
         <g>
-          <circle cx={36} cy={34} r={24} fill="#0f172a" stroke={buzzer?.active ? '#f59e0b' : '#475569'} strokeWidth={2} />
-          <circle cx={36} cy={34} r={7} fill={buzzer?.active ? '#f59e0b' : '#334155'} />
+          <circle cx={37} cy={34} r={24} fill="#0f172a" stroke={buzzer?.active ? '#f59e0b' : '#475569'} strokeWidth={2} />
+          <circle cx={37} cy={34} r={7} fill={buzzer?.active ? '#f59e0b' : '#cbd5e1'} />
           {buzzer?.active ? (
             <>
-              <circle cx={36} cy={34} r={29} fill="none" stroke="#fbbf24" strokeWidth={1.5} strokeDasharray="3 3" />
-              <text x={36} y={12} textAnchor="middle" fontSize="8" fill="#fbbf24" fontWeight={700}>
+              <circle cx={37} cy={34} r={29} fill="none" stroke="#fbbf24" strokeWidth={1.5} strokeDasharray="3 3" />
+              <text x={37} y={12} textAnchor="middle" fontSize="8" fill="#fbbf24" fontWeight={700}>
                 {buzzer.freq}Hz
               </text>
             </>
@@ -406,23 +662,23 @@ export function ComponentHardwareView({
         </g>
       ) : (
         <g>
-          <rect x={8} y={6} width={76} height={60} rx={6} fill="#0369a1" stroke="#38bdf8" strokeWidth={1.4} />
+          <rect x={8} y={6} width={80} height={60} rx={6} fill="#0284c7" stroke="#38bdf8" strokeWidth={1.4} />
           <circle cx={24} cy={22} r={4.5} fill={relayOn ? '#22c55e' : '#334155'} />
-          <text x={48} y={38} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight={700}>
+          <text x={50} y={39} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight={700}>
             RELAY {relayOn ? 'ON' : 'OFF'}
           </text>
         </g>
       )}
 
-      {/* Label badge above component */}
-      <text x={spec.width / 2} y={-8} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="#cbd5e1">
-        {comp.label}
-      </text>
+      {showLabels ? (
+        <text x={spec.width / 2} y={-8} textAnchor="middle" fontSize="9.5" fontWeight={700} fill={labelColor}>
+          {comp.label}
+        </text>
+      ) : null}
 
-      {/* Component clickable pins */}
       {spec.pins.map((p) => {
         const isSel = selectedPin?.nodeId === comp.id && selectedPin?.pinId === p.id
-        const color = isSel ? '#f59e0b' : p.role === 'power' ? '#ef4444' : p.role === 'gnd' || p.role === 'cathode' ? '#64748b' : '#38bdf8'
+        const color = isSel ? '#f59e0b' : p.role === 'power' ? '#ef4444' : p.role === 'gnd' || p.role === 'cathode' ? '#475569' : '#38bdf8'
         return (
           <g
             key={p.id}

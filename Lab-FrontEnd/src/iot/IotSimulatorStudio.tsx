@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   Award,
   CheckCircle2,
   Code2,
   Cpu,
   FolderOpen,
-  Layers,
-  Pause,
-  Play,
+  Pin,
   Plus,
-  RotateCcw,
   Save,
   Search,
   Sparkles,
+  Terminal,
   Trash2,
   Volume2,
   VolumeX,
@@ -23,16 +22,50 @@ import { useI18n } from '../shared/i18n'
 import { simApi } from '../simulator/api'
 import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getComponentSpec } from './boards'
 import { CircuitCanvas } from './CircuitCanvas'
-import { compileArduinoSketch, createInitialSimulation, createVmContext, stepLoop, stepSetup, type VmContext } from './firmwareVm'
+import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
+import {
+  compileArduinoSketch,
+  createInitialSimulation,
+  createVmContext,
+  stepLoop,
+  stepSetup,
+  verifyCircuitAndCode,
+  type VmContext,
+} from './firmwareVm'
 import { IOT_MISSIONS, IOT_PRESETS } from './presets'
 import { TelemetryDock } from './TelemetryDock'
-import type { BoardId, ComponentCategory, ComponentKind, PlacedComponent, SavedIotProject, SimulationState, Wire, WireEndpoint } from './types'
+import type {
+  BoardId,
+  CircuitDiagnosticItem,
+  ComponentCategory,
+  ComponentKind,
+  PlacedComponent,
+  SavedIotProject,
+  SimulationState,
+  Wire,
+  WireEndpoint,
+} from './types'
 import './iot.css'
 
 let uidCounter = 1
 function nextUid(prefix: string): string {
   uidCounter += 1
   return `${prefix}-${uidCounter}`
+}
+
+function useResolvedDarkTheme(): boolean {
+  const [dark, setDark] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark',
+  )
+  useEffect(() => {
+    const el = document.documentElement
+    const obs = new MutationObserver(() => {
+      setDark(el.dataset.theme === 'dark')
+    })
+    obs.observe(el, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
+  return dark
 }
 
 export function IotSimulatorStudio({
@@ -46,6 +79,7 @@ export function IotSimulatorStudio({
 }) {
   const { lang } = useI18n()
   const en = lang === 'en'
+  const isDark = useResolvedDarkTheme()
   const qc = useQueryClient()
 
   const initialPreset = useMemo(() => {
@@ -56,6 +90,7 @@ export function IotSimulatorStudio({
     return IOT_PRESETS[0]
   }, [initialLabId])
 
+  const [leftTab, setLeftTab] = useState<'code' | 'components' | 'terminal'>('code')
   const [boardId, setBoardId] = useState<BoardId>(initialPreset.board)
   const [activePresetId, setActivePresetId] = useState<string>(initialPreset.id)
   const [activeMissionId, setActiveMissionId] = useState<string | null>(initialPreset.missionId ?? null)
@@ -69,8 +104,10 @@ export function IotSimulatorStudio({
   const [audioOn, setAudioOn] = useState(false)
   const [partSearch, setPartSearch] = useState('')
   const [partCategory, setPartCategory] = useState<'all' | ComponentCategory>('all')
+  const [pinnedKinds, setPinnedKinds] = useState<ComponentKind[]>(['led', 'pushbutton'])
   const [showSavedDrawer, setShowSavedDrawer] = useState(false)
   const [statusNotice, setStatusNotice] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<CircuitDiagnosticItem[] | null>(null)
 
   const [simState, setSimState] = useState<SimulationState>(() =>
     createInitialSimulation(initialPreset.board, initialPreset.components, initialPreset.wires),
@@ -162,7 +199,6 @@ export function IotSimulatorStudio({
     },
   })
 
-  // Audio beep effect when buzzer active & user enabled sound
   useEffect(() => {
     if (!audioOn || !simState.running) return
     const active = Object.values(simState.buzzerActive).find((b) => b.active)
@@ -192,7 +228,6 @@ export function IotSimulatorStudio({
     }
   }, [audioOn, simState.running, simState.elapsedMs, simState.buzzerActive])
 
-  // Continuous firmware simulation timer
   useEffect(() => {
     if (!simState.running) return
     let cancelled = false
@@ -226,8 +261,16 @@ export function IotSimulatorStudio({
     setComponents(preset.components)
     setWires(preset.wires)
     setLoopIterations(0)
+    setDiagnostics(null)
     setSimState(createInitialSimulation(preset.board, preset.components, preset.wires))
     setStatusNotice(null)
+  }
+
+  const switchBoard = (nextBoard: BoardId) => {
+    setBoardId(nextBoard)
+    vmRef.current = null
+    setDiagnostics(null)
+    setSimState(createInitialSimulation(nextBoard, components, wires))
   }
 
   const loadSavedProject = (p: SavedIotProject) => {
@@ -241,12 +284,20 @@ export function IotSimulatorStudio({
     setComponents(p.components)
     setWires(p.wires)
     setLoopIterations(0)
+    setDiagnostics(null)
     setSimState(createInitialSimulation(p.board, p.components, p.wires))
     setShowSavedDrawer(false)
     setStatusNotice(en ? `Loaded "${p.title}".` : `Proyek "${p.title}" dimuat.`)
   }
 
+  const runCheckCircuit = () => {
+    const report = verifyCircuitAndCode(boardId, code, components, wires)
+    setDiagnostics(report)
+  }
+
   const startSimulation = () => {
+    const report = verifyCircuitAndCode(boardId, code, components, wires)
+    setDiagnostics(report)
     const compiled = compileArduinoSketch(code)
     if (compiled.compileError) {
       setSimState((prev) => ({ ...prev, running: false, compileError: compiled.compileError }))
@@ -261,13 +312,15 @@ export function IotSimulatorStudio({
     setSimState({ ...ctx.sim })
   }
 
-  const stopSimulation = () => {
-    setSimState((prev) => ({ ...prev, running: false }))
+  const toggleStartStop = () => {
+    if (simState.running) setSimState((prev) => ({ ...prev, running: false }))
+    else startSimulation()
   }
 
   const resetSimulation = () => {
     vmRef.current = null
     setLoopIterations(0)
+    setDiagnostics(null)
     setSimState(createInitialSimulation(boardId, components, wires))
   }
 
@@ -277,8 +330,8 @@ export function IotSimulatorStudio({
     const newComp: PlacedComponent = {
       id: nextUid(kind),
       kind,
-      x: 320 + offset,
-      y: 90 + (components.length % 4) * 58,
+      x: 330 + offset,
+      y: 80 + (components.length % 4) * 58,
       label: en ? spec.nameEn : spec.nameId,
       color: kind === 'led' ? 'red' : undefined,
       ohms: kind === 'resistor' ? 220 : undefined,
@@ -297,15 +350,35 @@ export function IotSimulatorStudio({
     setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
   }
 
-  const filteredParts = COMPONENT_CATALOG.filter((c) => {
+  const togglePin = (kind: ComponentKind) => {
+    setPinnedKinds((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]))
+  }
+
+  const categories: Array<{ id: 'all' | ComponentCategory; labelId: string; labelEn: string }> = [
+    { id: 'all', labelId: 'All', labelEn: 'All' },
+    { id: 'microcontrollers', labelId: 'Microcontrollers', labelEn: 'Microcontrollers' },
+    { id: 'sensors', labelId: 'Sensors', labelEn: 'Sensors' },
+    { id: 'inputs', labelId: 'Input Devices', labelEn: 'Input Devices' },
+    { id: 'displays', labelId: 'Displays', labelEn: 'Displays' },
+    { id: 'actuators', labelId: 'Actuators', labelEn: 'Actuators' },
+    { id: 'passives', labelId: 'Passive', labelEn: 'Passive' },
+  ]
+
+  const q = partSearch.trim().toLowerCase()
+  const showBoards = (partCategory === 'all' || partCategory === 'microcontrollers')
+  const matchingBoards = showBoards
+    ? Object.values(BOARDS).filter((b) => !q || b.name.toLowerCase().includes(q) || b.shortName.toLowerCase().includes(q))
+    : []
+  const matchingParts = COMPONENT_CATALOG.filter((c) => {
+    if (partCategory === 'microcontrollers') return false
     if (partCategory !== 'all' && c.category !== partCategory) return false
-    const q = partSearch.trim().toLowerCase()
     if (!q) return true
     return c.nameId.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q) || c.kind.includes(q)
   })
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
-  const lineCount = Math.max(12, code.split('\n').length)
+  const lineCount = Math.max(18, code.split('\n').length)
+  const latestSerial = simState.serialLog.slice(-2)
 
   return (
     <div className="iot-studio">
@@ -313,8 +386,8 @@ export function IotSimulatorStudio({
         title={en ? 'IoT Hardware & ESP32 Simulator' : 'Simulator Hardware IoT & ESP32'}
         description={
           en
-            ? 'Build interactive ESP32-C3, Arduino Uno, and Raspberry Pi Pico W circuits, write Arduino C++ sketches, wire components, and inspect real-time Serial Plotter telemetry.'
-            : 'Rangkai sirkuit virtual ESP32-C3, Arduino Uno, dan Raspberry Pi Pico W, tulis kode Arduino C++, sambungkan kabel pin, dan pantau Serial Plotter secara real-time.'
+            ? 'Design virtual ESP32-C3, Arduino, and Pico W circuits, inspect components, write Arduino C++ sketches, verify wiring, and monitor Serial output.'
+            : 'Rangkai sirkuit virtual ESP32-C3, Arduino, dan Pico W, pilih komponen lengkap, tulis kode Arduino C++, cek rangkaian, dan pantau Serial Monitor.'
         }
         actions={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -322,7 +395,7 @@ export function IotSimulatorStudio({
               <Cpu size={13} /> {BOARDS[boardId].shortName} · {BOARDS[boardId].logicVoltage}V
             </Badge>
             <button type="button" className="btn-outline" onClick={() => setShowSavedDrawer((v) => !v)}>
-              <FolderOpen size={15} /> {en ? 'Saved Projects' : 'Proyek Tersimpan'} ({projectsQ.data?.projects.length ?? 0})
+              <FolderOpen size={15} /> {en ? 'Saved' : 'Tersimpan'} ({projectsQ.data?.projects.length ?? 0})
             </button>
             <button type="button" className="btn-primary" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
               <Save size={15} /> {saveMut.isPending ? (en ? 'Saving...' : 'Menyimpan...') : en ? 'Save Project' : 'Simpan Proyek'}
@@ -338,13 +411,12 @@ export function IotSimulatorStudio({
         </div>
       ) : null}
 
-      {/* Saved Projects Collapsible Shelf */}
       {showSavedDrawer ? (
         <section className="card iot-saved-shelf">
           <div className="card-head">
             <div>
-              <h2>{en ? 'Your Saved Circuits' : 'Daftar Sirkuit Tersimpan'}</h2>
-              <p>{en ? 'Click a project to load its board, wiring, and sketch.' : 'Pilih proyek untuk memuat board, rangkaian kabel, dan kodenya.'}</p>
+              <h2>{en ? 'Saved Projects' : 'Proyek Tersimpan'}</h2>
+              <p>{en ? 'Load a saved circuit + sketch from database.' : 'Muat kembali rangkaian dan sketsa yang tersimpan.'}</p>
             </div>
           </div>
           {projectsQ.data?.projects.length ? (
@@ -370,14 +442,14 @@ export function IotSimulatorStudio({
             </div>
           ) : (
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              {en ? 'No saved projects yet. Click "Save Project" above to store your current circuit.' : 'Belum ada proyek tersimpan. Klik "Simpan Proyek" di atas untuk menyimpan sirkuit ini.'}
+              {en ? 'No saved projects yet.' : 'Belum ada proyek tersimpan.'}
             </p>
           )}
         </section>
       ) : null}
 
-      {/* Top Simulator Controls Bar */}
-      <section className="card iot-controls-bar" aria-label={en ? 'Simulator Toolbar' : 'Toolbar Simulator'}>
+      {/* Top Project / Preset / Speed Controls */}
+      <section className="card iot-controls-bar" aria-label={en ? 'Workspace Header' : 'Pengaturan Proyek'}>
         <div className="iot-ctrl-group">
           <label className="iot-inline-label">
             <span>{en ? 'Board' : 'Mikrokontroler'}</span>
@@ -385,12 +457,7 @@ export function IotSimulatorStudio({
               aria-label={en ? 'Select board' : 'Pilih board'}
               className="sim-select-full"
               value={boardId}
-              onChange={(e) => {
-                const next = e.target.value as BoardId
-                setBoardId(next)
-                vmRef.current = null
-                setSimState(createInitialSimulation(next, components, wires))
-              }}
+              onChange={(e) => switchBoard(e.target.value as BoardId)}
             >
               {Object.values(BOARDS).map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -415,33 +482,28 @@ export function IotSimulatorStudio({
           </label>
 
           <label className="iot-inline-label">
-            <span>{en ? 'Project Name' : 'Nama Proyek'}</span>
-            <input
-              className="input"
-              value={projectTitle}
-              onChange={(e) => setProjectTitle(e.target.value)}
-              style={{ minWidth: 190 }}
-            />
+            <span>{en ? 'Project Title' : 'Nama Proyek'}</span>
+            <input className="input" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} style={{ minWidth: 185 }} />
           </label>
         </div>
 
         <div className="iot-ctrl-actions">
-          {!simState.running ? (
-            <button type="button" className="btn-primary" onClick={startSimulation}>
-              <Play size={15} /> {en ? 'Run Simulation' : 'Jalankan Simulasi'}
-            </button>
-          ) : (
-            <button type="button" className="btn-outline" onClick={stopSimulation}>
-              <Pause size={15} /> {en ? 'Pause' : 'Jeda'}
-            </button>
-          )}
-          <button type="button" className="btn-outline" onClick={resetSimulation}>
-            <RotateCcw size={15} /> Reset
-          </button>
+          <div className="iot-wire-picker" title={en ? 'New wire color' : 'Warna kabel baru'}>
+            {WIRE_COLORS.map((wc) => (
+              <button
+                key={wc.id}
+                type="button"
+                className={`iot-color-dot ${wireColor === wc.id ? 'is-selected' : ''}`}
+                style={{ background: wc.id }}
+                aria-label={en ? wc.nameEn : wc.nameId}
+                onClick={() => setWireColor(wc.id)}
+              />
+            ))}
+          </div>
           <select
             aria-label={en ? 'Simulation speed' : 'Kecepatan simulasi'}
             className="sim-select-full"
-            style={{ width: 'auto', minWidth: 82 }}
+            style={{ width: 'auto', minWidth: 74 }}
             value={String(speed)}
             onChange={(e) => setSpeed(Number(e.target.value) as 0.5 | 1 | 2)}
           >
@@ -460,7 +522,7 @@ export function IotSimulatorStudio({
         </div>
       </section>
 
-      {/* Practicum Missions Banner */}
+      {/* Guided Practicum Missions Strip */}
       <section className="card iot-missions-strip">
         <div className="iot-mission-tabs">
           {IOT_MISSIONS.map((m) => {
@@ -510,108 +572,229 @@ export function IotSimulatorStudio({
         ) : null}
       </section>
 
-      {/* Main Split Workbench: Left Code Editor | Right Circuit Canvas & Parts */}
+      {/* Split Workbench matching iotsimulator.net: Left Tabbed Panel | Right Circuit Canvas */}
       <div className="iot-workbench-grid">
-        {/* Left: Arduino C++ Code Editor */}
-        <section className="card iot-editor-panel" aria-label={en ? 'Arduino Code Editor' : 'Editor Kode Arduino C++'}>
-          <header className="iot-panel-head">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13.5 }}>
-              <Code2 size={15} /> sketch_{boardId}.ino
-            </span>
-            <Badge tone={simState.compileError ? 'bad' : 'good'}>
-              {simState.compileError ? (en ? 'Compile Error' : 'Error Kompilasi') : 'Arduino C++'}
-            </Badge>
+        {/* LEFT PANE: Main.ino | Components | Terminal */}
+        <section className="card iot-left-panel">
+          <header className="iot-left-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={leftTab === 'code'}
+              className={`iot-left-tab ${leftTab === 'code' ? 'is-active' : ''}`}
+              onClick={() => setLeftTab('code')}
+            >
+              Main.ino
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={leftTab === 'components'}
+              className={`iot-left-tab ${leftTab === 'components' ? 'is-active' : ''}`}
+              onClick={() => setLeftTab('components')}
+            >
+              Components
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={leftTab === 'terminal'}
+              className={`iot-left-tab ${leftTab === 'terminal' ? 'is-active' : ''}`}
+              onClick={() => setLeftTab('terminal')}
+            >
+              Terminal
+            </button>
           </header>
-          {simState.compileError ? (
-            <div className="iot-compile-error">{simState.compileError}</div>
-          ) : null}
-          <div className="iot-code-wrap">
-            <div className="iot-line-gutter" aria-hidden="true">
-              {Array.from({ length: lineCount }, (_, idx) => (
-                <div key={idx}>{idx + 1}</div>
-              ))}
-            </div>
-            <textarea
-              aria-label={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
-              className="iot-code-textarea"
-              spellCheck={false}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
-        </section>
 
-        {/* Right: Component Strip + Interactive Canvas */}
-        <div className="iot-canvas-column">
-          <section className="card iot-palette-card">
-            <div className="iot-palette-top">
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                  <Layers size={14} /> {en ? 'Add Parts:' : 'Tambah Komponen:'}
+          {leftTab === 'code' ? (
+            <div className={`iot-editor-shell ${isDark ? 'theme-dark' : 'theme-light'}`}>
+              <div className="iot-panel-head">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
+                  <Code2 size={14} /> &lt;/&gt; Main.ino
                 </span>
-                {COMPONENT_CATALOG.filter((c) => c.pinned).map((c) => (
-                  <button
-                    key={c.kind}
-                    type="button"
-                    className="btn-outline iot-part-btn"
-                    onClick={() => addComponent(c.kind)}
-                    title={en ? c.subtitleEn : c.subtitleId}
-                  >
-                    <Plus size={12} /> {en ? c.nameEn : c.nameId}
-                  </button>
-                ))}
+                <Badge tone={simState.compileError ? 'bad' : 'good'}>
+                  {simState.compileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[boardId].shortName} C++`}
+                </Badge>
               </div>
-              <div className="iot-wire-picker">
-                <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>{en ? 'Wire:' : 'Kabel:'}</span>
-                {WIRE_COLORS.map((wc) => (
-                  <button
-                    key={wc.id}
-                    type="button"
-                    className={`iot-color-dot ${wireColor === wc.id ? 'is-selected' : ''}`}
-                    style={{ background: wc.id }}
-                    title={en ? wc.nameEn : wc.nameId}
-                    aria-label={en ? wc.nameEn : wc.nameId}
-                    onClick={() => setWireColor(wc.id)}
-                  />
-                ))}
+              {simState.compileError ? (
+                <div className="iot-compile-error">{simState.compileError}</div>
+              ) : null}
+              <div className="iot-code-wrap">
+                <div className="iot-line-gutter" aria-hidden="true">
+                  {Array.from({ length: lineCount }, (_, idx) => (
+                    <div key={idx}>{idx + 1}</div>
+                  ))}
+                </div>
+                <textarea
+                  aria-label={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
+                  className="iot-code-textarea"
+                  spellCheck={false}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
               </div>
             </div>
-
-            <div className="iot-palette-search">
-              <div className="search" style={{ minWidth: 180, flex: '1 1 180px' }}>
+          ) : leftTab === 'components' ? (
+            <div className="iot-components-browser">
+              <div className="search" style={{ width: '100%' }}>
                 <Search size={14} />
                 <input
                   value={partSearch}
                   onChange={(e) => setPartSearch(e.target.value)}
-                  placeholder={en ? 'More components (LDR, PIR, LCD, Relay, RGB)...' : 'Cari komponen lain (LDR, PIR, LCD, Relay, RGB)...'}
+                  placeholder={en ? 'Search Components (e.g. Servo, DHT22, LED)...' : 'Cari Komponen (mis. Servo, DHT22, LED)...'}
                 />
               </div>
-              <div className="chips">
-                {(['all', 'sensors', 'inputs', 'displays', 'actuators', 'passives'] as const).map((cat) => (
-                  <button key={cat} type="button" className="chip" aria-pressed={partCategory === cat} onClick={() => setPartCategory(cat)}>
-                    {cat === 'all' ? (en ? 'All' : 'Semua') : cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {(partSearch.trim() || partCategory !== 'all') ? (
-              <div className="iot-extra-parts">
-                {filteredParts.map((c) => (
-                  <button key={c.kind} type="button" className="btn-outline iot-part-btn" onClick={() => addComponent(c.kind)}>
-                    <Plus size={12} /> {en ? c.nameEn : c.nameId}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </section>
 
+              <div className="iot-cat-pills" role="group" aria-label="Component categories">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`iot-cat-pill ${partCategory === cat.id ? 'is-active' : ''}`}
+                    onClick={() => setPartCategory(cat.id)}
+                  >
+                    {en ? cat.labelEn : cat.labelId}
+                  </button>
+                ))}
+              </div>
+
+              {/* Pinned Components */}
+              {pinnedKinds.length > 0 ? (
+                <div className="iot-comp-section">
+                  <div className="iot-sec-title">
+                    <span><Pin size={13} style={{ color: '#eab308', verticalAlign: '-2px' }} /> {en ? 'Pinned Components' : 'Komponen Disematkan'}</span>
+                    <span className="muted">({pinnedKinds.length})</span>
+                  </div>
+                  <div className="iot-comp-grid">
+                    {pinnedKinds.map((pk) => {
+                      const spec = getComponentSpec(pk)
+                      return (
+                        <div key={`pin-${pk}`} className="iot-part-card is-pinned">
+                          <button
+                            type="button"
+                            className="iot-pin-toggle"
+                            title={en ? 'Unpin' : 'Lepas pin'}
+                            onClick={() => togglePin(pk)}
+                          >
+                            <Pin size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            className="iot-card-add-btn"
+                            title={en ? 'Add to circuit' : 'Tambah ke rangkaian'}
+                            onClick={() => addComponent(pk)}
+                          >
+                            <Plus size={12} />
+                          </button>
+                          <div className="iot-card-thumb" onClick={() => addComponent(pk)}>
+                            <PartThumbnail kind={pk} />
+                          </div>
+                          <strong>{en ? spec.nameEn : spec.nameId}</strong>
+                          <small>{en ? spec.subtitleEn : spec.subtitleId}</small>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Microcontrollers Grid */}
+              {matchingBoards.length > 0 ? (
+                <div className="iot-comp-section">
+                  <div className="iot-sec-title">
+                    <span>Microcontrollers</span>
+                    <span className="muted">({matchingBoards.length})</span>
+                  </div>
+                  <div className="iot-comp-grid">
+                    {matchingBoards.map((b) => (
+                      <div
+                        key={b.id}
+                        className={`iot-part-card ${boardId === b.id ? 'is-selected-board' : ''}`}
+                        onClick={() => switchBoard(b.id)}
+                      >
+                        <div className="iot-card-thumb">
+                          <BoardThumbnail boardId={b.id} />
+                        </div>
+                        <strong>{b.shortName}</strong>
+                        <small>{boardId === b.id ? (en ? 'Active on canvas' : 'Aktif di kanvas') : 'Microcontrollers'}</small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Sensors, Input Devices, Displays, Actuators, Passive */}
+              {matchingParts.length > 0 ? (
+                <div className="iot-comp-section">
+                  <div className="iot-sec-title">
+                    <span>{categories.find((c) => c.id === partCategory)?.labelEn ?? 'Components'}</span>
+                    <span className="muted">({matchingParts.length})</span>
+                  </div>
+                  <div className="iot-comp-grid">
+                    {matchingParts.map((c) => {
+                      const isPinned = pinnedKinds.includes(c.kind)
+                      return (
+                        <div key={c.kind} className="iot-part-card">
+                          <button
+                            type="button"
+                            className={`iot-pin-toggle ${isPinned ? 'is-on' : ''}`}
+                            title={isPinned ? 'Unpin' : 'Pin'}
+                            onClick={() => togglePin(c.kind)}
+                          >
+                            <Pin size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            className="iot-card-add-btn"
+                            title={en ? 'Add to circuit' : 'Tambah ke kanvas'}
+                            onClick={() => addComponent(c.kind)}
+                          >
+                            <Plus size={12} />
+                          </button>
+                          <div className="iot-card-thumb" onClick={() => addComponent(c.kind)}>
+                            <PartThumbnail kind={c.kind} />
+                          </div>
+                          <strong>{en ? c.nameEn : c.nameId}</strong>
+                          <small>{en ? c.subtitleEn : c.subtitleId}</small>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="iot-terminal-tab-pane">
+              <TelemetryDock
+                sim={simState}
+                hasWifi={BOARDS[boardId].hasWifi}
+                lang={lang}
+                onClearSerial={() => setSimState((prev) => ({ ...prev, serialLog: [], plotHistory: [] }))}
+                onSendSerial={(text) => {
+                  if (vmRef.current) vmRef.current.serialRxQueue.push(text)
+                  setSimState((prev) => ({
+                    ...prev,
+                    serialLog: [...prev.serialLog.slice(-79), { id: nextUid('tx'), timeMs: prev.elapsedMs, text, kind: 'tx' }],
+                  }))
+                }}
+              />
+            </div>
+          )}
+        </section>
+
+        {/* RIGHT PANE: Floating Pill Toolbar + Circuit Canvas + Live Check/Serial Strip */}
+        <div className="iot-canvas-column">
           <CircuitCanvas
             boardId={boardId}
             components={components}
             wires={wires}
             sim={simState}
             wireColor={wireColor}
+            isDark={isDark}
             lang={lang}
+            onStartStop={toggleStartStop}
+            onReset={resetSimulation}
+            onCheckCircuit={runCheckCircuit}
             onMoveComponent={(id, x, y) => {
               setComponents((prev) => prev.map((c) => (c.id === id ? { ...c, x, y } : c)))
             }}
@@ -623,6 +806,9 @@ export function IotSimulatorStudio({
               const nextWires = [...wires, nw]
               setWires(nextWires)
               setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, components, nextWires), running: prev.running }))
+            }}
+            onUpdateWire={(wireId, patch) => {
+              setWires((prev) => prev.map((w) => (w.id === wireId ? { ...w, ...patch } : w)))
             }}
             onDeleteWire={(wireId) => {
               const nextWires = wires.filter((w) => w.id !== wireId)
@@ -637,25 +823,48 @@ export function IotSimulatorStudio({
               setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, nextWires), running: prev.running }))
             }}
           />
+
+          {/* Compact Diagnostics & Live Serial Bar beneath Canvas */}
+          {diagnostics ? (
+            <section className="card iot-diag-panel" aria-label={en ? 'Circuit & Code Diagnostics' : 'Hasil Cek Rangkaian & Koding'}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <strong style={{ fontSize: 13 }}>
+                  {en ? 'Circuit & Code Verification' : 'Hasil Pemeriksaan Rangkaian & Koding'}
+                </strong>
+                <button type="button" className="btn-outline iot-mini-btn" onClick={() => setDiagnostics(null)}>
+                  {en ? 'Close' : 'Tutup'}
+                </button>
+              </div>
+              <div className="iot-diag-list">
+                {diagnostics.map((d) => (
+                  <div key={d.id} className={`iot-diag-item is-${d.status}`}>
+                    {d.status === 'ok' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    <span>{en ? d.textEn : d.textId}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="card iot-live-strip">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Badge tone={simState.running ? 'good' : 'muted'}>
+                <Terminal size={12} /> {simState.running ? 'LIVE' : 'IDLE'}
+              </Badge>
+              <code className="iot-live-line">
+                {latestSerial.length > 0
+                  ? latestSerial.map((s) => s.text).join(' | ')
+                  : en
+                    ? 'Click Run (▶) to simulate & see Serial output'
+                    : 'Klik Jalankan (▶) untuk menjalankan simulasi & melihat output Serial'}
+              </code>
+            </div>
+            <button type="button" className="btn-outline iot-mini-btn" onClick={() => setLeftTab('terminal')}>
+              {en ? 'Open Terminal & Plotter' : 'Buka Terminal & Plotter'}
+            </button>
+          </section>
         </div>
       </div>
-
-      {/* Bottom Dock: Serial Monitor, Plotter, GPIO & Safety, Wi-Fi/MQTT */}
-      <TelemetryDock
-        sim={simState}
-        hasWifi={BOARDS[boardId].hasWifi}
-        lang={lang}
-        onClearSerial={() => setSimState((prev) => ({ ...prev, serialLog: [], plotHistory: [] }))}
-        onSendSerial={(text) => {
-          if (vmRef.current) {
-            vmRef.current.serialRxQueue.push(text)
-          }
-          setSimState((prev) => ({
-            ...prev,
-            serialLog: [...prev.serialLog.slice(-79), { id: nextUid('tx'), timeMs: prev.elapsedMs, text, kind: 'tx' }],
-          }))
-        }}
-      />
     </div>
   )
 }
