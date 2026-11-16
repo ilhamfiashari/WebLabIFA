@@ -144,7 +144,6 @@ function IotDiorama({
   const activeVersion = String(state.active_version ?? (mode === 'attack' ? '1.0.0-unsigned' : '2.1.4-signed'))
   const pumpActive = mode === 'attack' || pumpState === 'ON' || pumpState === 'FORCED_ON'
   const isOta = labId.includes('ota')
-
   const nodes = isOta
     ? [
         { title: 'Cloud Repo', sub: `v${activeVersion}`, icon: Wifi },
@@ -152,9 +151,9 @@ function IotDiorama({
         { title: 'Flash Partition', sub: mode === 'attack' ? 'Slot B Downgraded' : 'Dual-bank Signed', icon: Cpu },
       ]
     : [
-        { title: 'Sensor Kelembapan', sub: `${moisture}% RH`, icon: Cpu },
-        { title: 'Broker MQTT', sub: mode === 'attack' ? 'ACL Wildcard #' : 'Topic Scoped + Nonce', icon: Wifi },
-        { title: 'Aktuator Pompa', sub: pumpState, icon: AlertTriangle },
+        { title: 'ESP32-C3 Node', sub: `${moisture}°C / Telemetry`, icon: Cpu },
+        { title: 'Broker MQTTS', sub: mode === 'attack' ? 'Plaintext 1883' : 'TLS 8883 Active', icon: Wifi },
+        { title: 'Aktuator & Pin', sub: pumpState, icon: AlertTriangle },
       ]
 
   return (
@@ -171,7 +170,7 @@ function IotDiorama({
           viewBox="0 0 760 220"
           width="100%"
           role="img"
-          aria-label={lang === 'en' ? 'Smart-Garden IoT Architecture Diagram' : 'Diagram Visual IoT Smart-Garden'}
+          aria-label={lang === 'en' ? 'ESP32 IoT Hardware Architecture' : 'Diagram Visual Arsitektur ESP32 IoT'}
           style={{ display: 'block', maxHeight: 230 }}
         >
           <defs>

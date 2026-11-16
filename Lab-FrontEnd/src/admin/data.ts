@@ -93,9 +93,9 @@ export const MODULES: Module[] = [
   { id: 'web-header', title: 'Header keamanan yang hilang', track: 'Web', owasp: 'A02', status: 'Draft', author: 'Sari Wulandari', updated: '9 Nov 2026', level: 'Dasar', attempts: 0, passRate: null },
   { id: 'web-crypto', title: 'Penyimpanan kata sandi lemah', track: 'Web', owasp: 'A04', status: 'Draft', author: 'Arif Nugraha', updated: '4 Nov 2026', level: 'Menengah', attempts: 0, passRate: null },
   { id: 'web-ssrf', title: 'SSRF pada pratinjau tautan', track: 'Web', owasp: 'A01', status: 'Draft', author: 'Yoga Pranata', updated: '28 Okt 2026', level: 'Lanjut', attempts: 0, passRate: null },
-  { id: 'iot-mqtt', title: 'Broker MQTT tanpa autentikasi', track: 'IoT', owasp: null, status: 'Terbit', author: 'Yoga Pranata', updated: '30 Okt 2026', level: 'Dasar', attempts: 96, passRate: 82 },
-  { id: 'iot-firmware', title: 'Ekstraksi kredensial firmware ESP32', track: 'IoT', owasp: null, status: 'Review', author: 'Sari Wulandari', updated: '11 Nov 2026', level: 'Lanjut', attempts: 0, passRate: null },
-  { id: 'iot-ota', title: 'Pembaruan OTA tanpa tanda tangan', track: 'IoT', owasp: null, status: 'Draft', author: 'Yoga Pranata', updated: '7 Nov 2026', level: 'Menengah', attempts: 0, passRate: null },
+  { id: 'iot-esp32-gpio', title: 'ESP32-C3: Kontrol GPIO, LED & Proteksi Resistor', track: 'IoT', owasp: null, status: 'Terbit', author: 'Yoga Pranata', updated: '30 Okt 2026', level: 'Dasar', attempts: 96, passRate: 82 },
+  { id: 'iot-esp32-ultrasonic', title: 'ESP32-C3: Sensor Jarak HC-SR04, Buzzer & Servo', track: 'IoT', owasp: null, status: 'Terbit', author: 'Sari Wulandari', updated: '11 Nov 2026', level: 'Menengah', attempts: 64, passRate: 78 },
+  { id: 'iot-esp32-mqtt', title: 'ESP32-C3: Wi-Fi Telemetri & Keamanan MQTT TLS', track: 'IoT', owasp: null, status: 'Review', author: 'Yoga Pranata', updated: '7 Nov 2026', level: 'Lanjut', attempts: 0, passRate: null },
 ]
 
 export function owaspCoverage() {

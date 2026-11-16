@@ -865,4 +865,55 @@ export const simApi = {
   exportAdminBackup() {
     return getJson<Record<string, unknown>>('/api/admin/backup')
   },
+  listIotProjects() {
+    return getJson<{
+      projects: import('../iot/types').SavedIotProject[]
+      completed_missions: import('../iot/types').CompletedMission[]
+    }>('/api/iot/projects')
+  },
+  saveIotProject(
+    csrf: string,
+    body: {
+      id?: string
+      title: string
+      board: string
+      mission_id?: string | null
+      code: string
+      components: unknown[]
+      wires: unknown[]
+    },
+  ) {
+    return postJson<{ id: string; title: string; board: string; saved: boolean }>(
+      '/api/iot/projects',
+      csrf,
+      body,
+    )
+  },
+  deleteIotProject(csrf: string, projectId: string) {
+    return deleteJson<{ deleted: boolean; id: string }>(
+      `/api/iot/projects/${encodeURIComponent(projectId)}`,
+      csrf,
+    )
+  },
+  submitIotMission(
+    csrf: string,
+    body: {
+      mission_id: string
+      board: string
+      code: string
+      component_count: number
+      wire_count: number
+      checks_passed: number
+      checks_total: number
+      has_hardware_alerts: boolean
+    },
+  ) {
+    return postJson<{
+      session_id: string
+      mission_id: string
+      score: number
+      passed: boolean
+      xp_awarded: number
+    }>('/api/iot/missions/submit', csrf, body)
+  },
 }

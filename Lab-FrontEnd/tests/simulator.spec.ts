@@ -169,7 +169,7 @@ function buildMockSimulatorRoutes(page: Page) {
           categories: [{ code: 'A01', name: 'Broken Access Control', summary: 'Kontrol akses' }, { code: 'A05', name: 'Injection', summary: 'SQLi & XSS' }],
           labs: [
             { id: 'a05-sqli', track: 'web', owasp_code: 'A05', title: 'SQL Injection & Query Builder Aman', subtitle: 'Uji query builder', objective: 'Bind parameter', cwe_id: 'CWE-89', wstg_ref: 'WSTG-INPV-05', asvs_ref: 'ASVS V5.3', estimated_minutes: 20, prerequisite: 'Tidak ada', publication_status: 'Terbit', version: '1.0.0', passed_levels: 0, total_levels: 4, levels: [{ level: 'easy', label: 'Easy', xp: 50, passed: false, best_score: null, active_session_id: 'ses-sqli-1', current_step: 'pahami' }] },
-            { id: 'iot-mqtt-acl', track: 'iot', owasp_code: null, title: 'Broker MQTT & Kebijakan ACL Topik', subtitle: 'Isolasi aktuator pompa kebun A', objective: 'ACL per clientId', cwe_id: 'CWE-284', wstg_ref: 'IOT-MQTT-01', asvs_ref: 'ASVS V4', estimated_minutes: 15, prerequisite: 'Tidak ada', publication_status: 'Terbit', version: '1.0.0', passed_levels: 0, total_levels: 4, levels: [{ level: 'easy', label: 'Easy', xp: 50, passed: false, best_score: null, active_session_id: null, current_step: null }] },
+            { id: 'iot-esp32-gpio', track: 'iot', owasp_code: null, title: 'ESP32-C3: Kontrol GPIO, LED & Proteksi Resistor', subtitle: 'Rangkai LED, resistor 220Ω, dan pushbutton', objective: 'Proteksi GPIO 3.3V', cwe_id: 'CWE-665', wstg_ref: 'IOT-HW-01', asvs_ref: 'IoTSVS HW-1', estimated_minutes: 15, prerequisite: 'Tidak ada', publication_status: 'Terbit', version: '2.0.0', passed_levels: 0, total_levels: 4, levels: [{ level: 'easy', label: 'Easy', xp: 50, passed: false, best_score: null, active_session_id: null, current_step: null }] },
           ],
           recent_session: { id: 'ses-sqli-1', lab_id: 'a05-sqli', level_id: 'easy', current_step: 'pahami', updated_at: '2026-11-15T10:00:00Z' },
         },
@@ -857,4 +857,45 @@ test('peringkat mahasiswa, anti-NaN & anti-HTTP 500 dengan avg_score null, serta
   await expect(page.getByText('HTTP 500')).toHaveCount(0)
   await expect(page.getByText('122140009@student.itera.ac.id').first()).toBeVisible()
   await expect(page.getByText(/\bNaN\b/)).toHaveCount(0)
+})
+
+test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monitor, Plotter & verifikasi misi', async ({ page }) => {
+  await page.route('**/api/me', r => r.fulfill({ json: student }))
+  await buildMockSimulatorRoutes(page)()
+  await page.route('**/api/iot/projects', async r => {
+    if (r.request().method() === 'POST') {
+      return r.fulfill({ json: { id: 'proj-1', title: 'Misi 1 · ESP32-C3 LED Blink & Resistor 220Ω', board: 'esp32-c3', saved: true } })
+    }
+    return r.fulfill({ json: { projects: [], completed_missions: [] } })
+  })
+  await page.route('**/api/iot/missions/submit', r =>
+    r.fulfill({ json: { session_id: 'ses-iot-1', mission_id: 'iot-esp32-gpio', score: 100, passed: true, xp_awarded: 50 } }),
+  )
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab/iot')
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Simulator Hardware IoT & ESP32' })).toBeVisible()
+  await expect(page.getByText('ESP32-C3', { exact: true }).first()).toBeVisible()
+
+  // Jalankan simulasi Blink + Resistor default dan verifikasi output Serial Monitor & Misi
+  await page.getByRole('button', { name: 'Jalankan Simulasi' }).click()
+  const serialLog = page.getByRole('log')
+  await expect(serialLog.getByText('ESP32-C3 GPIO Siap!', { exact: true })).toBeVisible()
+  await expect(serialLog.getByText('LED_STATE:1', { exact: true }).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Kumpulkan Misi (+50 XP)' }).click()
+  await expect(page.getByText(/Misi berhasil diverifikasi! Skor 100\/100 tercatat/)).toBeVisible()
+
+  // Uji ganti preset ke Sensor Suhu DHT22 + OLED SSD1306 + Serial Plotter
+  await page.getByLabel('Pilih template atau misi').selectOption('esp32-c3-dht-oled')
+  await page.getByRole('button', { name: 'Jalankan Simulasi' }).click()
+  await expect(page.getByText('ESP32 ENV MONITOR', { exact: true })).toBeVisible()
+  await expect(page.getByText('Temp: 28 C', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: /Serial Plotter/ }).click()
+  await expect(page.locator('.iot-plot-legend')).toContainText('temp:')
+
+  // Simpan proyek ke database
+  await page.getByRole('button', { name: 'Simpan Proyek' }).click()
+  await expect(page.getByText(/berhasil disimpan ke database/)).toBeVisible()
 })
