@@ -108,6 +108,7 @@ export function IotSimulatorStudio({
   const [showSavedDrawer, setShowSavedDrawer] = useState(false)
   const [statusNotice, setStatusNotice] = useState<string | null>(null)
   const [diagnostics, setDiagnostics] = useState<CircuitDiagnosticItem[] | null>(null)
+  const [quickSerialInput, setQuickSerialInput] = useState('')
 
   const [simState, setSimState] = useState<SimulationState>(() =>
     createInitialSimulation(initialPreset.board, initialPreset.components, initialPreset.wires),
@@ -378,10 +379,14 @@ export function IotSimulatorStudio({
       ohms: kind === 'resistor' ? 220 : undefined,
       props: {
         distanceCm: kind === 'hc-sr04' ? 40 : undefined,
-        tempC: kind === 'dht22' ? 28 : undefined,
+        tempC: kind === 'dht22' ? 28 : kind === 'ds18b20' || kind === 'ntc' ? 25 : undefined,
         humidity: kind === 'dht22' ? 60 : undefined,
-        potPct: kind === 'potentiometer' ? 50 : undefined,
+        potPct: kind === 'potentiometer' || kind === 'slide-pot' ? 50 : undefined,
         lux: kind === 'ldr' ? 420 : undefined,
+        gasPpm: kind === 'mq2' ? 280 : undefined,
+        pressureHpa: kind === 'bmp180' ? 1013 : undefined,
+        tiltDeg: kind === 'mpu6050' ? 0 : undefined,
+        dipBits: kind === 'dip-switch' ? [0, 0, 0, 0, 0, 0, 0, 0] : undefined,
         pressed: kind === 'pushbutton' ? false : undefined,
         motion: kind === 'pir' ? false : undefined,
       },
@@ -419,7 +424,6 @@ export function IotSimulatorStudio({
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
   const lineCount = Math.max(18, code.split('\n').length)
-  const latestSerial = simState.serialLog.slice(-2)
 
   return (
     <div className="iot-studio">
@@ -902,22 +906,69 @@ export function IotSimulatorStudio({
             </section>
           ) : null}
 
-          <section className="card iot-live-strip">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Badge tone={simState.running ? 'good' : 'muted'}>
-                <Terminal size={12} /> {simState.running ? 'LIVE' : 'IDLE'}
-              </Badge>
-              <code className="iot-live-line">
-                {latestSerial.length > 0
-                  ? latestSerial.map((s) => s.text).join(' | ')
-                  : en
-                    ? 'Click Run (▶) to simulate & see Serial output'
-                    : 'Klik Jalankan (▶) untuk menjalankan simulasi & melihat output Serial'}
-              </code>
+          <section className="card iot-terminal-console" aria-label={en ? 'Serial Monitor Console' : 'Konsol Serial Monitor'}>
+            <div className="iot-terminal-con-head">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Badge tone={simState.running ? 'good' : 'muted'}>
+                  <Terminal size={12} /> {simState.running ? '115200 baud · LIVE' : 'IDLE'}
+                </Badge>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {BOARDS[boardId].shortName} Serial Console
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn-outline iot-mini-btn"
+                  onClick={() => setSimState((prev) => ({ ...prev, serialLog: [], plotHistory: [] }))}
+                  aria-label={en ? 'Clear console' : 'Bersihkan konsol'}
+                >
+                  <Trash2 size={12} /> {en ? 'Clear' : 'Bersihkan'}
+                </button>
+                <button type="button" className="btn-outline iot-mini-btn" onClick={() => setLeftTab('terminal')}>
+                  {en ? 'Open Terminal & Plotter' : 'Buka Terminal & Plotter'}
+                </button>
+              </div>
             </div>
-            <button type="button" className="btn-outline iot-mini-btn" onClick={() => setLeftTab('terminal')}>
-              {en ? 'Open Terminal & Plotter' : 'Buka Terminal & Plotter'}
-            </button>
+            <div className="iot-terminal-con-screen">
+              {simState.serialLog.length === 0 ? (
+                <div className="iot-terminal-placeholder">
+                  {en
+                    ? 'Click Run (▶) to boot ROM and stream Serial UART output here...'
+                    : 'Klik Jalankan (▶) untuk melihat boot ROM mikrokontroler & output Serial UART di sini...'}
+                </div>
+              ) : (
+                simState.serialLog.slice(-14).map((entry) => (
+                  <div
+                    key={`con-${entry.id}`}
+                    className={`iot-con-line ${entry.kind === 'sys' ? 'is-sys' : entry.kind === 'tx' ? 'is-tx' : ''}`}
+                  >
+                    {entry.kind === 'tx' ? `> ${entry.text}` : entry.text}
+                  </div>
+                ))
+              )}
+            </div>
+            <form
+              className="iot-terminal-con-input"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!quickSerialInput.trim()) return
+                const txt = quickSerialInput.trim()
+                if (vmRef.current) vmRef.current.serialRxQueue.push(txt)
+                setSimState((prev) => ({
+                  ...prev,
+                  serialLog: [...prev.serialLog.slice(-79), { id: nextUid('tx'), timeMs: prev.elapsedMs, text: txt, kind: 'tx' }],
+                }))
+                setQuickSerialInput('')
+              }}
+            >
+              <input
+                className="input"
+                value={quickSerialInput}
+                onChange={(e) => setQuickSerialInput(e.target.value)}
+                placeholder={en ? 'Send serial input (Enter)...' : 'Ketik input ke Serial Monitor (Enter)...'}
+              />
+            </form>
           </section>
         </div>
       </div>

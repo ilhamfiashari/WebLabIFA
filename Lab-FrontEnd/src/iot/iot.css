@@ -927,3 +927,51 @@
   border-color: var(--brand);
   color: #ffffff;
 }
+
+/* Wokwi-style Serial Terminal Console below Circuit Canvas */
+.iot-terminal-console {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.iot-terminal-con-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.iot-terminal-con-screen {
+  min-height: 112px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.48;
+}
+
+.iot-con-line.is-sys {
+  color: var(--ink-2);
+}
+
+.iot-con-line.is-tx {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.iot-terminal-placeholder {
+  color: var(--ink-3);
+}
+
+.iot-terminal-con-input input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}

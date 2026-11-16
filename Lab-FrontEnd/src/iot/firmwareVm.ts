@@ -536,10 +536,14 @@ function evalExpr(
     if (fn === 'analogRead') {
       const gpio = Number(args[0] ?? 0)
       const maxAdc = BOARDS[ctx.boardId].logicVoltage === 5 ? 1023 : 4095
-      const pot = findConnectedComponent(ctx, components, gpio, 'potentiometer')
+      const pot = findConnectedComponent(ctx, components, gpio, 'potentiometer') ?? findConnectedComponent(ctx, components, gpio, 'slide-pot')
       if (pot) return Math.round(((pot.props.potPct ?? 50) / 100) * maxAdc)
       const ldr = findConnectedComponent(ctx, components, gpio, 'ldr')
       if (ldr) return Math.round(((ldr.props.lux ?? 500) / 1000) * maxAdc)
+      const mq2 = findConnectedComponent(ctx, components, gpio, 'mq2')
+      if (mq2) return Math.round((Math.min(2500, mq2.props.gasPpm ?? 280) / 2500) * maxAdc)
+      const ntc = findConnectedComponent(ctx, components, gpio, 'ntc')
+      if (ntc) return Math.round((Math.max(0, Math.min(85, (ntc.props.tempC ?? 25) + 10)) / 95) * maxAdc)
       return ctx.sim.gpioStates[gpio]?.adcValue ?? 0
     }
     if (fn === 'ultrasonicRead') {
@@ -841,8 +845,36 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
   }
 }
 
+function emitBootBanner(ctx: VmContext) {
+  const lines: string[] =
+    ctx.boardId === 'esp32'
+      ? [
+          'ets Jul 29 2019 12:21:46',
+          'rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)',
+          'configsip: 0, SPIWP:0xee',
+          'mode:DIO, clock div:2',
+          'entry 0x400805dc',
+        ]
+      : ctx.boardId === 'esp32-c3'
+        ? [
+            'ESP-ROM:esp32c3-api1-20210207',
+            'rst:0x1 (POWERON),boot:0xc (SPI_FAST_FLASH_BOOT) · entry 0x403ce000',
+          ]
+        : ctx.boardId === 'pico-w'
+          ? ['[RP2040] Bootrom v3 · CYW43439 Wi-Fi init OK · 133 MHz']
+          : [`[${BOARDS[ctx.boardId].shortName}] AVR Optiboot 16MHz READY (115200 baud)`]
+
+  for (const text of lines) {
+    ctx.sim.serialLog = [
+      ...ctx.sim.serialLog.slice(-79),
+      { id: `boot-${ctx.sim.serialLog.length + 1}`, timeMs: 0, text, kind: 'sys' },
+    ]
+  }
+}
+
 export function stepSetup(ctx: VmContext, components: PlacedComponent[], wires: Wire[]) {
   ctx.graph = buildNetGraph(wires, components)
+  emitBootBanner(ctx)
   runStatements(ctx.sketch.setupStmts, ctx, components)
   syncCircuitActuators(ctx, components, wires)
 }
