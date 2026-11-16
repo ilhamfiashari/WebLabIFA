@@ -1,39 +1,80 @@
-import type { BoardId, BoardSpec, ComponentKind, GpioRuntime, PlacedComponent, SimulationState, WireEndpoint } from './types'
+import type { BoardId, BoardSpec, ComponentKind, PlacedComponent, SimulationState, WireEndpoint } from './types'
 import { decodeResistorBands, formatOhms, getComponentSpec } from './boards'
+import { RealBoardBodySvg, WokwiExtendedPartSvg, WokwiPartThumbnail } from './WokwiPartsSvg'
 
 export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
-  const isArduino = boardId === 'arduino-uno' || boardId === 'arduino-mega'
-  const isPico = boardId === 'pico-w'
-  const pcb = isArduino ? '#0e6990' : isPico ? '#156035' : '#1b1e23'
+  if (boardId === 'arduino-uno') {
+    return (
+      <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+        <path d="M16 10 H86 L92 16 V48 L86 54 H16 Q12 54 12 50 V14 Q12 10 16 10 Z" fill="#00878f" stroke="#0f172a" strokeWidth={1.1} />
+        <rect x={6} y={16} width={14} height={12} rx={2} fill="#e2e8f0" stroke="#475569" />
+        <rect x={8} y={38} width={12} height={10} rx={2} fill="#18181b" />
+        <rect x={36} y={12} width={48} height={5} fill="#18181b" />
+        <rect x={42} y={47} width={34} height={5} fill="#18181b" />
+        <rect x={46} y={29} width={34} height={11} rx={1.5} fill="#111827" stroke="#94a3b8" strokeWidth={0.7} />
+      </svg>
+    )
+  }
+  if (boardId === 'arduino-mega') {
+    return (
+      <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+        <path d="M10 10 H98 L104 16 V48 L98 54 H10 Q6 54 6 50 V14 Q6 10 10 10 Z" fill="#008189" stroke="#0f172a" strokeWidth={1.1} />
+        <rect x={2} y={16} width={12} height={12} rx={2} fill="#e2e8f0" stroke="#475569" />
+        <rect x={4} y={38} width={11} height={10} rx={2} fill="#18181b" />
+        <rect x={30} y={12} width={56} height={5} fill="#18181b" />
+        <rect x={92} y={18} width={8} height={28} fill="#18181b" />
+        <rect x={48} y={23} width={20} height={18} rx={2} fill="#111827" stroke="#94a3b8" strokeWidth={0.8} />
+      </svg>
+    )
+  }
+  if (boardId === 'pico-w') {
+    return (
+      <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+        <rect x={36} y={7} width={38} height={50} rx={4} fill="#15803d" stroke="#052e16" strokeWidth={1.1} />
+        <rect x={47} y={3} width={16} height={8} rx={2} fill="#e2e8f0" stroke="#475569" />
+        <rect x={45} y={16} width={12} height={7} rx={1.5} fill="#f8fafc" />
+        <rect x={44} y={40} width={22} height={13} rx={2} fill="#cbd5e1" stroke="#64748b" />
+        <g transform="translate(55,31) rotate(45)">
+          <rect x={-5} y={-5} width={10} height={10} fill="#0f172a" />
+        </g>
+      </svg>
+    )
+  }
+  if (boardId === 'esp32') {
+    return (
+      <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+        <rect x={28} y={8} width={54} height={50} rx={4} fill="#18181b" stroke="#475569" strokeWidth={1.1} />
+        <path d="M44 9 V4 H49 V9 H54 V4 H59 V9 H65 V4" fill="none" stroke="#d4af37" strokeWidth={1.4} />
+        <rect x={41} y={12} width={28} height={24} rx={2} fill="#cbd5e1" stroke="#64748b" />
+        <rect x={47} y={49} width={16} height={9} rx={2} fill="#e2e8f0" />
+        {[0, 1, 2, 3, 4].map((i) => (
+          <g key={i}>
+            <circle cx={33} cy={22 + i * 7} r={1.6} fill="#eab308" />
+            <circle cx={77} cy={22 + i * 7} r={1.6} fill="#eab308" />
+          </g>
+        ))}
+      </svg>
+    )
+  }
   return (
     <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
-      <rect x={22} y={8} width={66} height={48} rx={5} fill={pcb} stroke="#475569" strokeWidth={1.2} />
-      {isArduino ? (
-        <>
-          <rect x={16} y={14} width={12} height={14} rx={2} fill="#cbd5e1" stroke="#64748b" />
-          <rect x={16} y={36} width={10} height={12} rx={2} fill="#1e293b" />
-          <rect x={44} y={24} width={28} height={16} rx={2} fill="#0f172a" stroke="#94a3b8" strokeWidth={0.8} />
-          <rect x={34} y={10} width={44} height={4} fill="#1e293b" />
-          <rect x={34} y={50} width={44} height={4} fill="#1e293b" />
-        </>
-      ) : (
-        <>
-          <rect x={40} y={12} width={30} height={22} rx={2} fill="#94a3b8" stroke="#cbd5e1" strokeWidth={0.9} />
-          <rect x={47} y={48} width={16} height={8} rx={2} fill="#cbd5e1" />
-          <path d="M44 10 V5 H49 V10 H54 V5 H59 V10 H65 V5" fill="none" stroke="#eab308" strokeWidth={1.2} />
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <g key={i}>
-              <circle cx={27} cy={14 + i * 7} r={1.8} fill="#facc15" />
-              <circle cx={83} cy={14 + i * 7} r={1.8} fill="#facc15" />
-            </g>
-          ))}
-        </>
-      )}
+      <rect x={32} y={8} width={46} height={48} rx={5} fill="#0f172a" stroke="#475569" strokeWidth={1.2} />
+      <rect x={47} y={10} width={16} height={5} rx={1} fill="#f8fafc" />
+      <rect x={42} y={18} width={26} height={19} rx={2} fill="#cbd5e1" stroke="#64748b" />
+      <rect x={47} y={48} width={16} height={8} rx={2} fill="#e2e8f0" />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <g key={i}>
+          <circle cx={37} cy={17 + i * 7.5} r={1.6} fill="#facc15" />
+          <circle cx={73} cy={17 + i * 7.5} r={1.6} fill="#facc15" />
+        </g>
+      ))}
     </svg>
   )
 }
 
 export function PartThumbnail({ kind }: { kind: ComponentKind }) {
+  const extThumb = WokwiPartThumbnail({ kind })
+  if (extThumb) return extThumb
   return (
     <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
       {kind === 'led' ? (
@@ -200,11 +241,6 @@ export function BoardHardwareView({
   onPinPointerDown: (ep: WireEndpoint, clientX: number, clientY: number) => void
   onPinPointerUp: (ep: WireEndpoint) => void
 }) {
-  const builtin: GpioRuntime | undefined = isPrimary ? sim.gpioStates[board.builtinLedGpio] : undefined
-  const builtinOn = Boolean(builtin && builtin.digital === 1)
-  const isArduino = board.id === 'arduino-uno' || board.id === 'arduino-mega'
-  const isPico = board.id === 'pico-w'
-  const pcbColor = isArduino ? '#0d6e96' : isPico ? '#14532d' : '#181b20'
   const w = board.width
   const h = board.height
 
@@ -219,10 +255,10 @@ export function BoardHardwareView({
     >
       {selectedBoard ? (
         <rect
-          x={-5}
-          y={-5}
-          width={w + 10}
-          height={h + 10}
+          x={-6}
+          y={-6}
+          width={w + 12}
+          height={h + 12}
           rx={13}
           fill="none"
           stroke="#16a34a"
@@ -230,117 +266,15 @@ export function BoardHardwareView({
           strokeDasharray="5 3"
         />
       ) : null}
-      {/* Realistic PCB Body */}
-      <rect x={0} y={0} width={w} height={h} rx={10} fill={pcbColor} stroke="#334155" strokeWidth={2} />
+
+      <RealBoardBodySvg board={board} sim={sim} isPrimary={isPrimary} />
+
       {!isPrimary ? (
-        <text x={w / 2} y={-8} textAnchor="middle" fontSize="9" fontWeight={700} fill="#38bdf8">
+        <text x={w / 2} y={-10} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="#38bdf8">
           {label}
         </text>
       ) : null}
 
-      {/* Four brass corner mounting holes */}
-      {[
-        [10, 10],
-        [w - 10, 10],
-        [10, h - 10],
-        [w - 10, h - 10],
-      ].map(([cx, cy], idx) => (
-        <g key={idx}>
-          <circle cx={cx} cy={cy} r={4} fill="#0f172a" stroke="#eab308" strokeWidth={1.5} />
-        </g>
-      ))}
-
-      {/* Top Wi-Fi meander PCB antenna (for ESP32 / Pico W) */}
-      {board.hasWifi ? (
-        <g>
-          <rect x={w / 2 - 42} y={4} width={84} height={22} rx={3} fill="#111317" stroke="#475569" strokeWidth={1} />
-          <path
-            d={`M ${w / 2 - 32} 20 V 9 H ${w / 2 - 22} V 20 H ${w / 2 - 12} V 9 H ${w / 2 - 2} V 20 H ${w / 2 + 8} V 9 H ${w / 2 + 22}`}
-            fill="none"
-            stroke="#eab308"
-            strokeWidth={2}
-          />
-        </g>
-      ) : null}
-
-      {/* Brushed silver RF shield / AVR MCU package safely centered inside pin columns */}
-      <rect
-        x={w / 2 - 38}
-        y={32}
-        width={76}
-        height={64}
-        rx={5}
-        fill={isArduino ? '#1e293b' : '#cbd5e1'}
-        stroke="#64748b"
-        strokeWidth={1.4}
-      />
-      <text
-        x={w / 2}
-        y={62}
-        textAnchor="middle"
-        fontSize="10"
-        fontWeight={800}
-        fill={isArduino ? '#e2e8f0' : '#0f172a'}
-      >
-        {board.shortName}
-      </text>
-      <text
-        x={w / 2}
-        y={76}
-        textAnchor="middle"
-        fontSize="7.5"
-        fill={isArduino ? '#94a3b8' : '#334155'}
-        fontWeight={600}
-      >
-        {board.logicVoltage}V · {board.clockMhz}MHz
-      </text>
-
-      {/* Secondary IC & Regulator well inside center corridor */}
-      <rect x={w / 2 - 14} y={114} width={28} height={28} rx={3} fill="#0f172a" stroke="#475569" strokeWidth={1} />
-      <text x={w / 2} y={131} textAnchor="middle" fontSize="6.5" fill="#94a3b8">UART</text>
-
-      {/* Power LED & Built-in LED cleanly centered above EN/BOOT */}
-      <circle cx={w / 2 - 20} cy={166} r={4} fill={sim.running ? '#ef4444' : '#450a0a'} style={sim.running ? { filter: 'drop-shadow(0 0 5px #ef4444)' } : undefined} />
-      <text x={w / 2 - 20} y={178} textAnchor="middle" fontSize="7" fill="#cbd5e1">PWR</text>
-
-      <circle
-        cx={w / 2 + 20}
-        cy={166}
-        r={builtinOn ? 4.8 : 4}
-        fill={builtinOn ? '#22c55e' : '#14532d'}
-        style={builtinOn ? { filter: 'drop-shadow(0 0 6px #22c55e)' } : undefined}
-      />
-      <text x={w / 2 + 20} y={178} textAnchor="middle" fontSize="7" fill="#cbd5e1">LED</text>
-
-      {/* Wi-Fi IP status tag in lower-center corridor (no pin overlap) */}
-      {board.hasWifi && sim.wifiConnected ? (
-        <g>
-          <rect x={w / 2 - 44} y={190} width={88} height={18} rx={4} fill="#064e3b" stroke="#10b981" strokeWidth={1} />
-          <text x={w / 2} y={202} textAnchor="middle" fontSize="7.5" fill="#a7f3d0" fontWeight={700}>
-            {sim.wifiIp}
-          </text>
-        </g>
-      ) : null}
-
-      {/* EN & BOOT tactile switches cleanly near bottom corners well below last pin (y=222) */}
-      <g transform={`translate(28, ${h - 46})`}>
-        <rect x={0} y={0} width={24} height={22} rx={3} fill="#cbd5e1" stroke="#475569" strokeWidth={1} />
-        <circle cx={12} cy={11} r={5} fill="#334155" />
-        <text x={12} y={32} textAnchor="middle" fontSize="7.5" fontWeight={700} fill="#cbd5e1">EN</text>
-      </g>
-      <g transform={`translate(${w - 52}, ${h - 46})`}>
-        <rect x={0} y={0} width={24} height={22} rx={3} fill="#cbd5e1" stroke="#475569" strokeWidth={1} />
-        <circle cx={12} cy={11} r={5} fill="#334155" />
-        <text x={12} y={32} textAnchor="middle" fontSize="7.5" fontWeight={700} fill="#cbd5e1">BOOT</text>
-      </g>
-
-      {/* Metallic USB Port at bottom edge */}
-      <rect x={w / 2 - 20} y={h - 16} width={40} height={20} rx={4} fill="#cbd5e1" stroke="#475569" strokeWidth={1.6} />
-      <text x={w / 2} y={h - 3} textAnchor="middle" fontSize="7.5" fill="#1e293b" fontWeight={800}>
-        {isArduino ? 'USB-B' : 'USB-C'}
-      </text>
-
-      {/* Pin Headers cleanly positioned along outer left/right edges with short readable labels */}
       {board.pins.map((p) => {
         const isSel = selectedPin?.nodeId === nodeId && selectedPin?.pinId === p.id
         const activeGpio = isPrimary && p.gpio !== undefined ? sim.gpioStates[p.gpio] : undefined
@@ -355,6 +289,10 @@ export function BoardHardwareView({
                 : isHigh
                   ? '#22c55e'
                   : '#eab308'
+
+        const labelX = p.side === 'left' ? p.x + 10 : p.side === 'right' ? p.x - 10 : p.x
+        const labelY = p.side === 'top' ? p.y + 15 : p.side === 'bottom' ? p.y - 11 : p.y + 3
+        const anchor = p.side === 'left' ? 'start' : p.side === 'right' ? 'end' : 'middle'
 
         return (
           <g
@@ -373,21 +311,23 @@ export function BoardHardwareView({
             }}
           >
             <circle className="iot-pin-hit" cx={p.x} cy={p.y} r={10} fill="transparent" />
-            <circle cx={p.x} cy={p.y} r={isSel ? 7 : 5.5} fill="#0f172a" stroke={fill} strokeWidth={2.2} />
-            <circle cx={p.x} cy={p.y} r={2.2} fill={fill} />
+            <circle cx={p.x} cy={p.y} r={isSel ? 7 : 5.2} fill="#0f172a" stroke={fill} strokeWidth={2.2} />
+            <circle cx={p.x} cy={p.y} r={2} fill={fill} />
             {showLabels ? (
               <text
-                x={p.side === 'left' ? p.x + 10 : p.x - 10}
-                y={p.y + 3}
-                textAnchor={p.side === 'left' ? 'start' : 'end'}
-                fontSize="8.5"
+                x={labelX}
+                y={labelY}
+                textAnchor={anchor}
+                fontSize={p.side === 'top' || p.side === 'bottom' ? '7.2' : '8.2'}
                 fontFamily="monospace"
                 fontWeight={700}
-                fill={isHigh ? '#86efac' : '#f1f5f9'}
+                fill={isHigh ? '#86efac' : '#f8fafc'}
+                style={{ pointerEvents: 'none' }}
               >
                 {p.label}
               </text>
             ) : null}
+            <title>{p.label}</title>
           </g>
         )
       })}
@@ -754,7 +694,7 @@ export function ComponentHardwareView({
             </>
           ) : null}
         </g>
-      ) : (
+      ) : comp.kind === 'relay' ? (
         <g>
           <rect x={8} y={6} width={80} height={60} rx={6} fill="#0284c7" stroke="#38bdf8" strokeWidth={1.4} />
           <circle cx={22} cy={20} r={4.5} fill={relayOn ? '#22c55e' : '#334155'} />
@@ -767,6 +707,8 @@ export function ComponentHardwareView({
             RELAY {relayOn ? 'ON' : 'OFF'}
           </text>
         </g>
+      ) : (
+        <WokwiExtendedPartSvg comp={comp} sim={sim} onUpdateProps={onUpdateProps} />
       )}
 
       {showLabels ? (

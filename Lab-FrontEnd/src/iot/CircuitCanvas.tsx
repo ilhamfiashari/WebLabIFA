@@ -63,6 +63,12 @@ function getEndpointGeometry(
     if (p.side === 'left') {
       return { x, y, sx: inst.x - 18, sy: y, side: 'left', boardNode }
     }
+    if (p.side === 'top') {
+      return { x, y, sx: x, sy: inst.y - 16, side: 'up', boardNode }
+    }
+    if (p.side === 'bottom') {
+      return { x, y, sx: x, sy: inst.y + spec.height + 16, side: 'down', boardNode }
+    }
     return { x, y, sx: inst.x + spec.width + 18, sy: y, side: 'right', boardNode }
   }
   const comp = components.find((c) => c.id === ep.nodeId && c.kind !== 'mcu')
@@ -146,45 +152,27 @@ function computeAutoWaypoints(
     }
   }
 
-  // Clean orthogonal jumper without protruding spikes on vertical pins (LED/sensors)
-  const startX = a.side === 'down' ? a.x : a.sx
-  const endX = b.side === 'down' ? b.x : b.sx
-
-  if (a.side === 'right' && b.side === 'down') {
-    if (b.y > a.y + 8) {
-      return [
-        { x: a.sx + lane * 0.4, y: a.y },
-        { x: b.x, y: a.y },
-      ]
+  // Horizontal header pins (Arduino Uno/Mega top/bottom rows) route vertically first
+  if (a.side === 'up' || a.side === 'down' || b.side === 'up' || b.side === 'down') {
+    const exitA = a.side === 'up' || a.side === 'down' ? { x: a.x, y: a.sy } : { x: a.sx, y: a.y }
+    const exitB = b.side === 'up' || b.side === 'down' ? { x: b.x, y: b.sy } : { x: b.sx, y: b.y }
+    const midY = Math.round((exitA.y + exitB.y) / 2) + ((offsetIdx % 3) - 1) * 7
+    const pts: WireWaypoint[] = [exitA]
+    if (Math.abs(exitA.x - exitB.x) > 4 && Math.abs(exitA.y - exitB.y) > 4) {
+      pts.push({ x: exitA.x, y: midY }, { x: exitB.x, y: midY })
     }
-    const clearY = b.y + 14 + lane * 0.4
-    return [
-      { x: a.sx, y: a.y },
-      { x: a.sx, y: clearY },
-      { x: b.x, y: clearY },
-    ]
-  }
-  if (b.side === 'right' && a.side === 'down') {
-    if (a.y > b.y + 8) {
-      return [
-        { x: a.x, y: b.y },
-        { x: b.sx + lane * 0.4, y: b.y },
-      ]
-    }
-    const clearY = a.y + 14 + lane * 0.4
-    return [
-      { x: a.x, y: clearY },
-      { x: b.sx, y: clearY },
-      { x: b.sx, y: b.y },
-    ]
+    pts.push(exitB)
+    return pts
   }
 
-  const midX = Math.round((startX + endX) / 2) + ((offsetIdx % 3) - 1) * 8
-  const pts: WireWaypoint[] = []
-  if (a.side !== 'down') pts.push({ x: a.sx, y: a.y })
-  pts.push({ x: midX, y: a.y }, { x: midX, y: b.y })
-  if (b.side !== 'down') pts.push({ x: b.sx, y: b.y })
-  return pts
+  // Standard left/right pin pairs
+  const midX = Math.round((a.sx + b.sx) / 2) + ((offsetIdx % 3) - 1) * 8
+  return [
+    { x: a.sx, y: a.y },
+    { x: midX, y: a.y },
+    { x: midX, y: b.y },
+    { x: b.sx, y: b.y },
+  ]
 }
 
 function resolveWireWaypoints(
@@ -543,14 +531,30 @@ export function CircuitCanvas({
   const gridDot = isDark ? '#334155' : '#dfd2bc'
   const activeStartPin = drawingPreview?.from ?? selectedPin
 
-  // Compute inline popup anchor position inside .iot-canvas-shell
+  // Anchor popup cleanly to the side of the component/board so its pins remain uncovered
   const inspectedComp = components.find((c) => c.id === inspectedNodeId && c.kind !== 'mcu') ?? null
   const inspectedBoard = inspectedNodeId ? boardInstances.find((b) => b.nodeId === inspectedNodeId) ?? null : null
   const popupPos = (() => {
-    const target = inspectedComp ?? (inspectedBoard ? { x: inspectedBoard.x, y: inspectedBoard.y } : null)
-    if (!target) return null
-    const leftPct = Math.min(68, Math.max(4, ((target.x + 18) / (SVG_W / zoom)) * 100))
-    const topPct = Math.min(62, Math.max(14, ((target.y + 8) / (SVG_H / zoom)) * 100))
+    const viewW = SVG_W / zoom
+    const viewH = SVG_H / zoom
+    let targetX = 0
+    let targetY = 0
+    let targetW = 100
+    if (inspectedComp) {
+      targetX = inspectedComp.x
+      targetY = inspectedComp.y
+      targetW = getComponentSpec(inspectedComp.kind).width
+    } else if (inspectedBoard) {
+      targetX = inspectedBoard.x
+      targetY = inspectedBoard.y
+      targetW = BOARDS[inspectedBoard.boardId].width
+    } else {
+      return null
+    }
+    const placeRight = targetX + targetW + 270 < viewW
+    const anchorX = placeRight ? targetX + targetW + 14 : Math.max(10, targetX - 260)
+    const leftPct = Math.min(68, Math.max(2, (anchorX / viewW) * 100))
+    const topPct = Math.min(58, Math.max(16, ((targetY + 4) / viewH) * 100))
     return { leftPct, topPct }
   })()
 
@@ -825,16 +829,76 @@ export function CircuitCanvas({
             </div>
           ) : null}
 
-          {inspectedComp?.kind === 'potentiometer' ? (
+          {inspectedComp?.kind === 'potentiometer' || inspectedComp?.kind === 'slide-pot' ? (
             <div className="iot-popover-body">
               <label className="iot-pop-field">
-                <span>{en ? 'Rotation' : 'Putaran Kenop'}: {inspectedComp.props.potPct ?? 50}%</span>
+                <span>{en ? 'Slider / Rotation' : 'Posisi / Putaran'}: {inspectedComp.props.potPct ?? 50}%</span>
                 <input
                   type="range"
                   min={0}
                   max={100}
                   value={inspectedComp.props.potPct ?? 50}
                   onChange={(e) => onUpdateProps(inspectedComp.id, { potPct: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'mq2' ? (
+            <div className="iot-popover-body">
+              <label className="iot-pop-field">
+                <span>{en ? 'Gas / Smoke (PPM)' : 'Kadar Gas / Asap (PPM)'}: {inspectedComp.props.gasPpm ?? 280} ppm</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={2500}
+                  value={inspectedComp.props.gasPpm ?? 280}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { gasPpm: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'ds18b20' || inspectedComp?.kind === 'ntc' ? (
+            <div className="iot-popover-body">
+              <label className="iot-pop-field">
+                <span>{en ? 'Temperature' : 'Suhu'}: {inspectedComp.props.tempC ?? 25}°C</span>
+                <input
+                  type="range"
+                  min={-10}
+                  max={85}
+                  value={inspectedComp.props.tempC ?? 25}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { tempC: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'mpu6050' ? (
+            <div className="iot-popover-body">
+              <label className="iot-pop-field">
+                <span>{en ? 'Tilt Angle' : 'Kemiringan IMU'}: {inspectedComp.props.tiltDeg ?? 0}°</span>
+                <input
+                  type="range"
+                  min={-90}
+                  max={90}
+                  value={inspectedComp.props.tiltDeg ?? 0}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { tiltDeg: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'bmp180' ? (
+            <div className="iot-popover-body">
+              <label className="iot-pop-field">
+                <span>{en ? 'Barometric Pressure' : 'Tekanan Udara'}: {inspectedComp.props.pressureHpa ?? 1013} hPa</span>
+                <input
+                  type="range"
+                  min={900}
+                  max={1100}
+                  value={inspectedComp.props.pressureHpa ?? 1013}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { pressureHpa: Number(e.target.value) })}
                 />
               </label>
             </div>
