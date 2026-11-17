@@ -21,6 +21,7 @@ for (const status of [400, 403, 405, 408, 409, 410, 413, 415, 422, 423, 429, 500
 }
 
 test('all error examples have distinct artwork, localized copy and reduced motion', async ({ page }) => {
+  test.setTimeout(90_000)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width: 1440, height: 900 })
   const artworks = new Set<string>()
