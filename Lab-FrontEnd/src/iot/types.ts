@@ -1,4 +1,11 @@
-export type BoardId = 'esp32-c3' | 'esp32' | 'arduino-uno' | 'arduino-mega' | 'pico-w'
+export type BoardId =
+  | 'esp32-c3'
+  | 'esp32'
+  | 'arduino-uno'
+  | 'arduino-nano'
+  | 'arduino-mega'
+  | 'pico-w'
+  | 'pi-pico'
 
 export type PinKind = 'power' | 'gnd' | 'gpio' | 'adc' | 'pwm' | 'i2c' | 'uart'
 
@@ -78,8 +85,15 @@ export type ComponentKind =
   | 'tft-ili9341'
   | 'servo'
   | 'stepper'
+  | 'stepper-a4988'
   | 'buzzer'
   | 'relay'
+  | 'shift-74hc595'
+  | 'shift-74hc165'
+  | 'microsd'
+  | 'lcd-nokia5110'
+  | 'neopixel-single'
+  | 'clock-gen'
 
 export interface ComponentPinDef {
   id: string
@@ -112,9 +126,9 @@ export interface PlacedComponent {
   /** Rotation in 90-degree increments matching Wokwi diagram.json (0, 90, 180, 270) */
   rotate?: number
   label: string
-  color?: 'red' | 'green' | 'yellow' | 'blue'
+  color?: string
   ohms?: number
-  /** Runtime interactive sensor / input values set by user on canvas */
+  /** Runtime interactive sensor / input values & Wokwi attrs set by user on canvas */
   props: {
     pressed?: boolean
     latched?: boolean
@@ -135,6 +149,31 @@ export interface PlacedComponent {
     lastKey?: string
     rfidUid?: string | null
     irHex?: string | null
+    /* Wokwi component configuration attributes (attrs) */
+    flip?: boolean
+    common?: 'anode' | 'cathode'
+    digits?: 1 | 2 | 3 | 4
+    colon?: boolean
+    tmType?: 'colon' | 'dp'
+    bounce?: boolean
+    shortcutKey?: string
+    lcdPins?: 'i2c' | 'full'
+    i2cAddress?: string
+    lcdBackground?: 'green' | 'blue'
+    lcdTextColor?: 'black' | 'white'
+    ringPixels?: 8 | 12 | 16 | 24
+    servoHorn?: 'single' | 'double' | 'cross'
+    servoHornColor?: string
+    buzzerMode?: 'smooth' | 'accurate'
+    buzzerVolume?: number
+    relayTransistor?: 'npn' | 'pnp'
+    hxType?: '50kg' | '5kg' | 'gauge'
+    matrixChain?: 1 | 2 | 4
+    matrixLayout?: 'parola' | 'fc16'
+    ntcBeta?: number
+    ldrThreshold?: number
+    ldrRl10?: number
+    ldrGamma?: number
   }
 }
 

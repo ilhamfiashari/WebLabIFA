@@ -27,16 +27,28 @@ export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
       </svg>
     )
   }
-  if (boardId === 'pico-w') {
+  if (boardId === 'pico-w' || boardId === 'pi-pico') {
     return (
       <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
-        <rect x={36} y={7} width={38} height={50} rx={4} fill="#15803d" stroke="#052e16" strokeWidth={1.1} />
+        <rect x={36} y={7} width={38} height={50} rx={4} fill={boardId === 'pi-pico' ? '#166534' : '#15803d'} stroke="#052e16" strokeWidth={1.1} />
         <rect x={47} y={3} width={16} height={8} rx={2} fill="#e2e8f0" stroke="#475569" />
         <rect x={45} y={16} width={12} height={7} rx={1.5} fill="#f8fafc" />
-        <rect x={44} y={40} width={22} height={13} rx={2} fill="#cbd5e1" stroke="#64748b" />
+        {boardId === 'pico-w' ? <rect x={44} y={40} width={22} height={13} rx={2} fill="#cbd5e1" stroke="#64748b" /> : null}
         <g transform="translate(55,31) rotate(45)">
           <rect x={-5} y={-5} width={10} height={10} fill="#0f172a" />
         </g>
+      </svg>
+    )
+  }
+  if (boardId === 'arduino-nano') {
+    return (
+      <svg viewBox="0 0 110 64" width="100%" height="56" aria-hidden="true">
+        <rect x={34} y={8} width={42} height={48} rx={4} fill="#006d77" stroke="#083344" strokeWidth={1.2} />
+        <rect x={46} y={3} width={18} height={9} rx={2} fill="#cbd5e1" stroke="#475569" />
+        <g transform="translate(55,30) rotate(45)">
+          <rect x={-6} y={-6} width={12} height={12} fill="#18181b" stroke="#64748b" strokeWidth={0.8} />
+        </g>
+        <circle cx={55} cy={46} r={4} fill="#e2e8f0" />
       </svg>
     )
   }
@@ -366,16 +378,26 @@ export function ComponentHardwareView({
   const oledText = sim.oledLines[comp.id] ?? ['SSD1306 128x64', 'Menunggu data...']
   const lcdText = sim.lcdRows[comp.id] ?? ['LCD 16x2 I2C    ', 'Siap...         ']
 
+  const LED_PALETTE: Record<string, { dim: string; off: string; on: string }> = {
+    red: { dim: '#dc2626', off: '#991b1b', on: '#ef4444' },
+    green: { dim: '#16a34a', off: '#166534', on: '#22c55e' },
+    blue: { dim: '#2563eb', off: '#1e40af', on: '#38bdf8' },
+    yellow: { dim: '#ca8a04', off: '#854d0e', on: '#facc15' },
+    orange: { dim: '#ea580c', off: '#9a3412', on: '#fb923c' },
+    purple: { dim: '#9333ea', off: '#581c87', on: '#c084fc' },
+    cyan: { dim: '#0891b2', off: '#155e75', on: '#22d3ee' },
+    white: { dim: '#cbd5e1', off: '#94a3b8', on: '#ffffff' },
+  }
+
   const ledFill = (() => {
-    if (!led) return comp.color === 'green' ? '#16a34a' : comp.color === 'blue' ? '#2563eb' : comp.color === 'yellow' ? '#ca8a04' : '#dc2626'
+    const pal = LED_PALETTE[comp.color ?? 'red'] ?? LED_PALETTE.red
+    if (!led) return pal.dim
     const lvl = Math.max(led.r, led.g, led.b)
-    if (lvl <= 0.05) {
-      return comp.color === 'green' ? '#166534' : comp.color === 'blue' ? '#1e40af' : comp.color === 'yellow' ? '#854d0e' : '#991b1b'
-    }
+    if (lvl <= 0.05) return pal.off
     if (comp.kind === 'rgb-led') {
       return `rgb(${Math.round(led.r * 255)}, ${Math.round(led.g * 255)}, ${Math.round(led.b * 255)})`
     }
-    return comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'yellow' ? '#facc15' : '#ef4444'
+    return pal.on
   })()
 
   const isGlowing = Boolean(led && Math.max(led.r, led.g, led.b) > 0.05)
@@ -405,7 +427,7 @@ export function ComponentHardwareView({
         />
 
         {comp.kind === 'led' || comp.kind === 'rgb-led' ? (
-        <g>
+        <g transform={comp.kind === 'led' && comp.props.flip ? `translate(${spec.width}, 0) scale(-1, 1)` : undefined}>
           {/* Metallic bent LED wire legs */}
           <path d={`M ${spec.width / 2 - 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
           <path d={`M ${spec.width / 2 + 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
@@ -462,6 +484,17 @@ export function ComponentHardwareView({
       ) : comp.kind === 'pushbutton' ? (
         (() => {
           const isDown = Boolean(comp.props.pressed || comp.props.latched)
+          const capMap: Record<string, string> = {
+            red: '#dc2626',
+            green: '#16a34a',
+            blue: '#2563eb',
+            yellow: '#eab308',
+            white: '#f8fafc',
+            black: '#18181b',
+            grey: '#64748b',
+          }
+          const baseCap = capMap[comp.color ?? 'red'] ?? '#dc2626'
+          const capTextColor = comp.color === 'white' || comp.color === 'yellow' ? '#0f172a' : '#ffffff'
           return (
             <g>
               <line x1={10} y1={22} x2={22} y2={22} stroke="#94a3b8" strokeWidth={3} />
@@ -478,8 +511,8 @@ export function ComponentHardwareView({
                 cx={39}
                 cy={isDown ? 35.5 : 34}
                 r={13}
-                fill={isDown ? '#16a34a' : '#dc2626'}
-                stroke={isDown ? '#14532d' : '#7f1d1d'}
+                fill={isDown ? '#16a34a' : baseCap}
+                stroke={isDown ? '#14532d' : '#334155'}
                 strokeWidth={isDown ? 2.2 : 1.5}
                 style={{ cursor: 'pointer' }}
                 onPointerDown={(e) => {
@@ -492,8 +525,8 @@ export function ComponentHardwareView({
                   window.addEventListener('pointerup', release)
                 }}
               />
-              <text x={39} y={isDown ? 38.5 : 37} textAnchor="middle" fontSize="7" fill="#fff" fontWeight={700} style={{ pointerEvents: 'none' }}>
-                {comp.props.latched ? 'LOCK' : isDown ? 'ON' : 'HOLD'}
+              <text x={39} y={isDown ? 38.5 : 37} textAnchor="middle" fontSize="6.8" fill={isDown ? '#fff' : capTextColor} fontWeight={700} style={{ pointerEvents: 'none' }}>
+                {comp.props.latched ? 'LOCK' : isDown ? 'ON' : comp.props.shortcutKey ? `[${comp.props.shortcutKey.toUpperCase()}]` : 'HOLD'}
               </text>
               {/* Small latch toggle corner button for hands-free hold */}
               <g
@@ -660,28 +693,50 @@ export function ComponentHardwareView({
           ))}
         </g>
       ) : comp.kind === 'lcd-1602' ? (
-        <g>
-          <rect x={4} y={4} width={128} height={66} rx={5} fill="#0f766e" stroke="#115e59" strokeWidth={1.5} />
-          <rect x={10} y={12} width={116} height={46} rx={3} fill="#84cc16" stroke="#1e293b" strokeWidth={2} />
-          <text x={15} y={30} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">
-            {lcdText[0]}
-          </text>
-          <text x={15} y={46} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">
-            {lcdText[1]}
-          </text>
-        </g>
+        (() => {
+          const isBlue = comp.props.lcdBackground === 'blue'
+          const bgFill = isBlue ? '#1d4ed8' : '#84cc16'
+          const fgFill = comp.props.lcdTextColor === 'white' || isBlue ? '#f8fafc' : '#1a2e05'
+          return (
+            <g>
+              <rect x={4} y={4} width={128} height={66} rx={5} fill="#0f766e" stroke="#115e59" strokeWidth={1.5} />
+              <rect x={10} y={12} width={116} height={46} rx={3} fill={bgFill} stroke="#1e293b" strokeWidth={2} />
+              <text x={15} y={30} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>
+                {lcdText[0]}
+              </text>
+              <text x={15} y={46} fontSize="8.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>
+                {lcdText[1]}
+              </text>
+            </g>
+          )
+        })()
       ) : comp.kind === 'servo' ? (
-        <g>
-          <rect x={12} y={16} width={84} height={56} rx={6} fill="#334155" stroke="#1e293b" strokeWidth={1.6} />
-          <circle cx={54} cy={40} r={14} fill="#e2e8f0" stroke="#475569" strokeWidth={1.5} />
-          <g transform={`translate(54, 40) rotate(${servoAngle - 90})`}>
-            <rect x={-4} y={-24} width={8} height={28} rx={4} fill="#ffffff" stroke="#0f172a" strokeWidth={1.2} />
-            <circle cx={0} cy={0} r={3.5} fill="#0f172a" />
-          </g>
-          <text x={54} y={66} textAnchor="middle" fontSize="8" fill="#f8fafc" fontWeight={700}>
-            {servoAngle}°
-          </text>
-        </g>
+        (() => {
+          const hornType = comp.props.servoHorn ?? 'single'
+          const hornColor = comp.props.servoHornColor ?? '#ffffff'
+          return (
+            <g>
+              <rect x={12} y={16} width={84} height={56} rx={6} fill="#334155" stroke="#1e293b" strokeWidth={1.6} />
+              <circle cx={54} cy={40} r={14} fill="#e2e8f0" stroke="#475569" strokeWidth={1.5} />
+              <g transform={`translate(54, 40) rotate(${servoAngle - 90})`}>
+                {hornType === 'double' ? (
+                  <rect x={-4} y={-24} width={8} height={48} rx={4} fill={hornColor} stroke="#0f172a" strokeWidth={1.2} />
+                ) : hornType === 'cross' ? (
+                  <>
+                    <rect x={-4} y={-24} width={8} height={48} rx={4} fill={hornColor} stroke="#0f172a" strokeWidth={1.2} />
+                    <rect x={-24} y={-4} width={48} height={8} rx={4} fill={hornColor} stroke="#0f172a" strokeWidth={1.2} />
+                  </>
+                ) : (
+                  <rect x={-4} y={-24} width={8} height={28} rx={4} fill={hornColor} stroke="#0f172a" strokeWidth={1.2} />
+                )}
+                <circle cx={0} cy={0} r={3.5} fill="#0f172a" />
+              </g>
+              <text x={54} y={66} textAnchor="middle" fontSize="8" fill="#f8fafc" fontWeight={700}>
+                {servoAngle}°
+              </text>
+            </g>
+          )
+        })()
       ) : comp.kind === 'buzzer' ? (
         <g>
           <circle cx={37} cy={34} r={24} fill="#0f172a" stroke={buzzer?.active ? '#f59e0b' : '#475569'} strokeWidth={2} />
@@ -706,6 +761,9 @@ export function ComponentHardwareView({
           <circle cx={68} cy={26} r={2.2} fill={!relayOn ? '#ef4444' : '#94a3b8'} />
           <text x={48} y={46} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight={700}>
             RELAY {relayOn ? 'ON' : 'OFF'}
+          </text>
+          <text x={48} y={56} textAnchor="middle" fontSize="6" fill="#e0f2fe">
+            {(comp.props.relayTransistor ?? 'npn').toUpperCase()}
           </text>
         </g>
       ) : (

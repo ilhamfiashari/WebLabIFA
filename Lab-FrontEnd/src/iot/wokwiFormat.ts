@@ -5,8 +5,10 @@ export const WOKWI_BOARD_TYPE_MAP: Record<BoardId, string> = {
   'esp32-c3': 'wokwi-esp32-c3-devkitm-1',
   esp32: 'wokwi-esp32-devkit-v1',
   'arduino-uno': 'wokwi-arduino-uno',
+  'arduino-nano': 'wokwi-arduino-nano',
   'arduino-mega': 'wokwi-arduino-mega',
   'pico-w': 'wokwi-pi-pico',
+  'pi-pico': 'wokwi-pi-pico',
 }
 
 export const WOKWI_PART_TYPE_MAP: Record<Exclude<ComponentKind, 'mcu'>, string> = {
@@ -48,8 +50,15 @@ export const WOKWI_PART_TYPE_MAP: Record<Exclude<ComponentKind, 'mcu'>, string> 
   'tft-ili9341': 'wokwi-ili9341',
   servo: 'wokwi-servo',
   stepper: 'wokwi-stepper-motor',
+  'stepper-a4988': 'wokwi-a4988',
   buzzer: 'wokwi-buzzer',
   relay: 'wokwi-relay-module',
+  'shift-74hc595': 'wokwi-74hc595',
+  'shift-74hc165': 'wokwi-74hc165',
+  microsd: 'wokwi-microsd-card',
+  'lcd-nokia5110': 'wokwi-nokia-5110-screen',
+  'neopixel-single': 'wokwi-neopixel',
+  'clock-gen': 'wokwi-clock-generator',
 }
 
 export interface WokwiDiagramPart {
@@ -74,6 +83,68 @@ export interface WokwiDiagramJson {
   dependencies?: Record<string, string>
 }
 
+function buildWokwiAttrs(c: PlacedComponent): Record<string, string> {
+  const attrs: Record<string, string> = {}
+  const p = c.props
+  if (c.label) attrs.label = c.label
+  if (c.color && (c.kind === 'led' || c.kind === 'pushbutton' || c.kind === 'seven-seg' || c.kind === 'seven-seg-4' || c.kind === 'led-bar-graph' || c.kind === 'max7219-matrix')) {
+    attrs.color = c.color
+  }
+  if (c.kind === 'led' && p.flip) attrs.flip = '1'
+  if ((c.kind === 'rgb-led' || c.kind === 'seven-seg') && p.common) attrs.common = p.common
+  if (c.kind === 'seven-seg') {
+    if (p.digits) attrs.digits = String(p.digits)
+    if (p.colon) attrs.colon = '1'
+  }
+  if (c.kind === 'seven-seg-4' && p.tmType) attrs.type = p.tmType
+  if (c.kind === 'resistor') attrs.value = String(c.ohms ?? 220)
+  if (c.kind === 'pushbutton') {
+    if (p.bounce === false) attrs.bounce = '0'
+    if (p.shortcutKey) attrs.key = p.shortcutKey
+  }
+  if (c.kind === 'slide-switch') {
+    if (p.pressed) attrs.value = '1'
+    if (p.bounce === false) attrs.bounce = '0'
+  }
+  if (c.kind === 'dht22') {
+    attrs.temperature = String(p.tempC ?? 28)
+    attrs.humidity = String(p.humidity ?? 60)
+  }
+  if (c.kind === 'hc-sr04') attrs.distance = String(p.distanceCm ?? 40)
+  if (c.kind === 'ntc') {
+    attrs.temperature = String(p.tempC ?? 25)
+    if (p.ntcBeta) attrs.beta = String(p.ntcBeta)
+  }
+  if (c.kind === 'ldr') {
+    attrs.lux = String(p.lux ?? 420)
+    if (p.ldrThreshold !== undefined) attrs.threshold = String(p.ldrThreshold)
+    if (p.ldrRl10 !== undefined) attrs.rl10 = String(p.ldrRl10)
+    if (p.ldrGamma !== undefined) attrs.gamma = String(p.ldrGamma)
+  }
+  if (c.kind === 'lcd-1602' || c.kind === 'lcd-20x4') {
+    if (p.lcdPins) attrs.pins = p.lcdPins
+    if (p.i2cAddress) attrs.i2cAddress = p.i2cAddress
+    if (p.lcdBackground) attrs.background = p.lcdBackground
+    if (p.lcdTextColor) attrs.color = p.lcdTextColor
+  }
+  if (c.kind === 'neopixel-ring' && p.ringPixels) attrs.pixels = String(p.ringPixels)
+  if (c.kind === 'servo') {
+    if (p.servoHorn) attrs.horn = p.servoHorn
+    if (p.servoHornColor) attrs.hornColor = p.servoHornColor
+  }
+  if (c.kind === 'buzzer') {
+    if (p.buzzerMode) attrs.mode = p.buzzerMode
+    if (p.buzzerVolume !== undefined) attrs.volume = String(p.buzzerVolume)
+  }
+  if (c.kind === 'relay' && p.relayTransistor) attrs.transistor = p.relayTransistor
+  if (c.kind === 'hx711' && p.hxType) attrs.type = p.hxType
+  if (c.kind === 'max7219-matrix') {
+    if (p.matrixChain) attrs.chain = String(p.matrixChain)
+    if (p.matrixLayout) attrs.layout = p.matrixLayout
+  }
+  return attrs
+}
+
 export function toWokwiDiagramJson(
   boardId: BoardId,
   components: PlacedComponent[],
@@ -93,13 +164,7 @@ export function toWokwiDiagramJson(
       .filter((c) => c.kind !== 'mcu')
       .map((c) => {
         const k = c.kind as Exclude<ComponentKind, 'mcu'>
-        const attrs: Record<string, string> = {}
-        if (c.kind === 'led' && c.color) attrs.color = c.color
-        if (c.kind === 'resistor') attrs.value = String(c.ohms ?? 220)
-        if (c.kind === 'dht22') {
-          attrs.temperature = String(c.props.tempC ?? 28)
-          attrs.humidity = String(c.props.humidity ?? 60)
-        }
+        const attrs = buildWokwiAttrs(c)
         return {
           type: WOKWI_PART_TYPE_MAP[k] ?? `wokwi-${c.kind}`,
           id: c.id,
@@ -239,21 +304,47 @@ export function parseWokwiDiagramJson(rawText: string): {
     const kind = REVERSE_PART_MAP[p.type]
     if (!kind) continue
     const spec = getComponentSpec(kind)
+    const attrs = p.attrs ?? {}
     components.push({
       id: p.id,
       kind,
       x: Number(p.left) || 320,
       y: Number(p.top) || 120,
       rotate: p.rotate ? ((Math.round(Number(p.rotate) / 90) * 90) % 360 + 360) % 360 : 0,
-      label: kind === 'resistor' ? `R (${p.attrs?.value ?? '220'}Ω)` : spec.nameId,
-      color: (p.attrs?.color as PlacedComponent['color']) ?? (kind === 'led' ? 'red' : undefined),
-      ohms: kind === 'resistor' ? Math.max(10, Number(p.attrs?.value ?? 220) || 220) : undefined,
+      label: attrs.label || (kind === 'resistor' ? `R (${attrs.value ?? '220'}Ω)` : spec.nameId),
+      color: attrs.color ?? (kind === 'led' || kind === 'pushbutton' ? 'red' : undefined),
+      ohms: kind === 'resistor' ? Math.max(1, Number(attrs.value ?? 220) || 220) : undefined,
       props: {
-        tempC: p.attrs?.temperature ? Number(p.attrs.temperature) : kind === 'dht22' ? 28 : undefined,
-        humidity: p.attrs?.humidity ? Number(p.attrs.humidity) : kind === 'dht22' ? 60 : undefined,
-        distanceCm: kind === 'hc-sr04' ? 40 : undefined,
+        tempC: attrs.temperature ? Number(attrs.temperature) : kind === 'dht22' ? 28 : kind === 'ntc' ? 25 : undefined,
+        humidity: attrs.humidity ? Number(attrs.humidity) : kind === 'dht22' ? 60 : undefined,
+        distanceCm: attrs.distance ? Number(attrs.distance) : kind === 'hc-sr04' ? 40 : undefined,
         potPct: kind === 'potentiometer' || kind === 'slide-pot' ? 50 : undefined,
-        lux: kind === 'ldr' ? 420 : undefined,
+        lux: attrs.lux ? Number(attrs.lux) : kind === 'ldr' ? 420 : undefined,
+        pressed: kind === 'slide-switch' ? attrs.value === '1' : undefined,
+        flip: attrs.flip === '1',
+        common: attrs.common === 'anode' || attrs.common === 'cathode' ? attrs.common : undefined,
+        digits: attrs.digits ? (Number(attrs.digits) as 1 | 2 | 3 | 4) : undefined,
+        colon: attrs.colon === '1',
+        tmType: attrs.type === 'dp' || attrs.type === 'colon' ? attrs.type : undefined,
+        bounce: attrs.bounce !== '0',
+        shortcutKey: attrs.key || undefined,
+        lcdPins: attrs.pins === 'i2c' || attrs.pins === 'full' ? attrs.pins : undefined,
+        i2cAddress: attrs.i2cAddress || undefined,
+        lcdBackground: attrs.background === 'blue' || attrs.background === 'green' ? attrs.background : undefined,
+        lcdTextColor: attrs.color === 'white' || attrs.color === 'black' ? attrs.color : undefined,
+        ringPixels: attrs.pixels ? (Number(attrs.pixels) as 8 | 12 | 16 | 24) : undefined,
+        servoHorn: attrs.horn === 'single' || attrs.horn === 'double' || attrs.horn === 'cross' ? attrs.horn : undefined,
+        servoHornColor: attrs.hornColor || undefined,
+        buzzerMode: attrs.mode === 'accurate' || attrs.mode === 'smooth' ? attrs.mode : undefined,
+        buzzerVolume: attrs.volume ? Number(attrs.volume) : undefined,
+        relayTransistor: attrs.transistor === 'pnp' || attrs.transistor === 'npn' ? attrs.transistor : undefined,
+        hxType: attrs.type === '5kg' || attrs.type === '50kg' || attrs.type === 'gauge' ? attrs.type : undefined,
+        matrixChain: attrs.chain ? (Number(attrs.chain) as 1 | 2 | 4) : undefined,
+        matrixLayout: attrs.layout === 'fc16' || attrs.layout === 'parola' ? attrs.layout : undefined,
+        ntcBeta: attrs.beta ? Number(attrs.beta) : undefined,
+        ldrThreshold: attrs.threshold ? Number(attrs.threshold) : undefined,
+        ldrRl10: attrs.rl10 ? Number(attrs.rl10) : undefined,
+        ldrGamma: attrs.gamma ? Number(attrs.gamma) : undefined,
       },
     })
   }
@@ -293,6 +384,9 @@ export const WOKWI_LIBRARY_REGISTRY: WokwiLibrarySpec[] = [
   { id: 'mfrc522', name: 'MFRC522 RFID', version: '1.4.11', include: '#include <MFRC522.h>', descriptionId: 'Pembaca kartu NFC/RFID 13.56MHz SPI', descriptionEn: '13.56MHz SPI RFID tag reader' },
   { id: 'tm1637', name: 'TM1637Display', version: '1.2.0', include: '#include <TM1637Display.h>', descriptionId: 'Tampilan angka 4-digit 7-Segment LED', descriptionEn: '4-digit 7-segment display driver' },
   { id: 'hx711', name: 'HX711 ADC', version: '0.7.5', include: '#include <HX711.h>', descriptionId: 'Amplifier sensor berat Load Cell 24-bit', descriptionEn: '24-bit Load Cell weight bridge amplifier' },
+  { id: 'sd', name: 'SD (SPI Storage)', version: '1.3.0', include: '#include <SD.h>', descriptionId: 'Baca/tulis file logging ke modul MicroSD Card SPI', descriptionEn: 'Read/write data logs on SPI MicroSD Card module' },
+  { id: 'nokia', name: 'Adafruit PCD8544 Nokia 5110', version: '2.0.3', include: '#include <Adafruit_PCD8544.h>', descriptionId: 'Driver layar monokrom SPI Nokia 5110 84×48', descriptionEn: 'Monochrome SPI driver for Nokia 5110 84×48 LCD' },
+  { id: 'accelstepper', name: 'AccelStepper', version: '1.64.0', include: '#include <AccelStepper.h>', descriptionId: 'Kontrol akselerasi Stepper Motor & driver A4988', descriptionEn: 'Stepper acceleration & A4988 Step/Dir driver' },
 ]
 
 export function buildVcdExport(samples: LogicSample[], gpios: number[]): string {

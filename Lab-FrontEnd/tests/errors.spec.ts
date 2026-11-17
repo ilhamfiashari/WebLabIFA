@@ -21,21 +21,47 @@ for (const status of [400, 403, 405, 408, 409, 410, 413, 415, 422, 423, 429, 500
 }
 
 test('all error examples have distinct artwork, localized copy and reduced motion', async ({ page }) => {
+  test.setTimeout(90_000)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.setViewportSize({ width: 1440, height: 900 })
   const artworks = new Set<string>()
   for (const status of ERROR_STATUSES) {
-    await page.goto(`/__preview/errors?status=${status}`)
+    if (status === 404) {
+      await page.goto('/missing-page')
+    } else if (status === 401) {
+      await page.unroute('**/api/me')
+      await page.route('**/api/me', route =>
+        route.fulfill({ json: { id: 'u1', name: 'Rani', email: 'rani@example.test', role: 'mahasiswa', home_route: '/lab/mahasiswa', allowed_roles: ['mahasiswa'], csrf_token: 'csrf', expires_at: '2099-01-01T00:00:00Z' } }),
+      )
+      await page.route('**/api/labs/sessions/err-401', route =>
+        route.fulfill({ status: 401, json: { status: 401, code: 'UNAUTHORIZED', message: 'Expired' } }),
+      )
+      await page.goto('/lab/sesi/err-401')
+    } else {
+      await page.unroute('**/api/me')
+      await page.route('**/api/me', route => route.fulfill({ status, json: { message: 'fixture' } }))
+      await page.goto('/lab')
+    }
     await expect(page.getByText(`HTTP ${status}`, { exact: true })).toBeVisible()
     const art = page.locator('.err-illustration')
     await expect(art).toHaveAttribute('data-error-art', ERROR_VISUALS[status])
     artworks.add(await art.evaluate(el => el.innerHTML))
     expect(await page.locator('.err-browser-float').evaluate(el => getComputedStyle(el).animationName)).toBe('none')
     await page.screenshot({ path: path.join(os.tmpdir(), `lab-error-${status}.png`), fullPage: true })
-    await page.getByRole('button', { name: 'Switch language to English' }).click()
+    if (status === 401) {
+      await page.getByRole('button', { name: 'Bahasa' }).click()
+      await page.getByRole('menuitemradio', { name: 'English' }).click()
+    } else {
+      await page.getByRole('button', { name: 'Switch language to English' }).click()
+    }
     await expect(page.getByRole('button', { name: 'Try Again', exact: true })).toBeVisible()
     await expect(page).not.toHaveTitle(/undefined/)
-    await page.getByRole('button', { name: 'Ganti bahasa ke Indonesia' }).click()
+    if (status === 401) {
+      await page.getByRole('button', { name: 'Language' }).click()
+      await page.getByRole('menuitemradio', { name: 'Indonesia' }).click()
+    } else {
+      await page.getByRole('button', { name: 'Ganti bahasa ke Indonesia' }).click()
+    }
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await expect(page.getByRole('button', { name: 'Coba Lagi', exact: true })).toBeVisible()

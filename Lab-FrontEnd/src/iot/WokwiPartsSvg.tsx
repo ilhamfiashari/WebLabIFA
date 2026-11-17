@@ -183,6 +183,51 @@ export function RealBoardBodySvg({
     )
   }
 
+  if (board.id === 'pi-pico') {
+    return (
+      <g>
+        <rect x={0} y={0} width={w} height={h} rx={7} fill="#166534" stroke="#052e16" strokeWidth={1.8} />
+        <rect x={w / 2 - 18} y={-8} width={36} height={22} rx={3} fill="#e2e8f0" stroke="#475569" strokeWidth={1.4} />
+        <text x={w / 2} y={7} textAnchor="middle" fontSize="6.2" fontWeight={700} fill="#334155">USB</text>
+        <rect x={w / 2 - 15} y={40} width={30} height={18} rx={3} fill="#f8fafc" stroke="#334155" />
+        <circle cx={w / 2} cy={49} r={4.5} fill="#cbd5e1" />
+        <text x={w / 2} y={67} textAnchor="middle" fontSize="6.5" fill="#ecfdf5" fontWeight={700}>BOOTSEL</text>
+        <g transform={`translate(${w / 2}, 148) rotate(45)`}>
+          <rect x={-24} y={-24} width={48} height={48} rx={3} fill="#0f172a" stroke="#475569" strokeWidth={1.3} />
+        </g>
+        <text x={w / 2} y={147} textAnchor="middle" fontSize="7.5" fontWeight={800} fill="#e2e8f0">RP2040</text>
+        <text x={w / 2} y={158} textAnchor="middle" fontSize="6" fill="#86efac">Pi Pico</text>
+        <circle cx={w / 2 - 28} cy={46} r={4} fill={builtinOn ? '#4ade80' : '#052e16'} />
+        <text x={w / 2 - 28} y={58} textAnchor="middle" fontSize="6" fill="#d1fae5">LED</text>
+        {[-12, 0, 12].map((dx, i) => (
+          <circle key={i} cx={w / 2 + dx} cy={h - 14} r={2.4} fill="#eab308" stroke="#052e16" />
+        ))}
+      </g>
+    )
+  }
+
+  if (board.id === 'arduino-nano') {
+    return (
+      <g>
+        <rect x={0} y={0} width={w} height={h} rx={7} fill="#006d77" stroke="#083344" strokeWidth={1.8} />
+        <rect x={w / 2 - 22} y={-8} width={44} height={26} rx={3} fill="#cbd5e1" stroke="#475569" strokeWidth={1.4} />
+        <text x={w / 2} y={8} textAnchor="middle" fontSize="6.2" fontWeight={700} fill="#334155">MINI-USB</text>
+        <g transform={`translate(${w / 2}, 132) rotate(45)`}>
+          <rect x={-22} y={-22} width={44} height={44} rx={2} fill="#18181b" stroke="#64748b" strokeWidth={1.2} />
+        </g>
+        <text x={w / 2} y={131} textAnchor="middle" fontSize="6.5" fontWeight={700} fill="#e2e8f0">ATmega328P</text>
+        <text x={w / 2} y={142} textAnchor="middle" fontSize="6" fill="#67e8f9">Arduino Nano</text>
+        <circle cx={w / 2} cy={222} r={11} fill="#e2e8f0" stroke="#475569" strokeWidth={1.5} />
+        <circle cx={w / 2} cy={222} r={5} fill="#f8fafc" />
+        <text x={w / 2} y={244} textAnchor="middle" fontSize="6.5" fill="#fff" fontWeight={700}>RESET</text>
+        <circle cx={w / 2 - 24} cy={46} r={3.8} fill={sim.running ? '#22c55e' : '#14532d'} />
+        <text x={w / 2 - 24} y={57} textAnchor="middle" fontSize="5.8" fill="#d1fae5">PWR</text>
+        <circle cx={w / 2 + 24} cy={46} r={3.8} fill={builtinOn ? '#f59e0b' : '#451a03'} />
+        <text x={w / 2 + 24} y={57} textAnchor="middle" fontSize="5.8" fill="#fef3c7">L</text>
+      </g>
+    )
+  }
+
   if (board.id === 'esp32') {
     return (
       <g>
@@ -528,11 +573,16 @@ export function WokwiExtendedPartSvg({
     case 'seven-seg': {
       const val = sim.running ? (sim.elapsedMs / 500) % 10 : 8
       const digit = Math.floor(val)
+      const segColor =
+        comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'yellow' ? '#facc15' : comp.color === 'white' ? '#f8fafc' : '#ef4444'
       return (
         <g>
           <rect x={6} y={6} width={56} height={66} rx={5} fill="#09090b" stroke="#52525b" strokeWidth={1.6} />
-          <text x={34} y={54} textAnchor="middle" fontSize="38" fontFamily="monospace" fontWeight={800} fill="#ef4444">
+          <text x={34} y={54} textAnchor="middle" fontSize="38" fontFamily="monospace" fontWeight={800} fill={segColor}>
             {digit}
+          </text>
+          <text x={34} y={16} textAnchor="middle" fontSize="5.5" fill="#94a3b8">
+            {comp.props.common === 'cathode' ? 'CC' : 'CA'}
           </text>
         </g>
       )
@@ -540,41 +590,51 @@ export function WokwiExtendedPartSvg({
     case 'seven-seg-4': {
       const secs = Math.floor((sim.elapsedMs || 0) / 1000) % 10000
       const str = String(secs).padStart(4, '0')
+      const segColor =
+        comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'yellow' ? '#facc15' : comp.color === 'white' ? '#f8fafc' : '#ef4444'
+      const sep = comp.props.tmType === 'dp' ? '.' : ':'
       return (
         <g>
           <rect x={4} y={8} width={116} height={54} rx={5} fill="#09090b" stroke="#475569" strokeWidth={1.5} />
-          <text x={62} y={45} textAnchor="middle" fontSize="24" fontFamily="monospace" fontWeight={800} fill="#ef4444" letterSpacing="3">
-            {str.slice(0, 2)}:{str.slice(2)}
+          <text x={62} y={45} textAnchor="middle" fontSize="24" fontFamily="monospace" fontWeight={800} fill={segColor} letterSpacing="3">
+            {str.slice(0, 2)}{sep}{str.slice(2)}
           </text>
         </g>
       )
     }
     case 'led-bar-graph': {
       const litCount = sim.running ? (Math.floor(sim.elapsedMs / 250) % 10) + 1 : 6
+      const modeClr = comp.color ?? 'GYR'
       return (
         <g>
           <rect x={4} y={10} width={104} height={38} rx={4} fill="#0f172a" stroke="#475569" />
           {Array.from({ length: 10 }, (_, i) => {
             const on = i < litCount
-            const c = i < 6 ? '#22c55e' : i < 8 ? '#eab308' : '#ef4444'
+            const c =
+              modeClr === 'BCYR'
+                ? i < 3 ? '#3b82f6' : i < 6 ? '#06b6d4' : i < 8 ? '#eab308' : '#ef4444'
+                : modeClr === 'GYR'
+                  ? i < 6 ? '#22c55e' : i < 8 ? '#eab308' : '#ef4444'
+                  : modeClr === 'green' ? '#22c55e' : modeClr === 'yellow' ? '#facc15' : modeClr === 'blue' ? '#38bdf8' : '#ef4444'
             return <rect key={i} x={10 + i * 9.5} y={16} width={6.5} height={26} rx={1} fill={on ? c : '#1e293b'} />
           })}
         </g>
       )
     }
     case 'neopixel-ring': {
-      const step = Math.floor((sim.elapsedMs || 0) / 220) % 12
+      const count = comp.props.ringPixels ?? 12
+      const step = Math.floor((sim.elapsedMs || 0) / 220) % count
       const colors = ['#ef4444', '#f59e0b', '#22c55e', '#38bdf8', '#8b5cf6', '#ec4899']
       return (
         <g>
           <circle cx={48} cy={44} r={36} fill="#0f172a" stroke="#475569" strokeWidth={1.5} />
           <circle cx={48} cy={44} r={18} fill="none" stroke="#334155" strokeWidth={1.2} />
-          {Array.from({ length: 12 }, (_, i) => {
-            const ang = (i / 12) * Math.PI * 2 - Math.PI / 2
+          {Array.from({ length: count }, (_, i) => {
+            const ang = (i / count) * Math.PI * 2 - Math.PI / 2
             const cx = 48 + Math.cos(ang) * 27
             const cy = 44 + Math.sin(ang) * 27
             const clr = sim.running ? colors[(i + step) % colors.length] : '#e2e8f0'
-            return <circle key={i} cx={cx} cy={cy} r={4} fill={clr} />
+            return <circle key={i} cx={cx} cy={cy} r={count > 16 ? 2.7 : 3.8} fill={clr} />
           })}
         </g>
       )
@@ -599,16 +659,21 @@ export function WokwiExtendedPartSvg({
         </g>
       )
     }
-    case 'lcd-20x4':
+    case 'lcd-20x4': {
+      const isBlue = comp.props.lcdBackground === 'blue'
+      const bgFill = isBlue ? '#1d4ed8' : '#84cc16'
+      const fgFill = comp.props.lcdTextColor === 'white' || isBlue ? '#f8fafc' : '#1a2e05'
+      const addr = comp.props.i2cAddress ?? '0x27'
       return (
         <g>
           <rect x={4} y={4} width={142} height={76} rx={5} fill="#0f766e" stroke="#115e59" strokeWidth={1.5} />
-          <rect x={10} y={12} width={130} height={58} rx={3} fill="#84cc16" stroke="#1e293b" strokeWidth={2} />
-          <text x={15} y={26} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">LCD 20x4 I2C Ready</text>
-          <text x={15} y={38} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">Line 2: OK</text>
-          <text x={15} y={50} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill="#1a2e05">Line 3: Address 0x27</text>
+          <rect x={10} y={12} width={130} height={58} rx={3} fill={bgFill} stroke="#1e293b" strokeWidth={2} />
+          <text x={15} y={26} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>LCD 20x4 {comp.props.lcdPins === 'full' ? 'PAR' : 'I2C'}</text>
+          <text x={15} y={38} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>Line 2: OK</text>
+          <text x={15} y={50} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>Addr: {addr}</text>
         </g>
       )
+    }
     case 'tft-ili9341':
       return (
         <g>
@@ -692,18 +757,22 @@ export function WokwiExtendedPartSvg({
           <text x={54} y={32} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="#0f172a">
             {((comp.props.weightKg ?? 1.2)).toFixed(1)} kg
           </text>
-          <text x={54} y={53} textAnchor="middle" fontSize="6.5" fill="#ecfdf5" fontWeight={700}>HX711 BRIDGE</text>
+          <text x={54} y={53} textAnchor="middle" fontSize="6.5" fill="#ecfdf5" fontWeight={700}>
+            HX711 ({comp.props.hxType ?? '50kg'})
+          </text>
         </g>
       )
     case 'max7219-matrix': {
       const tick = Math.floor((sim.elapsedMs || 0) / 300)
+      const litClr = comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'orange' ? '#f97316' : '#ef4444'
+      const offClr = comp.color === 'green' ? '#14532d' : comp.color === 'blue' ? '#0c4a6e' : '#3f1d1d'
       return (
         <g>
           <rect x={6} y={6} width={86} height={76} rx={5} fill="#18181b" stroke="#52525b" strokeWidth={1.5} />
           {Array.from({ length: 8 }, (_, r) =>
             Array.from({ length: 8 }, (__, c) => {
               const on = sim.running ? (r + c + tick) % 3 === 0 : r === c || r + c === 7
-              return <circle key={`${r}-${c}`} cx={16 + c * 9.2} cy={14 + r * 8.2} r={2.8} fill={on ? '#ef4444' : '#3f1d1d'} />
+              return <circle key={`${r}-${c}`} cx={16 + c * 9.2} cy={14 + r * 8.2} r={2.8} fill={on ? litClr : offClr} />
             }),
           )}
         </g>
@@ -722,6 +791,65 @@ export function WokwiExtendedPartSvg({
         </g>
       )
     }
+    case 'shift-74hc595':
+    case 'shift-74hc165':
+      return (
+        <g>
+          <rect x={10} y={16} width={92} height={44} rx={4} fill="#18181b" stroke="#64748b" strokeWidth={1.5} />
+          <circle cx={18} cy={38} r={4} fill="#334155" />
+          <text x={56} y={36} textAnchor="middle" fontSize="8.5" fontWeight={700} fill="#e2e8f0">
+            {comp.kind === 'shift-74hc595' ? '74HC595' : '74HC165'}
+          </text>
+          <text x={56} y={48} textAnchor="middle" fontSize="6" fill="#94a3b8">
+            {comp.kind === 'shift-74hc595' ? '8-Bit SIPO' : '8-Bit PISO'}
+          </text>
+        </g>
+      )
+    case 'stepper-a4988':
+      return (
+        <g>
+          <rect x={22} y={8} width={52} height={72} rx={5} fill="#b91c1c" stroke="#f87171" strokeWidth={1.4} />
+          <rect x={32} y={24} width={32} height={32} rx={3} fill="#0f172a" stroke="#94a3b8" />
+          <circle cx={48} cy={66} r={5} fill="#eab308" />
+          <text x={48} y={43} textAnchor="middle" fontSize="7" fontWeight={700} fill="#e2e8f0">A4988</text>
+        </g>
+      )
+    case 'microsd':
+      return (
+        <g>
+          <rect x={10} y={8} width={82} height={58} rx={5} fill="#0369a1" stroke="#38bdf8" strokeWidth={1.4} />
+          <rect x={24} y={12} width={54} height={38} rx={2} fill="#cbd5e1" stroke="#475569" />
+          <text x={51} y={34} textAnchor="middle" fontSize="8" fontWeight={700} fill="#0f172a">microSD</text>
+        </g>
+      )
+    case 'lcd-nokia5110':
+      return (
+        <g>
+          <rect x={8} y={6} width={102} height={74} rx={5} fill="#be123c" stroke="#fb7185" strokeWidth={1.5} />
+          <rect x={16} y={14} width={86} height={54} rx={3} fill="#84a98c" stroke="#1e293b" strokeWidth={1.6} />
+          <text x={59} y={38} textAnchor="middle" fontSize="8.5" fontWeight={700} fill="#0f172a" fontFamily="monospace">NOKIA 5110</text>
+          <text x={59} y={51} textAnchor="middle" fontSize="7" fill="#1e293b" fontFamily="monospace">84×48 PCD8544</text>
+        </g>
+      )
+    case 'neopixel-single': {
+      const tick = Math.floor((sim.elapsedMs || 0) / 300) % 4
+      const clrs = ['#ef4444', '#22c55e', '#38bdf8', '#a855f7']
+      return (
+        <g>
+          <rect x={12} y={10} width={48} height={44} rx={5} fill="#0f172a" stroke="#64748b" strokeWidth={1.4} />
+          <rect x={22} y={18} width={28} height={28} rx={4} fill="#e2e8f0" />
+          <circle cx={36} cy={32} r={8} fill={sim.running ? clrs[tick] : '#38bdf8'} />
+        </g>
+      )
+    }
+    case 'clock-gen':
+      return (
+        <g>
+          <rect x={10} y={8} width={72} height={46} rx={5} fill="#1e293b" stroke="#64748b" strokeWidth={1.4} />
+          <path d="M 22 36 H 32 V 22 H 44 V 36 H 56 V 22 H 68" fill="none" stroke="#22c55e" strokeWidth={2.2} />
+          <text x={46} y={48} textAnchor="middle" fontSize="6.5" fontWeight={700} fill="#cbd5e1">CLK 1Hz</text>
+        </g>
+      )
     default:
       return null
   }
@@ -872,6 +1000,51 @@ export function WokwiPartThumbnail({ kind }: { kind: ComponentKind }) {
           <rect x={20} y={8} width={40} height={40} rx={5} fill="#1e293b" />
           <circle cx={40} cy={28} r={13} fill="#cbd5e1" />
           <circle cx={40} cy={28} r={4} fill="#f97316" />
+        </svg>
+      )
+    case 'shift-74hc595':
+    case 'shift-74hc165':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={14} y={14} width={52} height={28} rx={3} fill="#18181b" />
+          <text x={40} y={31} textAnchor="middle" fontSize="9" fontWeight={700} fill="#e2e8f0">
+            {kind === 'shift-74hc595' ? '595' : '165'}
+          </text>
+        </svg>
+      )
+    case 'stepper-a4988':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={22} y={8} width={36} height={40} rx={4} fill="#b91c1c" />
+          <rect x={30} y={16} width={20} height={20} rx={2} fill="#0f172a" />
+        </svg>
+      )
+    case 'microsd':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={16} y={10} width={48} height={36} rx={4} fill="#0369a1" />
+          <rect x={24} y={14} width={32} height={22} rx={2} fill="#cbd5e1" />
+        </svg>
+      )
+    case 'lcd-nokia5110':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={14} y={10} width={52} height={36} rx={4} fill="#be123c" />
+          <rect x={20} y={15} width={40} height={26} rx={2} fill="#84a98c" />
+        </svg>
+      )
+    case 'neopixel-single':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={22} y={10} width={36} height={36} rx={4} fill="#0f172a" />
+          <circle cx={40} cy={28} r={9} fill="#38bdf8" />
+        </svg>
+      )
+    case 'clock-gen':
+      return (
+        <svg viewBox="0 0 80 56" width="100%" height="56" aria-hidden="true">
+          <rect x={16} y={12} width={48} height={32} rx={4} fill="#1e293b" />
+          <path d="M 24 34 H 32 V 22 H 42 V 34 H 52" fill="none" stroke="#22c55e" strokeWidth={2.2} />
         </svg>
       )
     default:

@@ -933,6 +933,11 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   // Bisa menambah lebih dari 1 mikrokontroler ke dalam 1 desain dengan bentuk fisik berbeda & menghapus tambahan MCU
   await expect(page.getByText('MQ2 Gas Sensor', { exact: true })).toBeVisible()
   await expect(page.getByText('Keypad 4×4 Matrix', { exact: true })).toBeVisible()
+  await expect(page.getByText('Arduino Nano', { exact: true })).toBeVisible()
+  await expect(page.getByText('Pi Pico', { exact: true })).toBeVisible()
+  const bottomPart = page.getByText('Clock Generator', { exact: true })
+  await bottomPart.scrollIntoViewIfNeeded()
+  await expect(bottomPart).toBeVisible()
   await page.getByRole('button', { name: 'Tambah Arduino Uno ke kanvas' }).click()
   await expect(page.getByText('Arduino Uno #2')).toBeVisible()
   await expect(page.getByText('ATMEGA328P-PU', { exact: true })).toBeVisible()
@@ -940,6 +945,17 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByText('Arduino Uno #2').dispatchEvent('pointerup')
   await page.getByRole('button', { name: 'Hapus Komponen' }).click()
   await expect(page.getByText('Arduino Uno #2')).toHaveCount(0)
+
+  // Cek kustomisasi atribut Wokwi pada LED di kanvas & sinkronisasi diagram.json
+  await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerup')
+  await page.getByRole('button', { name: 'ORANGE', exact: true }).click()
+  await page.getByLabel(/Balik polaritas kaki horizontal/).check()
+  await page.getByRole('tab', { name: 'diagram.json' }).click()
+  await expect(page.getByLabel('Wokwi diagram.json editor')).toHaveValue(/"color": "orange"/)
+  await expect(page.getByLabel('Wokwi diagram.json editor')).toHaveValue(/"flip": "1"/)
+  await page.getByLabel(/Balik polaritas kaki horizontal/).uncheck()
+  await page.getByRole('button', { name: 'Tutup', exact: true }).click()
 
   // Cek Rangkaian & Koding lalu jalankan simulasi Blink + Resistor default & ROM bootloader terminal
   await page.getByRole('button', { name: 'Cek', exact: true }).click()
