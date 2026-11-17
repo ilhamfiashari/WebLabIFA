@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { expect, test } from '@playwright/test'
 import { ERROR_STATUSES, ERROR_VISUALS } from '../src/shared/errors/error-status'
 
@@ -29,7 +31,7 @@ test('all error examples have distinct artwork, localized copy and reduced motio
     await expect(art).toHaveAttribute('data-error-art', ERROR_VISUALS[status])
     artworks.add(await art.evaluate(el => el.innerHTML))
     expect(await page.locator('.err-browser-float').evaluate(el => getComputedStyle(el).animationName)).toBe('none')
-    await page.screenshot({ path: `/private/tmp/lab-error-${status}.png`, fullPage: true })
+    await page.screenshot({ path: path.join(os.tmpdir(), `lab-error-${status}.png`), fullPage: true })
     await page.getByRole('button', { name: 'Switch language to English' }).click()
     await expect(page.getByRole('button', { name: 'Try Again', exact: true })).toBeVisible()
     await expect(page).not.toHaveTitle(/undefined/)
@@ -50,7 +52,7 @@ test('404 layout, localization, links and reduced motion at all widths', async (
     await page.setViewportSize({ width, height: 900 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await expect(page.getByRole('button', { name: 'Coba Lagi', exact: true })).toBeVisible()
-    await page.screenshot({ path: `/private/tmp/lab-error-404-${width}.png`, fullPage: true })
+    await page.screenshot({ path: path.join(os.tmpdir(), `lab-error-404-${width}.png`), fullPage: true })
   }
   await page.getByRole('button', { name: 'Switch language to English' }).click()
   await expect(page.getByRole('heading', { name: 'Page Not Found', exact: true })).toBeVisible()
