@@ -817,8 +817,10 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
 
   for (const c of components) {
     if (c.kind === 'led') {
-      const a = readPinDuty({ nodeId: c.id, pinId: 'A' })
-      const kGnd = hitsGround({ nodeId: c.id, pinId: 'K' })
+      const anodePin = c.props.flip ? 'K' : 'A'
+      const cathodePin = c.props.flip ? 'A' : 'K'
+      const a = readPinDuty({ nodeId: c.id, pinId: anodePin })
+      const kGnd = hitsGround({ nodeId: c.id, pinId: cathodePin })
       const baseLevel = kGnd ? a.duty : 0
       const ohms = a.minResistorOhms ?? 220
       const resistorScale =
@@ -826,20 +828,29 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
       const level = baseLevel * resistorScale
       const clr = c.color ?? 'red'
       ctx.sim.ledBrightness[c.id] = {
-        r: clr === 'red' || clr === 'yellow' ? level : 0,
-        g: clr === 'green' || clr === 'yellow' ? level : 0,
-        b: clr === 'blue' ? level : 0,
+        r: clr === 'red' || clr === 'yellow' || clr === 'orange' || clr === 'white' || clr === 'purple' ? level : 0,
+        g: clr === 'green' || clr === 'yellow' || clr === 'cyan' || clr === 'white' ? level : clr === 'orange' ? level * 0.5 : 0,
+        b: clr === 'blue' || clr === 'cyan' || clr === 'white' || clr === 'purple' ? level : 0,
         burned: baseLevel > 0 && (!a.hasResistor || (a.minResistorOhms !== null && a.minResistorOhms < 47)),
       }
     } else if (c.kind === 'rgb-led') {
-      const kGnd = hitsGround({ nodeId: c.id, pinId: 'GND' })
-      const r = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'R' }).duty : 0
-      const g = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'G' }).duty : 0
-      const b = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'B' }).duty : 0
-      ctx.sim.ledBrightness[c.id] = { r, g, b }
+      const isCommonAnode = c.props.common === 'anode'
+      if (isCommonAnode) {
+        const comPwr = readPinDuty({ nodeId: c.id, pinId: 'GND' }).duty > 0.5
+        const r = comPwr ? 1 - readPinDuty({ nodeId: c.id, pinId: 'R' }).duty : 0
+        const g = comPwr ? 1 - readPinDuty({ nodeId: c.id, pinId: 'G' }).duty : 0
+        const b = comPwr ? 1 - readPinDuty({ nodeId: c.id, pinId: 'B' }).duty : 0
+        ctx.sim.ledBrightness[c.id] = { r, g, b }
+      } else {
+        const kGnd = hitsGround({ nodeId: c.id, pinId: 'GND' })
+        const r = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'R' }).duty : 0
+        const g = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'G' }).duty : 0
+        const b = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'B' }).duty : 0
+        ctx.sim.ledBrightness[c.id] = { r, g, b }
+      }
     } else if (c.kind === 'relay') {
       const sig = readPinDuty({ nodeId: c.id, pinId: 'IN' })
-      ctx.sim.relayClosed[c.id] = sig.duty > 0.5
+      ctx.sim.relayClosed[c.id] = c.props.relayTransistor === 'pnp' ? sig.duty < 0.5 : sig.duty > 0.5
     } else if (c.kind === 'buzzer') {
       const sig = readPinDuty({ nodeId: c.id, pinId: 'POS' })
       if (!ctx.sim.buzzerActive[c.id]) {
@@ -873,7 +884,9 @@ function emitBootBanner(ctx: VmContext) {
           ]
         : ctx.boardId === 'pico-w'
           ? ['[RP2040] Bootrom v3 · CYW43439 Wi-Fi init OK · 133 MHz']
-          : [`[${BOARDS[ctx.boardId].shortName}] AVR Optiboot 16MHz READY (115200 baud)`]
+          : ctx.boardId === 'pi-pico'
+            ? ['[RP2040] Raspberry Pi Pico Bootrom v3 · 133 MHz READY']
+            : [`[${BOARDS[ctx.boardId].shortName}] AVR Optiboot 16MHz READY (115200 baud)`]
 
   for (const text of lines) {
     ctx.sim.serialLog = [
@@ -1009,15 +1022,18 @@ export function verifyCircuitAndCode(
     }
     const reversedLed = activeParts.find((c) => {
       if (c.kind !== 'led') return false
-      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' }, components)
-      const reachK = traceReachable(graph, { nodeId: c.id, pinId: 'K' }, components)
+      const anodePin = c.props.flip ? 'K' : 'A'
+      const cathodePin = c.props.flip ? 'A' : 'K'
+      const reachA = traceReachable(graph, { nodeId: c.id, pinId: anodePin }, components)
+      const reachK = traceReachable(graph, { nodeId: c.id, pinId: cathodePin }, components)
       const aHitsGnd = reachA.endpoints.some(isBoardGnd)
       const kHitsPwr = reachK.endpoints.some(isBoardPwrOrGpio)
       return aHitsGnd && kHitsPwr
     })
     const ungroundedLed = activeParts.find((c) => {
       if (c.kind !== 'led') return false
-      const reach = traceReachable(graph, { nodeId: c.id, pinId: 'K' }, components)
+      const cathodePin = c.props.flip ? 'A' : 'K'
+      const reach = traceReachable(graph, { nodeId: c.id, pinId: cathodePin }, components)
       return !reach.endpoints.some(isBoardGnd)
     })
     if (reversedLed) {
