@@ -348,10 +348,31 @@ export function CircuitCanvas({
         setDrawingPreview(null)
         setSnapHighlight(null)
       }
+      if (sim.running) {
+        const k = e.key.toLowerCase()
+        for (const c of components) {
+          if (c.kind === 'pushbutton' && c.props.shortcutKey && c.props.shortcutKey.toLowerCase() === k) {
+            onUpdateProps(c.id, { pressed: true })
+          }
+        }
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!sim.running) return
+      const k = e.key.toLowerCase()
+      for (const c of components) {
+        if (c.kind === 'pushbutton' && c.props.shortcutKey && c.props.shortcutKey.toLowerCase() === k) {
+          onUpdateProps(c.id, { pressed: false })
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [selectedWireId, selectedNodeId, components, onUpdateComponent, onDuplicateNode, onDeleteWire, onDeleteNode])
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [selectedWireId, selectedNodeId, components, sim.running, onUpdateComponent, onUpdateProps, onDuplicateNode, onDeleteWire, onDeleteNode])
 
   const onPinPointerDown = (ep: WireEndpoint, clientX: number, clientY: number) => {
     suppressNextClickRef.current = false
@@ -750,6 +771,26 @@ export function CircuitCanvas({
             </button>
           </div>
 
+          {inspectedComp ? (
+            <label className="iot-pop-field" style={{ paddingBottom: 4 }}>
+              <span>{en ? 'Label / Name' : 'Nama / Label Komponen'}</span>
+              <input
+                className="input"
+                style={{ minHeight: 28, fontSize: 12, padding: '2px 8px' }}
+                value={inspectedComp.kind === 'resistor' ? inspectedComp.label.split(' (')[0] : inspectedComp.label}
+                onChange={(e) => {
+                  const val = e.target.value
+                  onUpdateComponent(inspectedComp.id, {
+                    label:
+                      inspectedComp.kind === 'resistor'
+                        ? `${val || 'R'} (${formatOhms(inspectedComp.ohms ?? 220)})`
+                        : val,
+                  })
+                }}
+              />
+            </label>
+          ) : null}
+
           {inspectedComp?.kind === 'resistor' ? (() => {
             const ohms = inspectedComp.ohms ?? 220
             const { d1, d2, multIdx } = decodeResistorBands(ohms)
@@ -847,9 +888,9 @@ export function CircuitCanvas({
           {inspectedComp?.kind === 'led' ? (
             <div className="iot-popover-body">
               <div className="iot-pop-field">
-                <span>{en ? 'LED Color' : 'Warna LED'}</span>
+                <span>{en ? 'LED Color (color)' : 'Warna LED (color)'}</span>
                 <div className="iot-pop-quick-vals">
-                  {(['red', 'green', 'yellow', 'blue'] as const).map((clr) => (
+                  {(['red', 'green', 'yellow', 'blue', 'orange', 'purple', 'cyan', 'white'] as const).map((clr) => (
                     <button
                       key={clr}
                       type="button"
@@ -857,6 +898,34 @@ export function CircuitCanvas({
                       onClick={() => onUpdateComponent(inspectedComp.id, { color: clr })}
                     >
                       {clr.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(inspectedComp.props.flip)}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { flip: e.target.checked })}
+                />
+                <span>{en ? 'Flip pins horizontally (flip)' : 'Balik polaritas kaki horizontal (flip)'}</span>
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'rgb-led' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Common Pin (common)' : 'Tipe Pin Common (common)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['cathode', 'anode'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.common ?? 'cathode') === mode ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { common: mode })}
+                    >
+                      Common {mode === 'anode' ? 'Anode' : 'Cathode'}
                     </button>
                   ))}
                 </div>
@@ -941,6 +1010,40 @@ export function CircuitCanvas({
 
           {inspectedComp?.kind === 'pushbutton' ? (
             <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Button Color (color)' : 'Warna Tombol (color)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['red', 'green', 'blue', 'yellow', 'white', 'black', 'grey'] as const).map((clr) => (
+                    <button
+                      key={clr}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.color ?? 'red') === clr ? 'is-active' : ''}`}
+                      onClick={() => onUpdateComponent(inspectedComp.id, { color: clr })}
+                    >
+                      {clr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="iot-pop-field">
+                <span>{en ? 'Keyboard Shortcut (key)' : 'Shortcut Keyboard (key)'}</span>
+                <input
+                  className="input"
+                  maxLength={6}
+                  placeholder="mis. Q, 1, Space"
+                  style={{ minHeight: 26, fontSize: 11.5, padding: '2px 8px' }}
+                  value={inspectedComp.props.shortcutKey ?? ''}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { shortcutKey: e.target.value })}
+                />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={inspectedComp.props.bounce !== false}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { bounce: e.target.checked })}
+                />
+                <span>{en ? 'Simulate contact bounce' : 'Simulasi contact bounce'}</span>
+              </label>
               <button
                 type="button"
                 className="btn-primary iot-mini-btn"
@@ -950,6 +1053,29 @@ export function CircuitCanvas({
                   ? en ? 'Release Lock (Currently ON)' : 'Lepas Kunci (Sedang ON)'
                   : en ? 'Latch Switch ON' : 'Tahan / Kunci Tombol ON'}
               </button>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'slide-switch' ? (
+            <div className="iot-popover-body">
+              <button
+                type="button"
+                className="btn-primary iot-mini-btn"
+                onClick={() => {
+                  const next = !inspectedComp.props.pressed
+                  onUpdateProps(inspectedComp.id, { pressed: next, latched: next })
+                }}
+              >
+                {inspectedComp.props.pressed ? 'Status: ON (value="1")' : 'Status: OFF (value="")'}
+              </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={inspectedComp.props.bounce !== false}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { bounce: e.target.checked })}
+                />
+                <span>{en ? 'Simulate contact bounce' : 'Simulasi contact bounce'}</span>
+              </label>
             </div>
           ) : null}
 
@@ -1022,17 +1148,255 @@ export function CircuitCanvas({
 
           {inspectedComp?.kind === 'hx711' ? (
             <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Load Cell Type (type)' : 'Tipe Load Cell (type)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['50kg', '5kg', 'gauge'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.hxType ?? '50kg') === t ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { hxType: t })}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label className="iot-pop-field">
                 <span>{en ? 'Load Weight' : 'Beban Timbangan'}: {(inspectedComp.props.weightKg ?? 1.2).toFixed(1)} kg</span>
                 <input
                   type="range"
                   min={0}
-                  max={50}
-                  step={0.5}
-                  value={inspectedComp.props.weightKg ?? 1.2}
+                  max={inspectedComp.props.hxType === '5kg' ? 5 : 50}
+                  step={inspectedComp.props.hxType === '5kg' ? 0.1 : 0.5}
+                  value={Math.min(inspectedComp.props.hxType === '5kg' ? 5 : 50, inspectedComp.props.weightKg ?? 1.2)}
                   onChange={(e) => onUpdateProps(inspectedComp.id, { weightKg: Number(e.target.value) })}
                 />
               </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'lcd-1602' || inspectedComp?.kind === 'lcd-20x4' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Backlight & Address' : 'Backlight & Alamat I2C'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['green', 'blue'] as const).map((bg) => (
+                    <button
+                      key={bg}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.lcdBackground ?? 'green') === bg ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { lcdBackground: bg, lcdTextColor: bg === 'blue' ? 'white' : 'black' })}
+                    >
+                      {bg === 'blue' ? 'Blue' : 'Green'}
+                    </button>
+                  ))}
+                  {(['0x27', '0x3F'] as const).map((addr) => (
+                    <button
+                      key={addr}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.i2cAddress ?? '0x27') === addr ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { i2cAddress: addr })}
+                    >
+                      {addr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'servo' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Servo Horn (horn)' : 'Bentuk Horn (horn)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['single', 'double', 'cross'] as const).map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.servoHorn ?? 'single') === h ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { servoHorn: h })}
+                    >
+                      {h}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="iot-pop-field">
+                <span>{en ? 'Horn Color (hornColor)' : 'Warna Horn'}</span>
+                <div className="iot-pop-quick-vals">
+                  {[
+                    { hex: '#ffffff', label: 'White' },
+                    { hex: '#38bdf8', label: 'Blue' },
+                    { hex: '#ef4444', label: 'Red' },
+                    { hex: '#1e293b', label: 'Dark' },
+                  ].map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.servoHornColor ?? '#ffffff') === c.hex ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { servoHornColor: c.hex })}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'buzzer' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Sound Mode (mode)' : 'Mode Suara (mode)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['smooth', 'accurate'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.buzzerMode ?? 'smooth') === m ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { buzzerMode: m })}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="iot-pop-field">
+                <span>Volume: {Math.round((inspectedComp.props.buzzerVolume ?? 1) * 100)}%</span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={inspectedComp.props.buzzerVolume ?? 1}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { buzzerVolume: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'relay' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Driver Transistor (transistor)' : 'Tipe Transistor (transistor)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['npn', 'pnp'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.relayTransistor ?? 'npn') === t ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { relayTransistor: t })}
+                    >
+                      {t.toUpperCase()} ({t === 'npn' ? 'Active-HIGH' : 'Active-LOW'})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'seven-seg' || inspectedComp?.kind === 'seven-seg-4' || inspectedComp?.kind === 'max7219-matrix' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'LED Color (color)' : 'Warna LED (color)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['red', 'green', 'blue', 'yellow', 'white'] as const).map((clr) => (
+                    <button
+                      key={clr}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.color ?? 'red') === clr ? 'is-active' : ''}`}
+                      onClick={() => onUpdateComponent(inspectedComp.id, { color: clr })}
+                    >
+                      {clr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {inspectedComp.kind === 'seven-seg' ? (
+                <div className="iot-pop-quick-vals">
+                  {(['anode', 'cathode'] as const).map((cm) => (
+                    <button
+                      key={cm}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.common ?? 'anode') === cm ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { common: cm })}
+                    >
+                      Common {cm}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {inspectedComp.kind === 'seven-seg-4' ? (
+                <div className="iot-pop-quick-vals">
+                  {(['colon', 'dp'] as const).map((tp) => (
+                    <button
+                      key={tp}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.tmType ?? 'colon') === tp ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { tmType: tp })}
+                    >
+                      type: {tp}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {inspectedComp.kind === 'max7219-matrix' ? (
+                <div className="iot-pop-quick-vals">
+                  {(['parola', 'fc16'] as const).map((ly) => (
+                    <button
+                      key={ly}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.matrixLayout ?? 'parola') === ly ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { matrixLayout: ly })}
+                    >
+                      layout: {ly}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'led-bar-graph' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Bar Color / Pattern (color)' : 'Pola Warna Bar (color)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['GYR', 'BCYR', 'red', 'green', 'yellow', 'blue'] as const).map((clr) => (
+                    <button
+                      key={clr}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.color ?? 'GYR') === clr ? 'is-active' : ''}`}
+                      onClick={() => onUpdateComponent(inspectedComp.id, { color: clr })}
+                    >
+                      {clr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'neopixel-ring' ? (
+            <div className="iot-popover-body">
+              <div className="iot-pop-field">
+                <span>{en ? 'Ring LED Count (pixels)' : 'Jumlah LED Ring (pixels)'}</span>
+                <div className="iot-pop-quick-vals">
+                  {([8, 12, 16, 24] as const).map((cnt) => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      className={`iot-quick-val ${(inspectedComp.props.ringPixels ?? 12) === cnt ? 'is-active' : ''}`}
+                      onClick={() => onUpdateProps(inspectedComp.id, { ringPixels: cnt })}
+                    >
+                      {cnt} px
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : null}
 

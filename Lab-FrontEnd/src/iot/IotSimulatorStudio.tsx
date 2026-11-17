@@ -387,7 +387,12 @@ export function IotSimulatorStudio({
       x: 330 + offset,
       y: 80 + (components.length % 4) * 58,
       label: en ? spec.nameEn : spec.nameId,
-      color: kind === 'led' ? 'red' : undefined,
+      color:
+        kind === 'led' || kind === 'pushbutton' || kind === 'seven-seg' || kind === 'seven-seg-4' || kind === 'max7219-matrix'
+          ? 'red'
+          : kind === 'led-bar-graph'
+            ? 'GYR'
+            : undefined,
       ohms: kind === 'resistor' ? 220 : undefined,
       props: {
         distanceCm: kind === 'hc-sr04' ? 40 : undefined,
@@ -404,6 +409,21 @@ export function IotSimulatorStudio({
         dipBits: kind === 'dip-switch' ? [0, 0, 0, 0, 0, 0, 0, 0] : undefined,
         pressed: kind === 'pushbutton' || kind === 'slide-switch' ? false : undefined,
         motion: kind === 'pir' ? false : undefined,
+        bounce: kind === 'pushbutton' || kind === 'slide-switch' ? true : undefined,
+        common: kind === 'rgb-led' ? 'cathode' : kind === 'seven-seg' ? 'anode' : undefined,
+        tmType: kind === 'seven-seg-4' ? 'colon' : undefined,
+        lcdPins: kind === 'lcd-1602' || kind === 'lcd-20x4' ? 'i2c' : undefined,
+        i2cAddress: kind === 'lcd-1602' || kind === 'lcd-20x4' ? '0x27' : undefined,
+        lcdBackground: kind === 'lcd-1602' || kind === 'lcd-20x4' ? 'green' : undefined,
+        lcdTextColor: kind === 'lcd-1602' || kind === 'lcd-20x4' ? 'black' : undefined,
+        ringPixels: kind === 'neopixel-ring' ? 12 : undefined,
+        servoHorn: kind === 'servo' ? 'single' : undefined,
+        servoHornColor: kind === 'servo' ? '#ffffff' : undefined,
+        buzzerMode: kind === 'buzzer' ? 'smooth' : undefined,
+        buzzerVolume: kind === 'buzzer' ? 1 : undefined,
+        relayTransistor: kind === 'relay' ? 'npn' : undefined,
+        hxType: kind === 'hx711' ? '50kg' : undefined,
+        matrixLayout: kind === 'max7219-matrix' ? 'parola' : undefined,
       },
     }
     const nextComps = [...components, newComp]
