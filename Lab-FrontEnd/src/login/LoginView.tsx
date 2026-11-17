@@ -136,7 +136,7 @@ export function LoginView() {
           aria-hidden="true"
         >
           <path
-            d="M0,0 L28,0 C78,240 102,520 42,800 C18,895 16,955 24,1000 L0,1000 Z"
+            d="M0,0 L64,0 C88,240 98,520 72,800 C62,900 62,955 68,1000 L0,1000 Z"
             fill="#f7f6f1"
           />
         </svg>
