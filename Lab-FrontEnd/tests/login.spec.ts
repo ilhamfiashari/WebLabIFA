@@ -151,5 +151,5 @@ test('gangguan sesi tidak menampilkan identitas palsu', async ({ page }) => {
   await page.route('**/api/me', route => route.fulfill({ status: 503 }))
   await page.goto('/lab')
   await expect(page.getByRole('heading', { name: 'Gangguan layanan sementara' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Kembali ke Halaman Sekarang' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Coba Lagi' })).toBeVisible()
 })
