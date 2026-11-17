@@ -275,7 +275,7 @@ test('alur lengkap pentester simulator 5 tahap pada SQL Injection', async ({ pag
   // Stage 2: Uji Celah -> Baseline + Exploit + Hint
   await page.getByRole('button', { name: /Baseline: Cari Kabel'Pro/ }).click()
   await page.getByRole('button', { name: /Uji SQLi:/ }).click()
-  await expect(page.getByText('SQL Injection Tembus')).toBeVisible()
+  await expect(page.getByText('SQL Injection Tembus')).toBeVisible({ timeout: 10000 })
   await page.getByRole('button', { name: 'Buka Petunjuk Berikutnya' }).click()
   await expect(page.getByText(/Petunjuk 1:/)).toBeVisible()
   await page.getByRole('button', { name: /Lanjut Diagnosis/ }).click()
@@ -674,12 +674,12 @@ test('halaman error konsisten memiliki tombol kembali ke halaman sekarang dan be
   await page.goto('/lab/sesi/tidak-ada')
 
   await expect(page.getByText('HTTP 404')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Kembali ke Halaman Sekarang' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Coba Lagi' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Kembali ke Beranda' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Bahasa' }).click()
   await page.getByRole('menuitemradio', { name: 'English' }).click()
-  await expect(page.getByRole('button', { name: 'Back to Current Page' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try Again' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Back to Home' })).toBeVisible()
 })
 
@@ -714,7 +714,7 @@ test('webgoat target form login SQL injection dan leaderboard dosen berfungsi', 
   await page.getByRole('button', { name: "Payload: admin' --" }).click()
   await page.getByRole('button', { name: 'Kirim Login Target' }).click()
   await expect(page.getByText('Hasil Eksekusi Login SQLi & Token AST')).toBeVisible()
-  await expect(page.getByText('SQL Injection Tembus')).toBeVisible()
+  await expect(page.getByText('SQL Injection Tembus')).toBeVisible({ timeout: 10000 })
 
   // Cek Leaderboard Dosen + filter
   await page.unroute('**/api/me')

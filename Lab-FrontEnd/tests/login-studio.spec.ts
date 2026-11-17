@@ -1,4 +1,7 @@
+import os from 'node:os'
+import path from 'node:path'
 import { expect, test } from '@playwright/test'
+import { drawLabScreen } from '../src/login/lab-animation'
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/me', route => route.fulfill({ status: 401, json: {} }))
@@ -38,7 +41,7 @@ test('studio programs, weather, pause, sensors and persistence', async ({ page }
   await expect(page.locator('#main')).toHaveAttribute('data-paused', 'true')
   await page.getByRole('button', { name: 'Pratinjau studio', exact: true }).click()
   await expect(page.locator('#main')).toHaveAttribute('data-preview', 'true')
-  await page.screenshot({ path: '/private/tmp/lab-studio-storm.png' })
+  await page.screenshot({ path: path.join(os.tmpdir(), 'lab-studio-storm.png') })
   await page.getByRole('button', { name: 'Kembali ke login', exact: true }).click()
   await page.getByRole('button', { name: 'Studio', exact: true }).click()
   await page.getByRole('button', { name: 'Atur ulang studio' }).click()
@@ -57,7 +60,7 @@ test('responsive studio and reduced motion', async ({ page }) => {
     await page.getByRole('button', { name: 'Studio', exact: true }).click()
     await expect(page.getByLabel('Tema login')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.screenshot({ path: `/private/tmp/lab-studio-${width}.png`, fullPage: true })
+    await page.screenshot({ path: path.join(os.tmpdir(), `lab-studio-${width}.png`), fullPage: true })
     await page.keyboard.press('Escape')
     await expect(page.getByRole('button', { name: 'Masuk dengan Google', exact: true })).toBeVisible()
     if (width < 768) await expect(page.getByRole('button', { name: 'Pratinjau studio', exact: true })).toBeHidden()
@@ -70,9 +73,9 @@ test('green board LED pulses and rear instrument pixels move, then freeze on pau
   await page.goto('/login')
   await page.getByRole('button', { name: 'Pratinjau studio', exact: true }).click()
   await page.waitForFunction(() => Number(document.querySelector<HTMLCanvasElement>('[data-lab-animation]')?.dataset.greenLed) < .02)
-  await page.screenshot({ path: '/private/tmp/lab-led-green-off.png' })
+  await page.screenshot({ path: path.join(os.tmpdir(), 'lab-led-green-off.png') })
   await page.waitForFunction(() => Number(document.querySelector<HTMLCanvasElement>('[data-lab-animation]')?.dataset.greenLed) > .8)
-  await page.screenshot({ path: '/private/tmp/lab-led-green-on.png' })
+  await page.screenshot({ path: path.join(os.tmpdir(), 'lab-led-green-on.png') })
   const readRear = () => page.locator('[data-lab-animation]').evaluate((element: HTMLCanvasElement) => {
     const scale = Math.max(element.clientWidth / 1446, element.clientHeight / 1087) * element.width / element.clientWidth
     const ctx = element.getContext('2d')!
@@ -91,20 +94,41 @@ test('green board LED pulses and rear instrument pixels move, then freeze on pau
 })
 
 test('laptop renders twelve scenes with coding, CLI and selectable menus', async ({ page }) => {
+  let textCalls = 0
+  const frames: string[] = []
+  for (let i = 0; i < 12; i++) {
+    const ops: string[] = []
+    const gradient = { addColorStop: () => {} }
+    const ctx = new Proxy(
+      {
+        fillText: (value: string, x: number, y: number) => {
+          textCalls++
+          ops.push(`t:${value}@${Math.round(x)},${Math.round(y)}`)
+        },
+        measureText: (value: string) => ({ width: value.length * 8 }),
+        createLinearGradient: () => gradient,
+        createRadialGradient: () => gradient,
+      },
+      {
+        get(target, prop) {
+          if (prop in target) return target[prop as keyof typeof target]
+          return (...args: unknown[]) => {
+            ops.push(`${String(prop)}:${args.map(a => (typeof a === 'number' ? Math.round(a * 10) : String(a))).join(',')}`)
+          }
+        },
+        set(target, prop, value) {
+          ;(target as Record<string | symbol, unknown>)[prop] = value
+          return true
+        },
+      },
+    ) as unknown as CanvasRenderingContext2D
+    drawLabScreen(ctx, i * 10 + 2, 'auto', 'clear', 80, 50)
+    frames.push(ops.join('|'))
+  }
+  expect(new Set(frames).size).toBe(12)
+  expect(textCalls).toBeGreaterThan(200)
+
   await page.goto('/login')
-  const result = await page.evaluate(async () => {
-    const source = '/src/login/lab-animation.ts'
-    const { drawLabScreen } = await import(source)
-    const canvas = document.createElement('canvas'); canvas.width = 1920; canvas.height = 1080
-    const ctx = canvas.getContext('2d')!
-    let textCalls = 0
-    ctx.fillText = () => { textCalls++ }
-    const frames = []
-    for (let i = 0; i < 12; i++) { drawLabScreen(ctx, i * 10 + 2, 'auto', 'clear', 80, 50); frames.push(canvas.toDataURL()) }
-    return { textCalls, scenes: new Set(frames).size }
-  })
-  expect(result.scenes).toBe(12)
-  expect(result.textCalls).toBeGreaterThan(200)
   await page.getByRole('button', { name: 'Laptop: Pentest', exact: true }).click()
   await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'pentest')
   await page.getByRole('button', { name: 'Pratinjau studio', exact: true }).click()
