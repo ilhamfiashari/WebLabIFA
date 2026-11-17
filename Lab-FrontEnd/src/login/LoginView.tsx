@@ -24,6 +24,12 @@ import {
 import { getIdentity } from '../api'
 import { useI18n } from '../shared/i18n'
 import { type LoginSceneKey, useRealtimeAtmosphere } from './weatherTime'
+import { LOGIN_SCENES, resolveTimeScene } from './weatherTime'
+import { LabScene } from './LabScene'
+import { LaptopMenu } from './LaptopMenu'
+import { laptopSceneAt } from './lab-animation'
+import { StudioControls } from './StudioControls'
+import { resolveLabWeather, sensorSample, studioScene, useStudioSettings, WEATHER_LABELS } from './studio-model'
 import './login.css'
 
 const messagesId: Record<string, string> = {
@@ -86,7 +92,13 @@ export function LoginView() {
   const { tr, lang, setLang } = useI18n()
   const session = useQuery({ queryKey: ['identity'], queryFn: getIdentity })
   const [redirecting, setRedirecting] = useState(false)
-  const { now, scene, weather } = useRealtimeAtmosphere()
+  const { now, weather } = useRealtimeAtmosphere()
+  const [settings, setSettings] = useStudioSettings()
+  const [seconds, setSeconds] = useState(0)
+  const [preview, setPreview] = useState(false)
+  const activeWeather = settings.weather === 'auto' ? resolveLabWeather(weather) : settings.weather
+  const scene = LOGIN_SCENES[studioScene(settings.time === 'auto' ? resolveTimeScene(now, weather) : settings.time, activeWeather)]
+  const sample = sensorSample(seconds, activeWeather, settings.distance, settings.network)
 
   const status = new URLSearchParams(window.location.search).get('status') ?? ''
   const messages = lang === 'en' ? messagesEn : messagesId
@@ -106,12 +118,13 @@ export function LoginView() {
     minute: '2-digit',
     hour12: false,
   })
-  const sceneLabel = lang === 'en' ? scene.labelEn : scene.labelId
+  const sceneLabel = settings.weather !== 'auto' ? WEATHER_LABELS[activeWeather][lang === 'en' ? 1 : 0] : lang === 'en' ? scene.labelEn : scene.labelId
   const tempLabel =
-    typeof weather?.temperature_c === 'number' ? ` · ${Math.round(weather.temperature_c)}°C` : ''
+    settings.weather !== 'auto' ? ` · ${Math.round(sample.temperature)}°C · ${lang === 'en' ? 'Simulation' : 'Simulasi'}` : typeof weather?.temperature_c === 'number' ? ` · ${Math.round(weather.temperature_c)}°C` : ''
 
   return (
-    <main className="login-v2-shell" id="main">
+    <main className="login-v2-shell" id="main" data-theme={settings.theme} data-paused={settings.paused} data-preview={preview}>
+      <StudioControls settings={settings} setSettings={setSettings} en={lang === 'en'} preview={preview} onPreview={() => setPreview(p => !p)} />
       <section className="login-v2-left" aria-labelledby="login-title">
         <svg
           className="login-v2-hills"
@@ -119,6 +132,7 @@ export function LoginView() {
           preserveAspectRatio="none"
           aria-hidden="true"
         >
+          <defs><clipPath id="login-panel-curve-clip" clipPathUnits="objectBoundingBox"><path d="M0,0 L.64,0 C.88,.24 .98,.52 .72,.8 C.62,.9 .62,.955 .68,1 L0,1 Z" /></clipPath></defs>
           <path
             d="M0,145 C120,105 220,175 360,128 C465,92 535,115 600,98 L600,220 L0,220 Z"
             fill="#e9ede4"
@@ -129,17 +143,12 @@ export function LoginView() {
           />
         </svg>
 
-        <svg
-          className="login-v2-curve"
-          viewBox="0 0 100 1000"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M0,0 L64,0 C88,240 98,520 72,800 C62,900 62,955 68,1000 L0,1000 Z"
-            fill="#f7f6f1"
-          />
-        </svg>
+        <div className="login-v2-curve" aria-hidden="true">
+          <svg className="login-v2-hills" viewBox="0 0 44 220" preserveAspectRatio="none">
+            <path d="M0,98 C14,96 30,92 44,88 L44,220 H0 Z" fill="#e9ede4" />
+            <path d="M0,148 C14,146 30,141 44,137 L44,220 H0 Z" fill="#eef1ea" />
+          </svg>
+        </div>
 
         <header className="login-v2-header">
           <div className="login-v2-brand-group">
@@ -276,6 +285,7 @@ export function LoginView() {
       </section>
 
       <aside className="login-v2-right" aria-label={tr.brand.heroTop} data-scene={scene.key}>
+        <div className="login-lab-stage">
         <img
           className="hero-image"
           src={scene.src}
@@ -284,6 +294,9 @@ export function LoginView() {
           alt=""
           fetchPriority="high"
         />
+        <LabScene scene={scene} weather={activeWeather} settings={settings} en={lang === 'en'} onSample={setSeconds} />
+        <LaptopMenu time={scene.key} selected={laptopSceneAt(seconds, settings.program).mode} onSelect={program => setSettings(s => ({ ...s, program }))} />
+        </div>
 
         <div className="login-v2-cards-stack">
           <div className="login-v2-glass-card">
@@ -296,26 +309,16 @@ export function LoginView() {
             </div>
             <div className="login-v2-net-body">
               <svg className="login-v2-wave" viewBox="0 0 140 38" fill="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="netWaveFill" x1="0" y1="0" x2="0" y2="38" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#4ade80" stopOpacity="0.45" />
-                    <stop offset="100%" stopColor="#4ade80" stopOpacity="0.02" />
-                  </linearGradient>
-                </defs>
                 <path
-                  d="M2,33 C18,32 24,25 38,24 C52,23 64,10 78,11 C92,12 102,24 116,22 C126,20 132,27 138,26 L138,37 L2,37 Z"
-                  fill="url(#netWaveFill)"
-                />
-                <path
-                  d="M2,33 C18,32 24,25 38,24 C52,23 64,10 78,11 C92,12 102,24 116,22 C126,20 132,27 138,26"
+                  d={Array.from({ length: 36 }, (_, i) => `${i ? 'L' : 'M'}${i * 4},${settings.network === 0 ? 30 : 22 + Math.sin(i * .6 - seconds * 1.7) * 7 + Math.sin(i * .23 + seconds) * 5}`).join(' ')}
                   stroke="#5eead4"
                   strokeWidth="2"
                   strokeLinecap="round"
                 />
               </svg>
               <div className="login-v2-net-metrics">
-                <span className="login-v2-net-up">↑ 24.8 Mbps</span>
-                <span>↓ 3.6 Mbps</span>
+                <span className="login-v2-net-up">↑ {sample.upload.toFixed(1)} Mbps</span>
+                <span>↓ {sample.download.toFixed(1)} Mbps</span>
               </div>
             </div>
           </div>
@@ -333,8 +336,9 @@ export function LoginView() {
                 <span className="login-v2-iot-dot" aria-hidden="true" />
                 {tr.brand.cardIotActive}
               </span>
-              <span>{tr.brand.cardIotNew}</span>
+              <span>{sample.temperature.toFixed(1)}°C · {sample.humidity.toFixed(0)}% RH</span>
             </div>
+            <p className="login-sensor-note">HC-SR04 · {sample.distance.toFixed(1)} cm · {lang === 'en' ? 'Simulation' : 'Simulasi'}</p>
           </div>
 
           <div className="login-v2-atmosphere-pill" data-testid="login-atmosphere">

@@ -38,6 +38,8 @@
   height: 100%;
   pointer-events: none;
   z-index: 1;
+  background: var(--login-ground, #f7f6f1);
+  clip-path: url(#login-panel-curve-clip);
 }
 
 .login-v2-header {
@@ -322,8 +324,71 @@
   mask-image: linear-gradient(180deg, #000 0%, #000 72%, rgba(0, 0, 0, 0.52) 89%, transparent 100%);
 }
 
+/* Photo and effects share one cover plane so all hardware stays registered at every width. */
+.login-lab-stage { position: absolute; inset: 0 0 auto 24px; aspect-ratio: 1446 / 1087; min-height: 76%; max-height: 100%; z-index: -2; pointer-events: none; overflow: hidden; mask-image: linear-gradient(#000 0 74%, transparent 100%); }
+.login-lab-stage .hero-image { inset: 0; width: 100%; height: 100%; min-height: 0; max-height: none; object-fit: cover; object-position: left top; mask-image: none; }
+.login-lab-effects { position: absolute; inset: 0; width: 100%; height: 100%; }
+.login-laptop-menu-host { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.login-laptop-menu { position: absolute; top: 0; left: 0; width: 1280px; height: 64px; display: flex; padding: 10px 14px 9px 90px; gap: 7px; transform-origin: 0 0; }
+.login-laptop-menu button { flex: 1; min-width: 0; border: 0; border-radius: 6px; color: transparent; background: transparent; pointer-events: auto; font-size: 18px; }
+.login-laptop-menu button:hover { background: #ffffff20; }
+.login-laptop-menu button:focus-visible { outline: 4px solid #97f4d4; outline-offset: -2px; }
+.login-sensor-note { margin: 10px 0 0; font-size: 11px; color: #c3ded2; font-variant-numeric: tabular-nums; }
+.login-studio-dock { position: fixed; z-index: 40; bottom: 20px; right: 24px; display: flex; gap: 6px; color: #edf9f1; }
+.login-studio-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 10px 13px; border: 0; border-radius: 6px; background: #12382b; color: inherit; cursor: pointer; font-size: 13px; }
+.login-studio-trigger:hover { background: #20543f; }
+.login-studio-dock button:active { transform: scale(.97); }
+.login-studio-dock :is(button, select, input):focus-visible { outline: 3px solid #6bdba0; outline-offset: 3px; }
+.login-studio-panel { position: absolute; bottom: 56px; right: 0; width: min(350px, calc(100vw - 32px)); max-height: calc(100svh - 100px); overflow-y: auto; padding: 22px; border-radius: 10px; background: #f5f8f4; color: #183c2c; box-shadow: 0 12px 50px #001b2440; overscroll-behavior: contain; animation: studio-enter 220ms cubic-bezier(.16,1,.3,1); }
+.login-studio-panel header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
+.login-studio-panel h2 { font-size: 20px; margin: 0; color: inherit; }
+.login-studio-panel p { margin: 5px 0 0; font-size: 12px; line-height: 1.55; color: #536b5d; }
+.login-studio-panel header button { display: grid; place-items: center; min-width: 36px; min-height: 36px; border: 0; background: #e4ece3; border-radius: 5px; color: inherit; }
+.login-studio-panel label { display: block; margin: 14px 0; font-size: 13px; font-weight: 550; }
+.login-studio-panel select { display: block; width: 100%; min-height: 40px; margin-top: 6px; border: 1px solid #b9ccbd; border-radius: 4px; padding: 7px; color: #173829; background: #fff; font: inherit; }
+.login-studio-panel label > span { float: right; font-variant-numeric: tabular-nums; }
+.login-studio-panel input[type="range"] { display: block; width: 100%; min-height: 32px; accent-color: #176a45; }
+.login-studio-panel .login-studio-check { display: flex; align-items: center; gap: 9px; min-height: 36px; }
+.login-studio-check input { width: 18px; height: 18px; accent-color: #176a45; }
+.login-studio-reset { min-height: 40px; width: 100%; margin-top: 14px; border: 0; border-radius: 4px; background: #dce9de; color: #193e2c; font-size: 13px; }
+@keyframes studio-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.login-v2-shell { --login-ground: #f7f6f1; --login-ink: #132b20; --login-secondary: #54625a; --studio-panel: #f5f8f4; --studio-control: #fff; --studio-fill: #dce9de; }
+.login-v2-left { background: var(--login-ground); }
+.login-v2-shell[data-theme="dark"] { --login-ground: #10251d; --login-ink: #e3f1e8; --login-secondary: #b2c8bb; --studio-panel: #18362a; --studio-control: #10271e; --studio-fill: #28513c; color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  .login-v2-shell[data-theme="system"] { --login-ground: #10251d; --login-ink: #e3f1e8; --login-secondary: #b2c8bb; --studio-panel: #18362a; --studio-control: #10271e; --studio-fill: #28513c; color-scheme: dark; }
+}
+.login-studio-panel { background: var(--studio-panel); color: var(--login-ink); }
+.login-studio-panel p { color: var(--login-secondary); }
+.login-studio-panel select { background: var(--studio-control); color: var(--login-ink); }
+.login-studio-panel :is(header button, .login-studio-reset) { background: var(--studio-fill); color: var(--login-ink); }
+.login-v2-shell .login-v2-left :is(.brand, .login-v2-title) { color: var(--login-ink); }
+.login-v2-shell .login-v2-left :is(.login-v2-desc, .login-v2-brand-sub, .login-v2-info-note, .login-v2-feature-item, .login-v2-footer, .login-v2-footer a) { color: var(--login-secondary); }
+.login-v2-shell[data-theme="dark"] .login-v2-hills { opacity: .04; }
+.login-v2-shell[data-theme="dark"] :is(.login-v2-eyebrow, .login-v2-feature-icon) { color: #80dca8; }
+@media (prefers-color-scheme: dark) {
+  .login-v2-shell[data-theme="system"] .login-v2-hills { opacity: .04; }
+  .login-v2-shell[data-theme="system"] :is(.login-v2-eyebrow, .login-v2-feature-icon) { color: #80dca8; }
+}
+@media (max-width: 1080px) { .login-lab-stage { left: 0; height: 100%; aspect-ratio: auto; } .login-lab-stage .hero-image { object-position: 32% top; } }
+@media (max-width: 767px) {
+  .login-studio-dock { right: 16px; bottom: max(12px, env(safe-area-inset-bottom)); }
+  .login-v2-left { padding-bottom: 80px !important; }
+  .login-studio-preview { display: none; }
+}
+@media (min-width: 768px) {
+  .login-v2-shell[data-preview="true"] { display: block; }
+  .login-v2-shell[data-preview="true"] .login-v2-left { display: none; }
+  .login-v2-shell[data-preview="true"] :is(.login-v2-cards-stack, .login-v2-hero-bottom) { visibility: hidden; }
+  .login-v2-shell[data-preview="true"] .login-v2-right { padding: 0; height: 100svh; }
+  .login-v2-shell[data-preview="true"] .login-lab-stage { inset: 0; height: 100%; aspect-ratio: auto; mask-image: none; }
+  .login-v2-shell[data-preview="true"] .login-v2-right::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .login-studio-panel { animation: none; } .login-studio-dock * { transition: none !important; } }
+
 .login-v2-right::after {
   content: "";
+  pointer-events: none;
   position: absolute;
   inset: 0;
   z-index: -1;
