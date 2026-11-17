@@ -105,7 +105,7 @@ export const TRANSLATIONS = {
     errors: {
       backCurrent: 'Kembali ke Halaman Sekarang',
       backHome: 'Kembali ke Beranda',
-      retry: 'Muat Ulang / Coba Lagi',
+      retry: 'Coba Lagi',
       400: {
         title: 'Permintaan tidak valid',
         subtitle: 'Format parameter atau payload yang dikirim tidak dapat diproses oleh server.',
@@ -122,14 +122,20 @@ export const TRANSLATIONS = {
         title: 'Halaman tidak ditemukan',
         subtitle: 'Alamat atau sumber daya yang Anda cari tidak tersedia atau telah dipindahkan.',
       },
+      405: { title: 'Metode permintaan tidak didukung', subtitle: 'Tindakan ini tidak tersedia untuk alamat tersebut. Kembali ke halaman sebelumnya dan gunakan tombol yang disediakan.' },
+      408: { title: 'Waktu permintaan habis', subtitle: 'Permintaan belum selesai dalam batas waktu. Periksa koneksi Anda, lalu coba lagi.' },
       409: {
         title: 'Konflik urutan langkah',
         subtitle: 'Selesaikan langkah atau level sebelumnya terlebih dahulu, atau segarkan versi sesi.',
       },
+      410: { title: 'Halaman sudah tidak tersedia', subtitle: 'Sumber daya ini telah dihapus secara permanen. Kembali ke beranda untuk melanjutkan.' },
+      413: { title: 'Ukuran berkas terlalu besar', subtitle: 'Berkas atau data yang dikirim melebihi batas unggahan. Kurangi ukurannya sebelum mencoba kembali.' },
+      415: { title: 'Format berkas tidak didukung', subtitle: 'Jenis berkas yang dikirim belum dapat diterima. Gunakan format yang tercantum pada formulir unggahan.' },
       422: {
         title: 'Data tidak dapat diproses',
         subtitle: 'Input kosong, format salah, atau panjang karakter melebihi batas yang diizinkan.',
       },
+      423: { title: 'Sumber daya sedang terkunci', subtitle: 'Data sedang digunakan atau dilindungi dari perubahan. Tunggu proses selesai, lalu coba lagi.' },
       429: {
         title: 'Terlalu banyak permintaan',
         subtitle: 'Batas laju permintaan sementara tercapai. Tunggu sebentar lalu coba kembali.',
@@ -138,6 +144,13 @@ export const TRANSLATIONS = {
         title: 'Gangguan layanan sementara',
         subtitle: 'Terjadi kesalahan internal saat memproses permintaan. Silakan coba beberapa saat lagi.',
       },
+      501: { title: 'Fitur belum tersedia', subtitle: 'Server belum mendukung tindakan ini. Kembali ke beranda atau gunakan fitur lain yang tersedia.' },
+      502: { title: 'Layanan penghubung bermasalah', subtitle: 'Penghubung tidak menerima respons yang valid dari layanan tujuan. Silakan coba beberapa saat lagi.' },
+      503: { title: 'Gangguan layanan sementara', subtitle: 'Layanan sedang sibuk atau menjalani pemeliharaan. Silakan kembali beberapa saat lagi.' },
+      504: { title: 'Layanan tujuan belum merespons', subtitle: 'Penghubung menunggu terlalu lama untuk menerima jawaban dari layanan tujuan. Coba kembali beberapa saat lagi.' },
+      507: { title: 'Penyimpanan layanan penuh', subtitle: 'Ruang penyimpanan server belum cukup untuk menyelesaikan tindakan ini. Hubungi pengelola bila masalah berlanjut.' },
+      508: { title: 'Perulangan proses terdeteksi', subtitle: 'Layanan menghentikan proses yang berulang agar sistem tetap stabil. Kembali ke beranda dan coba alur yang berbeda.' },
+      511: { title: 'Jaringan memerlukan login', subtitle: 'Koneksi internet Anda memerlukan autentikasi jaringan. Selesaikan login Wi-Fi melalui portal jaringan, lalu coba kembali.' },
     },
     student: {
       greeting: 'Halo',
@@ -338,7 +351,7 @@ export const TRANSLATIONS = {
     errors: {
       backCurrent: 'Back to Current Page',
       backHome: 'Back to Home',
-      retry: 'Reload / Retry',
+      retry: 'Try Again',
       400: {
         title: 'Bad Request',
         subtitle: 'The request parameters or payload format could not be processed by the server.',
@@ -355,14 +368,20 @@ export const TRANSLATIONS = {
         title: 'Page Not Found',
         subtitle: 'The requested page or resource does not exist or has been moved.',
       },
+      405: { title: 'Method Not Allowed', subtitle: 'This action is not supported at this address. Return to the previous page and use the provided controls.' },
+      408: { title: 'Request Timed Out', subtitle: 'The request did not finish in time. Check your connection, then try again.' },
       409: {
         title: 'Step Sequence Conflict',
         subtitle: 'Complete the previous step or level first, or refresh the latest session version.',
       },
+      410: { title: 'Resource No Longer Available', subtitle: 'This resource has been permanently removed. Return to the home page to continue.' },
+      413: { title: 'Upload Too Large', subtitle: 'The file or submitted data exceeds the upload limit. Reduce its size before trying again.' },
+      415: { title: 'Unsupported File Format', subtitle: 'This file type is not accepted. Use one of the formats listed on the upload form.' },
       422: {
         title: 'Unprocessable Entity',
         subtitle: 'The input is empty, invalid, or exceeds the allowed character limit.',
       },
+      423: { title: 'Resource Locked', subtitle: 'This data is in use or protected from changes. Wait for the operation to finish, then try again.' },
       429: {
         title: 'Too Many Requests',
         subtitle: 'Rate limit reached temporarily. Please wait a moment and try again.',
@@ -371,6 +390,13 @@ export const TRANSLATIONS = {
         title: 'Temporary Service Disruption',
         subtitle: 'An unexpected error occurred while processing your request. Please try again shortly.',
       },
+      501: { title: 'Feature Not Available', subtitle: 'The server does not support this action yet. Return home or use another available feature.' },
+      502: { title: 'Gateway Connection Failed', subtitle: 'The gateway received an invalid response from the destination service. Please try again shortly.' },
+      503: { title: 'Temporary Service Disruption', subtitle: 'The service is busy or undergoing maintenance. Please return in a few moments.' },
+      504: { title: 'Gateway Timed Out', subtitle: 'The gateway waited too long for the destination service to respond. Please try again shortly.' },
+      507: { title: 'Service Storage Full', subtitle: 'The server does not have enough storage to finish this action. Contact the administrator if the issue persists.' },
+      508: { title: 'Process Loop Detected', subtitle: 'The service stopped a repeating operation to keep the system stable. Return home and try a different workflow.' },
+      511: { title: 'Network Sign-in Required', subtitle: 'Your internet connection requires network authentication. Complete the Wi-Fi portal sign-in, then retry.' },
     },
     student: {
       greeting: 'Hello',

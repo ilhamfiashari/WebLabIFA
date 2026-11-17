@@ -1,0 +1,49 @@
+import { ArrowLeftRight, Construction, FileQuestion, FileWarning, KeyRound, ListChecks, LockKeyhole, Repeat, ServerCrash, ShieldAlert, Unplug, Upload, Wifi, Wrench, X } from 'lucide-react'
+import type { ErrorStatus } from './error-status'
+
+const mint = '#d0eadd', green = '#3d8a6d', dark = '#215c4a', coral = '#d87562', paper = '#f9fcfa'
+function ClockBadge({ hourglass = false }: { hourglass?: boolean }) {
+  return <g><circle cx="418" cy="266" r="54" fill={paper} stroke={green} strokeWidth="9" />{hourglass ? <path d="M396 238H440M396 294H440M400 240C400 259 436 274 436 292M436 240C436 259 400 274 400 292" stroke={green} strokeWidth="5" strokeLinecap="round" /> : <><circle cx="418" cy="266" r="4" fill={dark} /><path className="err-clock-hand" d="M418 266V236" stroke={green} strokeWidth="5" strokeLinecap="round" /><path d="M418 266L440 278" stroke={green} strokeWidth="5" strokeLinecap="round" /></>}</g>
+}
+function Server({ x = 173, y = 102, small = false }: { x?: number; y?: number; small?: boolean }) {
+  return <g transform={`translate(${x} ${y}) scale(${small ? .65 : 1})`}>
+    <path d="M0 18L18 0H233L252 18V207H0Z" fill="#aacbbb" />
+    {[0, 1, 2].map(i => <g key={i}><rect x="6" y={18 + i * 61} width="234" height="53" rx="9" fill={i % 2 ? '#387f67' : '#438e72'} /><path d={`M24 ${36 + i * 61}H126M24 ${48 + i * 61}H100`} stroke="#b2dfc7" strokeWidth="4" strokeLinecap="round" /><circle className="err-server-led" cx="212" cy={44 + i * 61} r="5" fill="#d6f1c2" style={{ animationDelay: `${i * -.8}s` }} /></g>)}
+  </g>
+}
+function Sheet({ x = 182, y = 88 }: { x?: number; y?: number }) {
+  return <g><path d={`M${x} ${y}H${x + 166}L${x + 224} ${y + 59}V${y + 235}H${x}Z`} fill={paper} stroke="#aacdbb" strokeWidth="4" /><path d={`M${x + 166} ${y}V${y + 59}H${x + 224}`} fill={mint} stroke="#aacdbb" strokeWidth="4" />{[0, 1, 2, 3].map(i => <path key={i} d={`M${x + 28} ${y + 95 + i * 30}H${x + 155 - i % 2 * 35}`} stroke="#d8e8df" strokeWidth="9" strokeLinecap="round" />)}</g>
+}
+
+export function ErrorArtwork({ status }: { status: ErrorStatus }) {
+  if ([500, 501, 503, 507].includes(status)) return <g className="err-browser-float">
+    {status === 501 ? <g><Construction x="172" y="101" width="244" height="222" color={green} strokeWidth="1.3" /><path d="M192 222L237 184M261 222L306 184M330 222L375 184" stroke="#dfb26a" strokeWidth="13" /></g> : <Server />}
+    {status === 500 && <g className="err-art-accent"><circle cx="420" cy="266" r="57" fill="#fce5dd" /><ServerCrash x="385" y="231" width="70" height="70" color={coral} strokeWidth="1.8" /></g>}
+    {(status === 503 || status === 501) && <g className="err-tool-sway"><circle cx="420" cy="267" r="55" fill="#eaf5ed" /><Wrench x="384" y="231" width="75" height="75" color={dark} strokeWidth="2" /></g>}
+    {status === 507 && <g><rect x="183" y="280" width="230" height="14" rx="6" fill="#e3eee8" /><rect x="183" y="280" width="224" height="14" rx="6" fill={coral} /><circle cx="429" cy="265" r="47" fill="#fce8df" /><Upload x="401" y="237" width="56" height="56" color={coral} /></g>}
+  </g>
+  if (status === 502 || status === 504) return <g className="err-browser-float">
+    <Server x={116} y={116} small /><Server x={350} y={98} small />
+    <path d="M281 209H302L315 189M323 226L337 208H354" stroke={coral} strokeWidth="7" strokeLinecap="round" />
+    {status === 504 ? <ClockBadge /> : <g className="err-disconnect"><circle cx="314" cy="285" r="49" fill="#fce8df" /><Unplug x="282" y="253" width="64" height="64" color={coral} strokeWidth="1.8" /></g>}
+  </g>
+  if (status === 401) return <g className="err-browser-float"><rect x="160" y="112" width="280" height="190" rx="19" fill={paper} stroke="#b5d6c4" strokeWidth="4" /><rect x="160" y="112" width="280" height="39" rx="14" fill={green} /><circle cx="226" cy="208" r="25" fill={mint} /><path d="M188 268C190 226 260 226 264 268" fill={mint} /><path d="M289 188H405M289 214H373M289 241H357" stroke="#d1e5d9" strokeWidth="10" strokeLinecap="round" /><KeyRound x="307" y="259" width="55" height="55" color={green} /><ClockBadge /></g>
+  if (status === 403) return <g className="err-browser-float"><path d="M296 84L405 128V216C405 270 357 312 296 336C235 312 187 270 187 216V128Z" fill={green} stroke="#a8d8be" strokeWidth="7" /><ShieldAlert x="241" y="150" width="110" height="110" color="#edfff4" strokeWidth="1.5" /><circle cx="421" cy="279" r="50" fill="#f8e7df" /><path d="M390 310L452 248" stroke={coral} strokeWidth="9" strokeLinecap="round" /><KeyRound x="393" y="250" width="56" height="56" color={coral} /></g>
+  if (status === 405) return <g className="err-browser-float"><path d="M295 94V326" stroke={dark} strokeWidth="13" strokeLinecap="round" /><path d="M167 114H385L423 148L385 182H167Z" fill={green} /><path d="M423 202H205L167 236L205 270H423Z" fill="#a6d4b9" /><path className="err-packet-shift" d="M214 148H355M374 236H235" stroke={paper} strokeWidth="8" strokeLinecap="round" /><circle cx="433" cy="293" r="44" fill="#fae8df" /><X x="409" y="269" width="48" height="48" color={coral} strokeWidth="3" /></g>
+  if (status === 408) return <g className="err-browser-float"><path d="M218 103H379M218 309H379" stroke={dark} strokeWidth="15" strokeLinecap="round" /><path d="M235 113C235 185 348 222 360 298M360 113C360 185 247 222 235 298" fill="#e1f2e8" stroke={green} strokeWidth="8" /><path d="M253 132H342L298 190Z" fill="#b5cfa0" /><path d="M250 290L298 235L346 290Z" fill="#b5cfa0" /><path className="err-sand" d="M298 202V249" stroke="#91b485" strokeWidth="4" strokeDasharray="4 7" /><ClockBadge hourglass /></g>
+  if (status === 409) return <g className="err-browser-float"><g transform="rotate(-9 252 202)"><Sheet x={133} y={104} /></g><g transform="rotate(10 373 210)"><Sheet x={280} y={106} /></g><circle cx="312" cy="230" r="60" fill="#e0f0e6" /><ArrowLeftRight className="err-packet-shift" x="275" y="193" width="74" height="74" color={green} strokeWidth="2" /></g>
+  if (status === 410) return <g className="err-browser-float"><path d="M172 153H430V313H172Z" fill="#b4d8c2" /><path d="M153 119H450V167H153Z" fill={green} /><path d="M183 102H417" stroke="#b3d8c4" strokeWidth="21" strokeLinecap="round" /><rect x="245" y="201" width="108" height="49" rx="6" fill="#edf7f0" stroke={green} strokeWidth="2" strokeDasharray="5 5" /><circle cx="427" cy="284" r="47" fill="#f8e7df" /><X x="399" y="256" width="56" height="56" color={coral} strokeWidth="2.5" /></g>
+  if (status === 423) return <g className="err-browser-float"><path d="M160 164V127H276L305 157H437V314H160Z" fill="#b6d8c2" stroke="#83b79c" strokeWidth="4" /><rect x="240" y="201" width="116" height="102" rx="15" fill={green} /><path d="M262 201V180C262 128 335 128 335 180V201" stroke={dark} strokeWidth="13" /><LockKeyhole x="273" y="226" width="50" height="50" color="#e9f9ef" /><path d="M158 249H227M369 249H439" stroke={dark} strokeWidth="8" strokeDasharray="16 7" /></g>
+  if (status === 429) return <g className="err-browser-float">{[0,1,2,3,4].map(i => <g key={i} transform={`translate(${133+i*49} ${125+i*22})`}><rect width="105" height="80" rx="9" fill={i%2 ? '#c7e3d1' : paper} stroke="#8ebca3" strokeWidth="3" /><path d="M19 25H76M19 43H64" stroke="#96c6ac" strokeWidth="6" strokeLinecap="round" /></g>)}<path className="err-packet-shift" d="M146 315H339" stroke={green} strokeWidth="6" strokeDasharray="12 14" /><ClockBadge /></g>
+  if (status === 508) return <g className="err-browser-float"><g className="err-routing-loop"><Repeat x="182" y="85" width="238" height="238" color={green} strokeWidth="1.1" /></g>{[[173,176],[398,176],[285,302]].map(([x,y],i) => <g key={i}><rect x={x} y={y} width="65" height="45" rx="8" fill={paper} stroke="#8bbca4" strokeWidth="3" /><circle cx={x+47} cy={y+23} r="5" fill="#61ae89" /></g>)}<circle cx="302" cy="207" r="42" fill="#f9e9de" /><X x="280" y="185" width="44" height="44" color={coral} /></g>
+  if (status === 511) return <g className="err-browser-float"><rect x="174" y="221" width="248" height="74" rx="17" fill={paper} stroke="#a1c9b2" strokeWidth="4" /><path d="M194 222V151M400 222V151" stroke={dark} strokeWidth="9" strokeLinecap="round" /><Wifi className="err-signal" x="245" y="98" width="108" height="108" color={green} strokeWidth="1.7" />{[0,1,2,3].map(i=><circle key={i} cx={205+i*25} cy="259" r="5" fill={green} />)}<circle cx="424" cy="278" r="47" fill="#dfefe4" /><KeyRound x="394" y="248" width="60" height="60" color={dark} /></g>
+  // Request and upload errors keep a document as their shared visual context.
+  const Icon = status === 413 ? Upload : status === 415 ? FileQuestion : status === 422 ? ListChecks : FileWarning
+  return <g className="err-browser-float"><Sheet />
+    {status === 413 && <g><path d="M153 91V323M144 91H162M144 323H162" stroke={green} strokeWidth="4" />{[0,1,2,3,4].map(i=><path key={i} d={`M146 ${127+i*39}H161`} stroke={green} strokeWidth="3" />)}<path className="err-upload" d="M296 236V151M272 175L296 151L320 175" stroke={green} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" /></g>}
+    {status === 422 && <g>{[0,1,2].map(i=><g key={i}><rect x="206" y={159+i*42} width="19" height="19" rx="4" fill={i===1 ? '#f0c7bb' : '#b8dcc5'} />{i===1 && <path d="M211 206L221 216M221 206L211 216" stroke={coral} strokeWidth="2" />}</g>)}<path className="err-scan-line" d="M199 170H373" stroke="#73b792" strokeWidth="3" strokeLinecap="round" /></g>}
+    {status === 415 && <FileQuestion x="249" y="156" width="93" height="93" color="#92b29f" strokeWidth="1.4" />}
+    {status === 400 && <path d="M242 158H285L295 174L309 158H351V241H242Z" fill="#d3e9dd" stroke="#8fb6a0" strokeWidth="3" />}
+    <circle cx="423" cy="277" r="53" fill={status===413 ? '#e2f0e5' : '#fae8df'} /><Icon x="389" y="243" width="68" height="68" color={status===413 ? green : coral} strokeWidth="1.8" />
+  </g>
+}

@@ -8,7 +8,8 @@ import { StudentApp } from './student/StudentApp'
 import { LecturerApp } from './lecturer/LecturerApp'
 import { LoginView } from './login/LoginView'
 import { allowedPath } from './portal/hooks'
-import { ErrorView } from './shared/errors/ErrorView'
+import { ErrorPage } from './shared/errors/ErrorView'
+import { ERROR_STATUSES, type ErrorStatus } from './shared/errors/error-status'
 import { useI18n } from './shared/i18n'
 
 function Brand() {
@@ -85,17 +86,11 @@ function Lab() {
   if (session.isError) {
     const code = session.error instanceof ApiError ? session.error.status : 500
     return (
-      <main className="document" id="main">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Brand />
-          <LangToggleButton />
-        </div>
-        <ErrorView
+        <ErrorPage
           status={code}
           homeHref="/login"
           onStayCurrent={() => void session.refetch()}
         />
-      </main>
     )
   }
   if (!session.data) return <StatusPage title="Memeriksa sesi…"><p role="status">Mohon tunggu sebentar.</p></StatusPage>
@@ -103,17 +98,11 @@ function Lab() {
   const allowed = path === '/lab' || allowedPath(session.data.role, path)
   if (!allowed) {
     return (
-      <main className="document" id="main">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Brand />
-          <LangToggleButton />
-        </div>
-        <ErrorView
+        <ErrorPage
           status={403}
           homeHref={session.data.home_route ?? '/lab'}
           onStayCurrent={() => window.location.reload()}
         />
-      </main>
     )
   }
   return <LabContent user={session.data}/>
@@ -148,6 +137,11 @@ function Information({ help }: { help: boolean }) {
 export default function App() {
   const path = window.location.pathname
   const { tr } = useI18n()
-  useEffect(() => { if (path.startsWith('/lab')) return; document.title = `${path === '/lab' ? 'Ruang praktikum' : path === '/privasi' ? tr.brand.privacy : path === '/bantuan' ? tr.brand.help : 'Masuk'} · IFA Lab` }, [path, tr.brand.help, tr.brand.privacy])
-  return <><a className="skip-link" href="#main">Lewati ke konten utama</a>{path === '/' || path === '/login' ? <LoginView/> : path === '/lab' || path.startsWith('/lab/') ? <Lab/> : path === '/privasi' || path === '/bantuan' ? <Information help={path === '/bantuan'}/> : <main className="document" id="main"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}><Brand /><LangToggleButton /></div><ErrorView status={404} homeHref="/" /></main>}</>
+  useEffect(() => { if (path.startsWith('/lab') || (import.meta.env.DEV && path === '/__preview/errors')) return; document.title = `${path === '/privasi' ? tr.brand.privacy : path === '/bantuan' ? tr.brand.help : path === '/' || path === '/login' ? 'Masuk' : tr.errors[404].title} · IFA Lab` }, [path, tr.brand.help, tr.brand.privacy, tr.errors])
+  // Local design examples only; production keeps normal 404 routing for this path.
+  if (import.meta.env.DEV && path === '/__preview/errors') {
+    const requested = Number(new URLSearchParams(window.location.search).get('status') ?? 404)
+    return <ErrorPage status={ERROR_STATUSES.includes(requested as ErrorStatus) ? requested : 404} homeHref="/login" />
+  }
+  return <><a className="skip-link" href="#main">Lewati ke konten utama</a>{path === '/' || path === '/login' ? <LoginView/> : path === '/lab' || path.startsWith('/lab/') ? <Lab/> : path === '/privasi' || path === '/bantuan' ? <Information help={path === '/bantuan'}/> : <ErrorPage status={404} homeHref="/" />}</>
 }

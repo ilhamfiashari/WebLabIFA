@@ -1,0 +1,66 @@
+.err-document { min-height: 100svh; position: relative; isolation: isolate; overflow: hidden; background: #fbfdfc; color: #143d32; padding: 24px clamp(20px, 5vw, 80px) 0; }
+.err-header { width: min(1180px, 100%); min-height: 52px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.err-brand { display: inline-flex; align-items: center; gap: 12px; color: #144c3b; font-size: 29px; font-weight: 650; letter-spacing: -.04em; }
+.err-brand:hover { text-decoration: none; }
+.err-brand > span { display: grid; place-items: center; width: 44px; height: 44px; background: #146045; color: #fff; border-radius: 11px; }
+.err-language { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #d3e4da; padding: 8px 14px; border-radius: 24px; color: #204e3f; background: #fff; font-size: 14px; font-weight: 600; }
+.err-page { min-height: min(68vh, 640px); display: grid; place-items: center; padding: 28px 16px; }
+.err-card { width: min(850px, 100%); display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; color: #173e33; }
+.err-document .err-page { min-height: calc(100svh - 100px); padding: 10px 0 100px; }
+.err-illustration { width: min(400px, 100%); height: auto; flex-shrink: 0; }
+.err-document .err-illustration { width: min(490px, 85vw); max-height: 310px; }
+.err-code-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 15px; background: #def1e6; color: #146448; border-radius: 24px; font-size: 18px; font-weight: 700; line-height: 1.35; }
+.err-code-dot { width: 7px; height: 7px; border-radius: 50%; background: #398466; }
+.err-code-dot.is-danger { background: #c46b56; }
+.err-title { margin: 0 !important; max-width: 800px; font-size: clamp(27px, 3.3vw, 44px) !important; font-weight: 700 !important; line-height: 1.15; letter-spacing: -.035em; text-wrap: balance; }
+.err-desc { margin: 0; max-width: 64ch; font-size: clamp(16px, 1.4vw, 18px); line-height: 1.65; color: #53635f; text-wrap: pretty; }
+.err-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
+.err-actions :is(a, button) { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 12px 24px; border: 1px solid #1f7859; border-radius: 11px; font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1.4; text-decoration: none; transition: transform 160ms ease, background-color 160ms ease; }
+.err-actions .btn-primary { background: #146347; color: #fff; }
+.err-actions .btn-outline { background: #fff; color: #18513c; }
+.err-actions .btn-primary:hover { background: #0c4e37; }
+.err-actions .btn-outline:hover { background: #eaf5ee; }
+.err-actions :is(a, button):active { transform: scale(.98); }
+.err-document :is(button, a):focus-visible, .err-actions :is(a, button):focus-visible { outline: 3px solid #519a79; outline-offset: 4px; }
+.err-waves { position: absolute; z-index: -1; width: 100%; height: clamp(100px, 20vh, 200px); inset: auto 0 0; pointer-events: none; opacity: .65; }
+.err-banner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line, #e2d6d1); background: var(--bad-bg, #f9eee9); color: var(--ink, #293e34); }
+.err-banner-meta { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 240px; }
+.err-banner .err-code-pill { font-size: 13px; padding: 5px 10px; }
+@media (prefers-reduced-motion: no-preference) {
+  .err-card { animation: error-arrive 550ms cubic-bezier(.16,1,.3,1) both; }
+  .err-browser-float { animation: error-browser 7s ease-in-out infinite; }
+  .err-magnifier { animation: error-lens 9s ease-in-out infinite; transform-origin: 416px 258px; }
+  .err-orbit { animation: error-orbit 18s ease-in-out infinite; transform-origin: 300px 200px; }
+  .err-leaves { animation: error-leaves 8s ease-in-out infinite; transform-origin: 300px 325px; }
+  .err-clock-hand { animation: error-clock 30s linear infinite; transform-box: fill-box; transform-origin: center bottom; }
+  .err-tool-sway { animation: error-tool 7s ease-in-out infinite; transform-origin: 420px 267px; }
+  .err-scan-line { animation: error-scan 6s ease-in-out infinite; }
+  .err-packet-shift { animation: error-packet 5s ease-in-out infinite; }
+  .err-server-led, .err-signal { animation: error-status-light 4s ease-in-out infinite; }
+  .err-routing-loop { animation: error-clock 24s linear infinite; transform-origin: 301px 204px; }
+  .err-sand { animation: error-sand 2s linear infinite; }
+  .err-disconnect, .err-upload { animation: error-tool 8s ease-in-out infinite; transform-origin: 300px 260px; }
+}
+@keyframes error-clock { to { transform: rotate(360deg); } }
+@keyframes error-tool { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes error-scan { 0%,100% { transform: translateY(0); opacity: .3; } 50% { transform: translateY(85px); opacity: .7; } }
+@keyframes error-packet { 0%,100% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+@keyframes error-status-light { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes error-sand { to { stroke-dashoffset: -22; } }
+@keyframes error-arrive { from { opacity: .4; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes error-browser { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes error-lens { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-4deg) translateY(-2px); } }
+@keyframes error-orbit { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(4deg); } }
+@keyframes error-leaves { 0%, 100% { transform: skewX(0); } 50% { transform: skewX(1.5deg); } }
+@media (max-width: 600px) {
+  .err-document { padding-top: 18px; }
+  .err-brand { font-size: 24px; gap: 9px; }
+  .err-brand > span { width: 38px; height: 38px; border-radius: 9px; }
+  .err-language { padding: 8px 10px; font-size: 13px; }
+  .err-document .err-page { padding: 24px 0 100px; }
+  .err-card { gap: 15px; }
+  .err-actions { width: 100%; gap: 10px; margin-top: 8px; }
+  .err-actions :is(a, button) { min-height: 48px; padding: 11px 15px; font-size: 14px; }
+  .err-title { font-size: 28px !important; }
+  .err-illustration { max-height: 230px; }
+}
