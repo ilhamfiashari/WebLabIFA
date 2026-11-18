@@ -49,7 +49,7 @@ export function WebCatalogPage({
         description={
           mode === 'dosen'
             ? '11 modul OWASP A01–A10 mode simulasi Dosen: seluruh 4 level kesulitan (Low hingga Impossible) terbuka langsung tanpa gamifikasi.'
-            : '11 lab interaktif mencakup kategori A01–A10 dengan 4 level bertahap gaya DVWA, OWASP Juice Shop, dan WebGoat.'
+            : '11 lab interaktif mencakup kategori A01–A10 dengan 4 level kesulitan bertahap (Low hingga Impossible).'
         }
         actions={
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -325,7 +325,7 @@ export function LabDetailPage({
       <section className="card" style={{ display: 'grid', gap: 12 }}>
         <div className="card-head">
           <div>
-            <h2>Pilih Tingkat Kesulitan (4 Level Bertahap · Gaya DVWA &amp; WebGoat)</h2>
+            <h2>Pilih Tingkat Kesulitan (4 Level Bertahap)</h2>
             <p>
               {mode === 'dosen'
                 ? 'Mode Dosen: seluruh level dari Low hingga Impossible terbuka langsung tanpa penguncian dan tanpa gamifikasi.'

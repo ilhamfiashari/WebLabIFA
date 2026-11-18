@@ -683,7 +683,7 @@ test('halaman error konsisten memiliki tombol kembali ke halaman sekarang dan be
   await expect(page.getByRole('button', { name: 'Back to Home' })).toBeVisible()
 })
 
-test('webgoat target form login SQL injection dan leaderboard dosen berfungsi', async ({ page }) => {
+test('target form login SQL injection dan leaderboard dosen berfungsi', async ({ page }) => {
   await page.route('**/api/me', r => r.fulfill({ json: student }))
   await buildMockSimulatorRoutes(page)()
   await page.route('**/api/labs/sessions/ses-sqli-1/probe', async r => {
@@ -993,4 +993,67 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   // Simpan proyek ke database
   await page.getByRole('button', { name: 'Simpan Proyek' }).click()
   await expect(page.getByText(/berhasil disimpan ke database/)).toBeVisible()
+
+  // Tambah Breadboard realistis (half 400-pt tanpa label pin bertumpuk) & uji Mode Fokus + Fullscreen
+  await page.getByRole('tab', { name: 'Components' }).click()
+  await page.getByRole('button', { name: 'Tambah Breadboard ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(30)
+
+  await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Fokus Studio' }).click()
+  await expect(page.locator('.iot-studio')).toHaveClass(/is-focus-focus/)
+  await expect(page.getByLabel('Bar Mode Fokus')).toBeVisible()
+
+  await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Fokus Kanvas' }).click()
+  await expect(page.locator('.iot-studio')).toHaveClass(/is-focus-canvas/)
+  await expect(page.locator('.iot-left-panel')).toHaveCount(0)
+
+  await page.getByLabel('Bar Mode Fokus').getByRole('button', { name: 'Layar Penuh' }).click()
+  await expect(page.locator('.iot-studio')).toHaveClass(/is-fullscreen/)
+  await page.getByLabel('Bar Mode Fokus').getByRole('button', { name: 'Keluar Layar Penuh' }).click()
+  await expect(page.locator('.iot-studio')).not.toHaveClass(/is-fullscreen/)
+  await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Normal' }).click()
+  await expect(page.locator('.iot-left-panel')).toBeVisible()
+})
+
+test('halaman simulator web bersih dari label DVWA dan WebGoat', async ({ page }) => {
+  await page.route('**/api/me', r => r.fulfill({ json: student }))
+  await buildMockSimulatorRoutes(page)()
+  await page.route('**/api/labs/a05-sqli', r =>
+    r.fulfill({
+      json: {
+        id: 'a05-sqli',
+        track: 'web',
+        owasp_code: 'A05',
+        title: 'SQL Injection & Query Builder Aman',
+        subtitle: 'Pencarian katalog produk.',
+        objective: 'Mengamankan query pencarian.',
+        context: 'Katalog produk publik.',
+        cwe_id: 'CWE-89',
+        wstg_ref: 'WSTG-INPV-05',
+        asvs_ref: 'ASVS V5.3',
+        estimated_minutes: 20,
+        prerequisite: 'Tidak ada',
+        fixture_actors: ['pengunjung'],
+        trust_nodes: [],
+        trust_edges: [],
+        code_stacks: [],
+        gamification_enabled: true,
+        solution_unlocked: false,
+        official_summary: null,
+        levels: [
+          { level: 'easy', label: 'Easy', xp: 50, title: 'Level Low', scenario: 'Tanpa proteksi', initial_control: 'Kosong', expected_baseline: '1 baris', expected_exploit: 'Semua baris', passed: false, unlocked: true, unlock_requirement: null, best_score: null, active_session_id: null, current_step: null },
+        ],
+      },
+    }),
+  )
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab')
+  await expect(page.getByRole('heading', { name: /OWASP Top 10/ })).toBeVisible()
+  const catalogBody = await page.locator('main').innerText()
+  expect(catalogBody).not.toMatch(/dvwa|webgoat/i)
+
+  await page.goto('/lab/web/A05/a05-sqli')
+  await expect(page.getByRole('heading', { name: 'Pilih Tingkat Kesulitan (4 Level Bertahap)' })).toBeVisible()
+  const detailBody = await page.locator('main').innerText()
+  expect(detailBody).not.toMatch(/dvwa|webgoat/i)
 })

@@ -44,7 +44,7 @@ WebLabIFA/
 │   │   ├── admin/          # Admin portal & live security/anomaly monitor
 │   │   ├── lecturer/       # Lecturer analytics, grading drawer & leaderboard
 │   │   ├── student/        # Student dashboard, assignments, achievements & history
-│   │   ├── simulator/      # Interactive OWASP WebGoat-style & IoT Studio workspace
+│   │   ├── simulator/      # Interactive OWASP & IoT Studio workspace
 │   │   ├── shared/         # Bilingual i18n, animated charts, errors & MFA settings
 │   │   └── portal/         # Shared shell, pagination component & responsive CSS
 │   ├── tests/              # Playwright E2E test suites
