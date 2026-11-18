@@ -9,12 +9,14 @@ import {
   PanelLeftClose,
   Pause,
   Play,
+  Redo2,
   RotateCcw,
   RotateCw,
   Shrink,
   Sparkles,
   Trash2,
   Type,
+  Undo2,
   X,
   ZoomIn,
   ZoomOut,
@@ -249,6 +251,12 @@ export function CircuitCanvas({
   onDuplicateNode,
   onSelectPrimaryBoard,
   onSelectMcuCode,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  onGestureStart,
+  onGestureEnd,
   focusMode = 'normal',
   onChangeFocusMode,
   isFullscreen = false,
@@ -274,6 +282,12 @@ export function CircuitCanvas({
   onDuplicateNode?: (nodeId: string) => void
   onSelectPrimaryBoard?: (boardId: BoardId) => void
   onSelectMcuCode?: (nodeId: string) => void
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
+  onGestureStart?: () => void
+  onGestureEnd?: () => void
   focusMode?: 'normal' | 'focus' | 'canvas'
   onChangeFocusMode?: (mode: 'normal' | 'focus' | 'canvas') => void
   isFullscreen?: boolean
@@ -350,8 +364,36 @@ export function CircuitCanvas({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      const isTextInput =
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (tag === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes((target as HTMLInputElement).type))
+      if (isTextInput) return
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        const k = e.key.toLowerCase()
+        if (k === 'z') {
+          e.preventDefault()
+          if (e.shiftKey) {
+            onRedo?.()
+          } else if (selectedPin || drawingPreview) {
+            setSelectedPin(null)
+            setDrawingPreview(null)
+            setSnapHighlight(null)
+          } else {
+            onUndo?.()
+          }
+          return
+        }
+        if (k === 'y' && !e.shiftKey) {
+          e.preventDefault()
+          onRedo?.()
+          return
+        }
+      }
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedWireId) {
           onDeleteWire(selectedWireId)
@@ -398,7 +440,21 @@ export function CircuitCanvas({
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [selectedWireId, selectedNodeId, components, sim.running, onUpdateComponent, onUpdateProps, onDuplicateNode, onDeleteWire, onDeleteNode])
+  }, [
+    selectedPin,
+    drawingPreview,
+    selectedWireId,
+    selectedNodeId,
+    components,
+    sim.running,
+    onUpdateComponent,
+    onUpdateProps,
+    onDuplicateNode,
+    onDeleteWire,
+    onDeleteNode,
+    onUndo,
+    onRedo,
+  ])
 
   const onPinPointerDown = (ep: WireEndpoint, clientX: number, clientY: number) => {
     suppressNextClickRef.current = false
@@ -539,6 +595,7 @@ export function CircuitCanvas({
       const dist = Math.hypot(e.clientX - d.startClientX, e.clientY - d.startClientY)
       if (dist > 4) d.moved = true
       if (!d.moved) return
+      onGestureStart?.()
       const dx = (e.clientX - d.startClientX) / zoom
       const dy = (e.clientY - d.startClientY) / zoom
       const nx = Math.max(12, Math.min(SVG_W - 70, Math.round((d.origX + dx) / 6) * 6))
@@ -549,6 +606,7 @@ export function CircuitCanvas({
 
     if (waypointDragRef.current) {
       const wd = waypointDragRef.current
+      onGestureStart?.()
       const clampedX = Math.max(10, Math.min(SVG_W - 10, Math.round(pt.x / 4) * 4))
       const clampedY = Math.max(10, Math.min(SVG_H - 10, Math.round(pt.y / 4) * 4))
       const next = wd.waypoints.map((wp, idx) => (idx === wd.index ? { x: clampedX, y: clampedY } : wp))
@@ -563,6 +621,7 @@ export function CircuitCanvas({
       const delta = curAngle - rd.startAngleDeg
       if (Math.abs(delta) > 3) rd.moved = true
       if (!rd.moved) return
+      onGestureStart?.()
       let nextDeg = ((Math.round(rd.origRotate + delta) % 360) + 360) % 360
       if (e.shiftKey) {
         nextDeg = (Math.round(nextDeg / 45) * 45) % 360
@@ -580,6 +639,7 @@ export function CircuitCanvas({
 
   const endDrag = (e?: React.PointerEvent<SVGSVGElement>) => {
     setSnapHighlight(null)
+    onGestureEnd?.()
     if (rotateDragRef.current) {
       const finished = rotateDragRef.current
       rotateDragRef.current = null
@@ -691,6 +751,38 @@ export function CircuitCanvas({
           <button type="button" className="iot-pill-btn" onClick={onReset} title={en ? 'Reset simulation' : 'Reset simulasi'}>
             <RotateCcw size={14} />
             <span>Reset</span>
+          </button>
+
+          <span className="iot-pill-divider" aria-hidden="true" />
+
+          <button
+            type="button"
+            className="iot-pill-btn"
+            disabled={!canUndo && !activeStartPin}
+            onClick={() => {
+              if (activeStartPin) {
+                setSelectedPin(null)
+                setDrawingPreview(null)
+                setSnapHighlight(null)
+                return
+              }
+              onUndo?.()
+            }}
+            title={activeStartPin ? (en ? 'Cancel wire (Esc / Ctrl+Z)' : 'Batal tarik kabel (Esc / Ctrl+Z)') : (en ? 'Undo (Ctrl+Z)' : 'Urungkan / Undo (Ctrl+Z)')}
+            aria-label={en ? 'Undo (Ctrl+Z)' : 'Undo (Ctrl+Z)'}
+          >
+            <Undo2 size={14} />
+          </button>
+
+          <button
+            type="button"
+            className="iot-pill-btn"
+            disabled={!canRedo}
+            onClick={() => onRedo?.()}
+            title={en ? 'Redo (Ctrl+Y / Ctrl+Shift+Z)' : 'Ulangi / Redo (Ctrl+Y / Ctrl+Shift+Z)'}
+            aria-label={en ? 'Redo (Ctrl+Y)' : 'Redo (Ctrl+Y)'}
+          >
+            <Redo2 size={14} />
           </button>
 
           <span className="iot-pill-divider" aria-hidden="true" />

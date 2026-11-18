@@ -707,6 +707,11 @@
   color: var(--bg);
 }
 
+.iot-pill-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
 .iot-canvas-subbar {
   display: grid;
   gap: 6px;
