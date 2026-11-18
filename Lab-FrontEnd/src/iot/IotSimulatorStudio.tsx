@@ -31,6 +31,11 @@ import { simApi } from '../simulator/api'
 import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getComponentSpec } from './boards'
 import { CircuitCanvas } from './CircuitCanvas'
 import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
+import {
+  applyAutocompleteItem,
+  getArduinoAutocomplete,
+  type AcSuggestion,
+} from './cppAutocomplete'
 import { tokenizeArduinoCpp } from './cppHighlight'
 import {
   compileArduinoSketch,
@@ -173,6 +178,50 @@ export function IotSimulatorStudio({
   }
   const componentsRef = useRef(components)
   const wiresRef = useRef(wires)
+  const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [acState, setAcState] = useState<{
+    replaceStart: number
+    replaceEnd: number
+    items: AcSuggestion[]
+    activeIndex: number
+    topPx: number
+    leftPx: number
+  } | null>(null)
+
+  const refreshAutocomplete = (nextCode: string, cursor: number | null, force = false) => {
+    if (cursor === null || cursor < 0) {
+      setAcState(null)
+      return
+    }
+    const res = getArduinoAutocomplete(nextCode, cursor, force)
+    if (!res) {
+      setAcState(null)
+      return
+    }
+    const beforeLines = nextCode.slice(0, cursor).split('\n')
+    const lineIdx = beforeLines.length - 1
+    const colIdx = beforeLines[lineIdx]?.length ?? 0
+    setAcState({
+      ...res,
+      activeIndex: 0,
+      topPx: lineIdx * 19.375 + 34,
+      leftPx: Math.min(Math.max(8, colIdx * 7.5 + 10), 140),
+    })
+  }
+
+  const acceptAutocomplete = (item: AcSuggestion) => {
+    if (!acState) return
+    const { nextCode, nextCursor } = applyAutocompleteItem(code, acState.replaceStart, acState.replaceEnd, item)
+    setCode(nextCode)
+    setAcState(null)
+    requestAnimationFrame(() => {
+      const ta = codeTextareaRef.current
+      if (ta) {
+        ta.focus()
+        ta.setSelectionRange(nextCursor, nextCursor)
+      }
+    })
+  }
   useEffect(() => {
     componentsRef.current = components
   }, [components])
@@ -854,9 +903,12 @@ export function IotSimulatorStudio({
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
                   <Code2 size={14} /> &lt;/&gt; Main.ino
                 </span>
-                <Badge tone={simState.compileError ? 'bad' : 'good'}>
-                  {simState.compileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[boardId].shortName} C++`}
-                </Badge>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="muted" style={{ fontSize: 11 }}>Ctrl+Space</span>
+                  <Badge tone={simState.compileError ? 'bad' : 'good'}>
+                    {simState.compileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[boardId].shortName} C++`}
+                  </Badge>
+                </div>
               </div>
               {simState.compileError ? (
                 <div className="iot-compile-error">{simState.compileError}</div>
@@ -879,13 +931,83 @@ export function IotSimulatorStudio({
                     </code>
                   </pre>
                   <textarea
+                    ref={codeTextareaRef}
                     aria-label={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
                     className="iot-code-textarea"
                     spellCheck={false}
                     wrap="off"
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
+                    aria-autocomplete="list"
+                    aria-expanded={Boolean(acState)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      const cursor = e.target.selectionStart
+                      setCode(val)
+                      refreshAutocomplete(val, cursor, false)
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+                        e.preventDefault()
+                        refreshAutocomplete(e.currentTarget.value, e.currentTarget.selectionStart, true)
+                        return
+                      }
+                      if (!acState) return
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        setAcState((prev) =>
+                          prev ? { ...prev, activeIndex: (prev.activeIndex + 1) % prev.items.length } : null,
+                        )
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        setAcState((prev) =>
+                          prev
+                            ? { ...prev, activeIndex: (prev.activeIndex - 1 + prev.items.length) % prev.items.length }
+                            : null,
+                        )
+                      } else if (e.key === 'Enter' || e.key === 'Tab') {
+                        e.preventDefault()
+                        const item = acState.items[acState.activeIndex]
+                        if (item) acceptAutocomplete(item)
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setAcState(null)
+                      }
+                    }}
+                    onBlur={() => setAcState(null)}
                   />
+                  {acState ? (
+                    <div
+                      className="iot-ac-popup"
+                      role="listbox"
+                      aria-label={en ? 'Code suggestions' : 'Saran kode C++'}
+                      style={{ top: acState.topPx, left: acState.leftPx }}
+                    >
+                      {acState.items.map((item, idx) => (
+                        <button
+                          key={`${item.kind}-${item.label}`}
+                          type="button"
+                          role="option"
+                          aria-selected={idx === acState.activeIndex}
+                          className={`iot-ac-item ${idx === acState.activeIndex ? 'is-active' : ''}`}
+                          onMouseEnter={() =>
+                            setAcState((prev) => (prev ? { ...prev, activeIndex: idx } : null))
+                          }
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            acceptAutocomplete(item)
+                          }}
+                        >
+                          <span className={`iot-ac-kind is-${item.kind}`}>{item.kind}</span>
+                          <span className="iot-ac-label">{item.label}</span>
+                          <span className="iot-ac-detail">{en ? item.detailEn : item.detailId}</span>
+                        </button>
+                      ))}
+                      <div className="iot-ac-hint">
+                        ↑↓ {en ? 'select' : 'pilih'} · Enter/Tab {en ? 'insert' : 'sisipkan'} · Esc {en ? 'close' : 'tutup'}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

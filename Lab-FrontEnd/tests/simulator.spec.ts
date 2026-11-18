@@ -891,6 +891,23 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   expect(preprocColor).not.toBe('rgb(30, 41, 59)')
   expect(commentColor).not.toBe(preprocColor)
 
+  // Autocomplete suggestion muncul saat mengetik kode C++/Arduino dan dapat disisipkan via Enter
+  const codeEditor = page.getByLabel('Kode program mikrokontroler')
+  const originalCode = await codeEditor.inputValue()
+  await codeEditor.click()
+  await codeEditor.evaluate((el: HTMLTextAreaElement) => {
+    el.selectionStart = el.value.length
+    el.selectionEnd = el.value.length
+  })
+  await page.keyboard.type('\n  dig')
+  const acBox = page.getByRole('listbox', { name: 'Saran kode C++' })
+  await expect(acBox).toBeVisible()
+  await expect(acBox.getByRole('option', { name: /digitalWrite/ })).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(acBox).toHaveCount(0)
+  await expect(codeEditor).toHaveValue(/digitalWrite\(\)/)
+  await codeEditor.fill(originalCode)
+
   // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive
   await page.getByRole('tab', { name: 'Components' }).click()
   await expect(page.getByRole('button', { name: 'Microcontrollers' })).toBeVisible()
