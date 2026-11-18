@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -179,6 +179,7 @@ export function IotSimulatorStudio({
   const [pinnedKinds, setPinnedKinds] = useState<ComponentKind[]>(['led', 'pushbutton'])
   const [showSavedDrawer, setShowSavedDrawer] = useState(false)
   const [focusMode, setFocusMode] = useState<'normal' | 'focus' | 'canvas'>('normal')
+  const [splitWidth, setSplitWidth] = useState<number>(420)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [statusNotice, setStatusNotice] = useState<string | null>(null)
   const [diagnostics, setDiagnostics] = useState<CircuitDiagnosticItem[] | null>(null)
@@ -190,6 +191,7 @@ export function IotSimulatorStudio({
   const [loopIterations, setLoopIterations] = useState(0)
 
   const studioRef = useRef<HTMLDivElement | null>(null)
+  const workbenchRef = useRef<HTMLDivElement | null>(null)
   const vmRef = useRef<VmContext | null>(null)
   const liveCircuitRef = useRef<CircuitSnapshot>({
     boardId: initialPreset.board,
@@ -716,7 +718,73 @@ export function IotSimulatorStudio({
   })
 
   const audioCtxRef = useRef<AudioContext | null>(null)
-  const buzzerSoundRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null)
+  const buzzerSoundRef = useRef<{ osc: OscillatorNode; filter: BiquadFilterNode; gain: GainNode } | null>(null)
+  const audioOnRef = useRef(audioOn)
+  const immediateStepQueuedRef = useRef(false)
+
+  useEffect(() => {
+    audioOnRef.current = audioOn
+  }, [audioOn])
+
+  const stopBuzzerSound = useCallback(() => {
+    const node = buzzerSoundRef.current
+    if (!node) return
+    try {
+      node.gain.gain.setTargetAtTime(0, node.gain.context.currentTime, 0.008)
+      node.osc.stop(node.gain.context.currentTime + 0.025)
+    } catch {
+      // ignore already-stopped oscillator
+    }
+    buzzerSoundRef.current = null
+  }, [])
+
+  const syncBuzzerAudio = useCallback((
+    buzzerMap: Record<string, { freq: number; active: boolean }>,
+    isRunning: boolean,
+    isAudioOn: boolean,
+  ) => {
+    const entry = Object.entries(buzzerMap).find(([, b]) => b.active)
+    if (!isAudioOn || !isRunning || !entry) {
+      stopBuzzerSound()
+      return
+    }
+    const ctx = audioCtxRef.current
+    if (!ctx || ctx.state === 'closed') return
+    if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {})
+    }
+    const [buzzId, active] = entry
+    const comp = componentsRef.current.find((c) => c.id === buzzId)
+    const freq = Math.max(80, Math.min(4000, active.freq || 1000))
+    const vol = Math.max(0.01, Math.min(1, comp?.props.buzzerVolume ?? 1))
+    const isAccurate = comp?.props.buzzerMode === 'accurate'
+    const filterFreq = isAccurate ? 12000 : 2600
+
+    try {
+      if (!buzzerSoundRef.current) {
+        const osc = ctx.createOscillator()
+        const filter = ctx.createBiquadFilter()
+        const gain = ctx.createGain()
+        osc.type = 'square'
+        osc.frequency.setValueAtTime(freq, ctx.currentTime)
+        filter.type = 'lowpass'
+        filter.frequency.setValueAtTime(filterFreq, ctx.currentTime)
+        gain.gain.setValueAtTime(0.22 * vol, ctx.currentTime)
+        osc.connect(filter)
+        filter.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start()
+        buzzerSoundRef.current = { osc, filter, gain }
+      } else {
+        const { osc, filter, gain } = buzzerSoundRef.current
+        osc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.006)
+        filter.frequency.setTargetAtTime(filterFreq, ctx.currentTime, 0.006)
+        gain.gain.setTargetAtTime(0.22 * vol, ctx.currentTime, 0.006)
+      }
+    } catch {
+      stopBuzzerSound()
+    }
+  }, [stopBuzzerSound])
 
   const unlockAudio = (): AudioContext | null => {
     try {
@@ -725,62 +793,40 @@ export function IotSimulatorStudio({
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
         audioCtxRef.current = new AudioCtx()
       }
-      if (audioCtxRef.current.state === 'suspended') {
-        void audioCtxRef.current.resume().catch(() => {})
+      const ctx = audioCtxRef.current
+      if (ctx.state === 'suspended') {
+        void ctx
+          .resume()
+          .then(() => {
+            const vm = vmRef.current
+            if (vm?.sim.running) syncBuzzerAudio(vm.sim.buzzerActive, true, audioOnRef.current)
+          })
+          .catch(() => {})
       }
-      return audioCtxRef.current
+      return ctx
     } catch {
       return null
     }
   }
 
-  const stopBuzzerSound = () => {
-    const node = buzzerSoundRef.current
-    if (!node) return
-    try {
-      node.gain.gain.setTargetAtTime(0, node.gain.context.currentTime, 0.01)
-      node.osc.stop(node.gain.context.currentTime + 0.03)
-    } catch {
-      // ignore already-stopped oscillator
-    }
-    buzzerSoundRef.current = null
+  const triggerImmediateVmStep = () => {
+    if (immediateStepQueuedRef.current || !vmRef.current) return
+    immediateStepQueuedRef.current = true
+    queueMicrotask(() => {
+      immediateStepQueuedRef.current = false
+      const vm = vmRef.current
+      if (!vm || !vm.sim.running) return
+      const cur = liveCircuitRef.current
+      stepLoop(vm, cur.components, cur.wires)
+      syncBuzzerAudio(vm.sim.buzzerActive, true, audioOnRef.current)
+      setLoopIterations(vm.loopIterations)
+      setSimState({ ...vm.sim, running: true })
+    })
   }
 
   useEffect(() => {
-    const entry = Object.entries(simState.buzzerActive).find(([, b]) => b.active)
-    if (!audioOn || !simState.running || !entry) {
-      stopBuzzerSound()
-      return
-    }
-    const [buzzId, active] = entry
-    const comp = componentsRef.current.find((c) => c.id === buzzId)
-    const freq = Math.max(80, Math.min(4000, active.freq || 1000))
-    const vol = Math.max(0.01, Math.min(1, comp?.props.buzzerVolume ?? 1))
-    const wave: OscillatorType = comp?.props.buzzerMode === 'accurate' ? 'square' : 'triangle'
-
-    const ctx = unlockAudio()
-    if (!ctx) return
-    try {
-      if (!buzzerSoundRef.current) {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.type = wave
-        osc.frequency.value = freq
-        gain.gain.value = 0.08 * vol
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.start()
-        buzzerSoundRef.current = { osc, gain }
-      } else {
-        const { osc, gain } = buzzerSoundRef.current
-        if (osc.type !== wave) osc.type = wave
-        osc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.008)
-        gain.gain.setTargetAtTime(0.08 * vol, ctx.currentTime, 0.008)
-      }
-    } catch {
-      stopBuzzerSound()
-    }
-  }, [audioOn, simState.running, simState.buzzerActive])
+    syncBuzzerAudio(simState.buzzerActive, simState.running, audioOn)
+  }, [audioOn, simState.running, simState.buzzerActive, syncBuzzerAudio])
 
   useEffect(() => {
     return () => {
@@ -791,7 +837,7 @@ export function IotSimulatorStudio({
         // ignore close error
       }
     }
-  }, [])
+  }, [stopBuzzerSound])
 
   useEffect(() => {
     if (!simState.running) return
@@ -801,6 +847,7 @@ export function IotSimulatorStudio({
     const tick = () => {
       if (cancelled || !vmRef.current) return
       const nextDelay = stepLoop(vmRef.current, componentsRef.current, wiresRef.current)
+      syncBuzzerAudio(vmRef.current.sim.buzzerActive, true, audioOnRef.current)
       setLoopIterations(vmRef.current.loopIterations)
       setSimState({ ...vmRef.current.sim, running: true })
       timerId = window.setTimeout(tick, Math.max(70, Math.round(nextDelay / speed)))
@@ -811,7 +858,7 @@ export function IotSimulatorStudio({
       cancelled = true
       window.clearTimeout(timerId)
     }
-  }, [simState.running, speed])
+  }, [simState.running, speed, syncBuzzerAudio])
 
   const availablePresets = useMemo(
     () => IOT_PRESETS.filter((p) => !p.dosenOnly || mode === 'dosen'),
@@ -947,6 +994,7 @@ export function IotSimulatorStudio({
     stepLoop(ctx, components, wires)
     ctx.sim.running = true
     vmRef.current = ctx
+    syncBuzzerAudio(ctx.sim.buzzerActive, true, audioOnRef.current)
     setLoopIterations(ctx.loopIterations)
     setSimState({ ...ctx.sim })
   }
@@ -1144,6 +1192,12 @@ export function IotSimulatorStudio({
     <div
       ref={studioRef}
       className={`iot-studio ${isFullscreen ? 'is-fullscreen' : ''} ${focusMode !== 'normal' ? `is-focus-${focusMode}` : ''}`}
+      onPointerDownCapture={() => {
+        if (audioOnRef.current) unlockAudio()
+      }}
+      onKeyDownCapture={() => {
+        if (audioOnRef.current) unlockAudio()
+      }}
     >
       {focusMode === 'normal' && !isFullscreen ? (
         <PageHead
@@ -1370,8 +1424,12 @@ export function IotSimulatorStudio({
       </section>
       ) : null}
 
-      {/* Split Workbench matching iotsimulator.net: Left Tabbed Panel | Right Circuit Canvas */}
-      <div className="iot-workbench-grid">
+      {/* Split Workbench matching iotsimulator.net: Left Tabbed Panel | Draggable Resizer | Right Circuit Canvas */}
+      <div
+        ref={workbenchRef}
+        className="iot-workbench-grid"
+        style={focusMode !== 'canvas' ? ({ '--iot-left-width': `${splitWidth}px` } as CSSProperties) : undefined}
+      >
         {/* LEFT PANE: Main.ino | Components | Terminal */}
         {focusMode !== 'canvas' ? (
         <section className="card iot-left-panel">
@@ -2172,6 +2230,50 @@ export function IotSimulatorStudio({
         </section>
         ) : null}
 
+        {focusMode !== 'canvas' ? (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={en ? 'Resize code editor and canvas panes' : 'Geser untuk memperlebar panel kode atau kanvas'}
+            aria-valuemin={280}
+            aria-valuemax={780}
+            aria-valuenow={splitWidth}
+            tabIndex={0}
+            title={en ? 'Drag left/right to resize panes (double-click resets)' : 'Geser kiri/kanan untuk memperlebar panel (klik 2× reset)'}
+            className="iot-split-resizer"
+            onDoubleClick={() => setSplitWidth(420)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowLeft') {
+                e.preventDefault()
+                setSplitWidth((w) => Math.max(280, w - 24))
+              } else if (e.key === 'ArrowRight') {
+                e.preventDefault()
+                setSplitWidth((w) => Math.min(780, w + 24))
+              }
+            }}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              const startX = e.clientX
+              const startWidth = splitWidth
+              const maxW = Math.max(460, Math.round((workbenchRef.current?.clientWidth ?? 1200) * 0.65))
+              document.body.style.cursor = 'col-resize'
+              const onMove = (ev: PointerEvent) => {
+                const next = Math.max(280, Math.min(maxW, Math.round(startWidth + (ev.clientX - startX))))
+                setSplitWidth(next)
+              }
+              const onUp = () => {
+                document.body.style.cursor = ''
+                window.removeEventListener('pointermove', onMove)
+                window.removeEventListener('pointerup', onUp)
+              }
+              window.addEventListener('pointermove', onMove)
+              window.addEventListener('pointerup', onUp)
+            }}
+          >
+            <span className="iot-split-grip" aria-hidden="true" />
+          </div>
+        ) : null}
+
         {/* RIGHT PANE: Floating Pill Toolbar + Circuit Canvas + Live Check/Serial Strip */}
         <div className="iot-canvas-column">
           <CircuitCanvas
@@ -2213,6 +2315,9 @@ export function IotSimulatorStudio({
               const nextComps = cur.components.map((c) => (c.id === id ? { ...c, props: { ...c.props, ...patch } } : c))
               liveCircuitRef.current = { ...cur, components: nextComps }
               setComponents(nextComps)
+              if (simState.running && vmRef.current) {
+                triggerImmediateVmStep()
+              }
             }}
             onAddWire={(from: WireEndpoint, to: WireEndpoint) => {
               pushCircuitUndo()

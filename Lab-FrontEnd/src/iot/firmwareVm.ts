@@ -470,6 +470,8 @@ export interface VmContext {
   localGpio: Record<number, GpioRuntime>
   servoPinMap: Record<string, number>
   tonePins: Record<number, number>
+  toneStartedAtDelay: Record<number, number>
+  toneBurstPins: Record<number, { freq: number; untilMs: number }>
   serialRxQueue: string[]
   oledBuffer: string[]
   oledStarted: boolean
@@ -565,6 +567,8 @@ export function createVmContext(
     localGpio: sim.gpioStates,
     servoPinMap: {},
     tonePins: {},
+    toneStartedAtDelay: {},
+    toneBurstPins: {},
     serialRxQueue: [],
     oledBuffer: [],
     oledStarted: false,
@@ -591,6 +595,8 @@ export function createVmContext(
       localGpio: buildBoardGpioMap(peerBoard),
       servoPinMap: {},
       tonePins: {},
+      toneStartedAtDelay: {},
+      toneBurstPins: {},
       serialRxQueue: [],
       oledBuffer: [],
       oledStarted: false,
@@ -958,9 +964,19 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
     } else if (fn === 'tone') {
       const gpio = Number(args[0] ?? 0)
       const freq = Math.max(80, Math.min(5000, Number(args[1] ?? 1000)))
-      ctx.tonePins[gpio] = freq
+      const durArg = args.length >= 3 ? Number(args[2] ?? 0) : 0
+      if (durArg > 0) {
+        ctx.tonePins[gpio] = 0
+        ctx.toneBurstPins[gpio] = {
+          freq,
+          untilMs: Date.now() + Math.max(120, Math.min(2000, durArg)),
+        }
+      } else {
+        ctx.tonePins[gpio] = freq
+        ctx.toneStartedAtDelay[gpio] = delayAccum
+      }
       const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer') ?? components.find((c) => c.kind === 'buzzer')
-      if (buzz) ctx.sim.buzzerActive[buzz.id] = { freq, active: true }
+      if (buzz) ctx.sim.buzzerActive = { ...ctx.sim.buzzerActive, [buzz.id]: { freq, active: true } }
       ctx.localGpio[gpio] = {
         ...(ctx.localGpio[gpio] ?? { gpio, mode: 'PWM', adcValue: 0 }),
         mode: 'PWM',
@@ -970,9 +986,22 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       }
     } else if (fn === 'noTone') {
       const gpio = Number(args[0] ?? 0)
+      const activeFreq = ctx.tonePins[gpio] ?? 0
+      const startedAt = ctx.toneStartedAtDelay[gpio]
+      if (activeFreq > 0 && startedAt !== undefined && delayAccum > startedAt) {
+        const pulseDur = Math.max(320, Math.min(800, delayAccum - startedAt))
+        ctx.toneBurstPins[gpio] = { freq: activeFreq, untilMs: Date.now() + pulseDur }
+      }
       ctx.tonePins[gpio] = 0
       const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer') ?? components.find((c) => c.kind === 'buzzer')
-      if (buzz) ctx.sim.buzzerActive[buzz.id] = { freq: 0, active: false }
+      if (buzz) {
+        const burst = ctx.toneBurstPins[gpio]
+        const burstActive = Boolean(burst && burst.untilMs > Date.now())
+        ctx.sim.buzzerActive = {
+          ...ctx.sim.buzzerActive,
+          [buzz.id]: burstActive ? { freq: burst.freq, active: true } : { freq: 0, active: false },
+        }
+      }
       if (ctx.localGpio[gpio]) {
         ctx.localGpio[gpio] = { ...ctx.localGpio[gpio], digital: 0, pwmDuty: 0, voltage: 0 }
       }
@@ -1119,6 +1148,8 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
     })
   }
 
+  const nextBuzzers: Record<string, { freq: number; active: boolean }> = {}
+  const nowMs = Date.now()
   for (const c of components) {
     if (c.kind === 'led') {
       const anodePin = c.props.flip ? 'K' : 'A'
@@ -1165,7 +1196,12 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
           const bp = getBoardPin(rb, r.pinId)
           if (!bp || bp.gpio === undefined) continue
           const owner = ctx.allNodes?.get(r.nodeId) ?? ctx
-          const tf = owner.tonePins[bp.gpio] ?? 0
+          let tf = owner.tonePins[bp.gpio] ?? 0
+          if (tf <= 0) {
+            const burst = owner.toneBurstPins[bp.gpio]
+            if (burst && burst.untilMs > nowMs) tf = burst.freq
+            else if (burst) delete owner.toneBurstPins[bp.gpio]
+          }
           if (tf > 0) f = tf
         }
         return f
@@ -1180,9 +1216,10 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
       const reverseActive = swapGndOk && (swapTone > 0 || swapSig.duty > 0)
       const active = forwardActive || reverseActive
       const freq = forwardActive ? (posTone > 0 ? posTone : 1000) : reverseActive ? (swapTone > 0 ? swapTone : 1000) : 0
-      ctx.sim.buzzerActive[c.id] = { freq, active }
+      nextBuzzers[c.id] = { freq, active }
     }
   }
+  ctx.sim.buzzerActive = nextBuzzers
 
   // Record 8-channel digital logic sample for Wokwi Logic Analyzer & VCD export
   const channels: Record<number, 0 | 1> = {}

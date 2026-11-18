@@ -733,10 +733,18 @@ export function ComponentHardwareView({
                 style={{ cursor: 'pointer' }}
                 onPointerDown={(e) => {
                   e.stopPropagation()
+                  const downAt = Date.now()
                   onUpdateProps(comp.id, { pressed: true })
                   const release = () => {
-                    onUpdateProps(comp.id, { pressed: false })
                     window.removeEventListener('pointerup', release)
+                    const elapsed = Date.now() - downAt
+                    if (elapsed >= 220) {
+                      onUpdateProps(comp.id, { pressed: false })
+                    } else {
+                      window.setTimeout(() => {
+                        onUpdateProps(comp.id, { pressed: false })
+                      }, 240 - elapsed)
+                    }
                   }
                   window.addEventListener('pointerup', release)
                 }}

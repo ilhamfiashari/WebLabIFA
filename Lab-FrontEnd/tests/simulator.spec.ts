@@ -1166,12 +1166,60 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
 })
 
 test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mode dosen', async ({ page }) => {
+  await page.addInitScript(() => {
+    const win = window as unknown as {
+      __oscStarts?: number
+      __oscFreqs?: number[]
+      AudioContext?: typeof AudioContext
+      webkitAudioContext?: typeof AudioContext
+    }
+    win.__oscStarts = 0
+    win.__oscFreqs = []
+    const OrigCtx = win.AudioContext || win.webkitAudioContext
+    if (OrigCtx) {
+      const Patched = class extends OrigCtx {
+        override createOscillator() {
+          const osc = super.createOscillator()
+          const origStart = osc.start.bind(osc)
+          const origSet = osc.frequency.setValueAtTime.bind(osc.frequency)
+          osc.start = ((when?: number) => {
+            win.__oscStarts = (win.__oscStarts ?? 0) + 1
+            return origStart(when)
+          }) as typeof osc.start
+          osc.frequency.setValueAtTime = ((v: number, t: number) => {
+            win.__oscFreqs?.push(v)
+            return origSet(v, t)
+          }) as typeof osc.frequency.setValueAtTime
+          return osc
+        }
+      }
+      win.AudioContext = Patched as typeof AudioContext
+      win.webkitAudioContext = Patched as typeof AudioContext
+    }
+  })
   await page.route('**/api/me', r => r.fulfill({ json: lecturer }))
   await buildMockSimulatorRoutes(page)()
   await page.route('**/api/iot/projects', async r => r.fulfill({ json: { projects: [], completed_missions: [] } }))
 
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/lab/dosen/iot')
+
+  // 0. Pembatas editor <-> kanvas bisa digeser untuk memperlebar panel kode
+  const resizer = page.getByRole('separator', { name: /Geser untuk memperlebar panel/i })
+  await expect(resizer).toBeVisible()
+  await resizer.scrollIntoViewIfNeeded()
+  const leftPanel = page.locator('.iot-left-panel')
+  const beforeBox = await leftPanel.boundingBox()
+  const sepBox = await resizer.boundingBox()
+  expect(beforeBox).not.toBeNull()
+  expect(sepBox).not.toBeNull()
+  const dragY = sepBox!.y + Math.min(80, sepBox!.height / 2)
+  await page.mouse.move(sepBox!.x + sepBox!.width / 2, dragY)
+  await page.mouse.down()
+  await page.mouse.move(sepBox!.x + 120, dragY, { steps: 4 })
+  await page.mouse.up()
+  const afterBox = await leftPanel.boundingBox()
+  expect((afterBox?.width ?? 0) - (beforeBox?.width ?? 0)).toBeGreaterThan(80)
 
   const presetSelect = page.getByLabel('Pilih template atau misi')
   await expect(presetSelect).toBeVisible()
@@ -1189,15 +1237,16 @@ test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mo
     await expect(page.locator(`option[value="${id}"]`)).toHaveCount(1)
   }
 
-  // 1. Kalkulator Keypad 4x4 + LCD 20x4 + Beep Buzzer
+  // 1. Kalkulator Keypad 4x4 + LCD 20x4 + Beep Tombol 1320Hz
   await presetSelect.selectOption('dosen-wokwi-calculator')
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.getByText('KALKULATOR ARDUINO', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '5', exact: true }).click()
+  await expect(page.getByText('1320Hz', { exact: true })).toBeVisible()
   await expect(page.getByText(/Input: 5/)).toBeVisible()
   await expect(page.getByText(/Last Key: 5/)).toBeVisible()
 
-  // 2. Jam Alarm 7-Segment + RTC + Slide Switch -> Buzzer menyala 1480Hz
+  // 2. Jam Alarm 7-Segment + RTC + Slide Switch -> Buzzer menyala 1480Hz & WebAudio aktif
   await presetSelect.selectOption('dosen-wokwi-alarm-clock')
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await page.locator('.iot-svg-board g.iot-interactive-control').first().dispatchEvent('pointerdown')
@@ -1209,7 +1258,13 @@ test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mo
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.getByText('[######----] 60%', { exact: true })).toBeVisible()
 
-  // 4. Kompas 3D OLED + MPU6050 Tilt Slider + Buzzer Utara
+  // 4. Mini Piano klik tuts cepat [1] -> Nada 262Hz tampil & berbunyi
+  await presetSelect.selectOption('dosen-wokwi-mini-piano')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await page.locator('.iot-svg-board circle.iot-interactive-control').first().click()
+  await expect(page.getByText('262Hz', { exact: true })).toBeVisible()
+
+  // 5. Kompas 3D OLED + MPU6050 Tilt Slider + Buzzer Utara
   await presetSelect.selectOption('dosen-wokwi-compass')
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.getByText('988Hz', { exact: true })).toBeVisible()
@@ -1217,6 +1272,14 @@ test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mo
   await expect(mpuSlider).toBeVisible()
   await mpuSlider.fill('37')
   await expect(page.getByText('Tilt X : 37 deg', { exact: true })).toBeVisible()
+
+  const audioStats = await page.evaluate(() => {
+    const win = window as unknown as { __oscStarts?: number; __oscFreqs?: number[] }
+    return { starts: win.__oscStarts ?? 0, freqs: win.__oscFreqs ?? [] }
+  })
+  expect(audioStats.starts).toBeGreaterThanOrEqual(2)
+  expect(audioStats.freqs).toContain(1320)
+  expect(audioStats.freqs).toContain(1480)
 })
 
 test('halaman simulator web bersih dari label DVWA dan WebGoat', async ({ page }) => {
