@@ -355,27 +355,32 @@
 .iot-editor-shell.theme-dark .tok-const { color: #4fc1ff; font-weight: 600; }
 .iot-editor-shell.theme-dark .tok-punct { color: #94a3b8; }
 
-/* Inline Arduino C++ Autocomplete Suggestions */
+/* Inline VS Code-Style Arduino C++ Autocomplete & Parameter Hints */
 .iot-ac-popup {
   position: absolute;
-  z-index: 30;
-  min-width: 245px;
-  max-width: 340px;
+  z-index: 40;
+  width: min(390px, calc(100% - 16px));
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.24);
   overflow: hidden;
+  display: grid;
+}
+
+.iot-ac-list {
+  max-height: 175px;
+  overflow-y: auto;
   display: grid;
 }
 
 .iot-ac-item {
   display: grid;
-  grid-template-columns: 44px minmax(88px, auto) minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border: 0;
   border-bottom: 1px solid var(--line);
   background: transparent;
@@ -392,43 +397,171 @@
 
 .iot-ac-kind {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
   text-align: center;
-  padding: 1px 4px;
-  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  border-radius: 5px;
   background: var(--surface-2);
   color: var(--ink-2);
 }
 
 .iot-ac-kind.is-fn,
-.iot-ac-kind.is-method { color: #92400e; background: rgba(245, 158, 11, 0.14); }
+.iot-ac-kind.is-method { color: #9333ea; background: rgba(168, 85, 247, 0.14); }
 .iot-ac-kind.is-type { color: #0369a1; background: rgba(14, 165, 233, 0.14); }
 .iot-ac-kind.is-kw,
-.iot-ac-kind.is-hdr { color: #9333ea; background: rgba(168, 85, 247, 0.14); }
-.iot-ac-kind.is-const { color: #1d4ed8; background: rgba(59, 130, 246, 0.14); }
+.iot-ac-kind.is-hdr { color: #92400e; background: rgba(245, 158, 11, 0.14); }
+.iot-ac-kind.is-const,
+.iot-ac-kind.is-var { color: #1d4ed8; background: rgba(59, 130, 246, 0.14); }
 .iot-ac-kind.is-snip { color: #047857; background: rgba(16, 185, 129, 0.14); }
 
 .iot-ac-label {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.iot-ac-detail {
-  color: var(--ink-2);
-  font-size: 11px;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.iot-ac-param-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.iot-ac-doc {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+}
+
+.iot-ac-doc-sig {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.iot-ac-doc-sig code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.iot-ac-param-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--brand-soft);
+  color: var(--brand);
+  white-space: nowrap;
+}
+
+.iot-ac-doc-summary {
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+
+.iot-ac-param-list {
+  margin: 2px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.iot-ac-param-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.iot-ac-param-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .iot-ac-hint {
   padding: 4px 10px;
   font-size: 10.5px;
   color: var(--ink-3);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.iot-sig-popup {
+  position: absolute;
+  z-index: 40;
+  width: min(390px, calc(100% - 16px));
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--brand);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+  font-size: 11.5px;
+}
+
+.iot-sig-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.iot-sig-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.iot-sig-ret {
+  color: #0369a1;
+  font-weight: 700;
+}
+
+.iot-sig-active-param {
+  font-weight: 800;
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.iot-sig-param-desc {
+  color: var(--ink);
   background: var(--surface-2);
+  padding: 4px 7px;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+
+.iot-sig-summary {
+  color: var(--ink-2);
+  font-size: 11px;
 }
 
 .iot-line-gutter .is-active-line {
@@ -771,8 +904,13 @@
   width: 100%;
   height: auto;
   min-height: 390px;
-  touch-action: none;
+  touch-action: pan-y;
   cursor: grab;
+}
+
+.iot-svg-board.is-pan-mode,
+.iot-svg-board.is-dragging {
+  touch-action: none;
 }
 
 .iot-svg-board.is-pan-mode {
@@ -780,6 +918,7 @@
 }
 
 .iot-svg-board.is-panning {
+  touch-action: none;
   cursor: grabbing;
 }
 

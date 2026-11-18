@@ -38,8 +38,11 @@ import { CircuitCanvas } from './CircuitCanvas'
 import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
 import {
   applyAutocompleteItem,
+  formatSuggestionSignature,
   getArduinoAutocomplete,
+  getArduinoSignatureHelp,
   type AcSuggestion,
+  type SignatureHelpResult,
 } from './cppAutocomplete'
 import {
   formatArduinoCpp,
@@ -87,6 +90,17 @@ let uidCounter = 1
 function nextUid(prefix: string): string {
   uidCounter += 1
   return `${prefix}-${uidCounter}`
+}
+
+const AC_KIND_GLYPHS: Record<AcSuggestion['kind'], string> = {
+  fn: 'ƒ',
+  method: '𝑚',
+  kw: 'k',
+  type: '𝑡',
+  const: '𝑐',
+  var: '𝑥',
+  hdr: '#',
+  snip: '□',
 }
 
 interface CircuitSnapshot {
@@ -330,6 +344,7 @@ export function IotSimulatorStudio({
     topPx: number
     leftPx: number
   } | null>(null)
+  const [sigHelp, setSigHelp] = useState<(SignatureHelpResult & { topPx: number; leftPx: number }) | null>(null)
 
   useEffect(() => {
     if (!showFileMenu) return
@@ -377,7 +392,29 @@ export function IotSimulatorStudio({
     setActiveCode(next)
   }
 
+  const refreshSignatureHint = (nextCode: string, cursor: number | null) => {
+    if (cursor === null || cursor < 0) {
+      setSigHelp(null)
+      return
+    }
+    const sig = getArduinoSignatureHelp(nextCode, cursor)
+    if (!sig) {
+      setSigHelp(null)
+      return
+    }
+    const beforeLines = nextCode.slice(0, cursor).split('\n')
+    const lineIdx = beforeLines.length - 1
+    const colIdx = beforeLines[lineIdx]?.length ?? 0
+    const topPx = lineIdx >= 4 ? Math.max(6, lineIdx * 19.375 - 78) : lineIdx * 19.375 + 34
+    setSigHelp({
+      ...sig,
+      topPx,
+      leftPx: Math.min(Math.max(8, colIdx * 7.5 + 10), 96),
+    })
+  }
+
   const refreshAutocomplete = (nextCode: string, cursor: number | null, force = false) => {
+    refreshSignatureHint(nextCode, cursor)
     if (cursor === null || cursor < 0) {
       setAcState(null)
       return
@@ -394,7 +431,7 @@ export function IotSimulatorStudio({
       ...res,
       activeIndex: 0,
       topPx: lineIdx * 19.375 + 34,
-      leftPx: Math.min(Math.max(8, colIdx * 7.5 + 10), 140),
+      leftPx: Math.min(Math.max(8, colIdx * 7.5 + 10), 110),
     })
   }
 
@@ -462,7 +499,10 @@ export function IotSimulatorStudio({
   const applyEditorMutation = (nextCode: string, selStart: number, selEnd = selStart, runAc = false) => {
     setCursorPos(getLineCol(nextCode, selStart))
     if (runAc) refreshAutocomplete(nextCode, selStart, false)
-    else setAcState(null)
+    else {
+      setAcState(null)
+      refreshSignatureHint(nextCode, selStart)
+    }
     const ta = codeTextareaRef.current
     if (nextCode === displayedCode) {
       if (ta) {
@@ -988,6 +1028,9 @@ export function IotSimulatorStudio({
     if (!q) return true
     return c.nameId.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q) || c.kind.includes(q)
   })
+
+  const acActiveItem = acState ? (acState.items[acState.activeIndex] ?? acState.items[0] ?? null) : null
+  const acActiveSig = acActiveItem ? formatSuggestionSignature(acActiveItem) : null
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
   const lineCount = Math.max(18, displayedCode.split('\n').length)
@@ -1564,8 +1607,16 @@ export function IotSimulatorStudio({
                       setCursorPos(getLineCol(val, cursor ?? 0))
                       refreshAutocomplete(val, cursor, false)
                     }}
-                    onClick={(e) => setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
-                    onSelect={(e) => setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
+                    onClick={(e) => {
+                      const cursor = e.currentTarget.selectionStart ?? 0
+                      setCursorPos(getLineCol(e.currentTarget.value, cursor))
+                      refreshSignatureHint(e.currentTarget.value, cursor)
+                    }}
+                    onSelect={(e) => {
+                      const cursor = e.currentTarget.selectionStart ?? 0
+                      setCursorPos(getLineCol(e.currentTarget.value, cursor))
+                      refreshSignatureHint(e.currentTarget.value, cursor)
+                    }}
                     onKeyDown={(e) => {
                       if ((e.ctrlKey || e.metaKey) && !e.altKey) {
                         const k = e.key.toLowerCase()
@@ -1620,6 +1671,11 @@ export function IotSimulatorStudio({
                           setAcState(null)
                           return
                         }
+                      } else if (sigHelp && e.key === 'Escape') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSigHelp(null)
+                        return
                       }
 
                       const ta = e.currentTarget
@@ -1662,7 +1718,10 @@ export function IotSimulatorStudio({
                         }
                       }
                     }}
-                    onBlur={() => setAcState(null)}
+                    onBlur={() => {
+                      setAcState(null)
+                      setSigHelp(null)
+                    }}
                   />
                   {acState ? (
                     <div
@@ -1671,28 +1730,109 @@ export function IotSimulatorStudio({
                       aria-label={en ? 'Code suggestions' : 'Saran kode C++'}
                       style={{ top: acState.topPx, left: acState.leftPx }}
                     >
-                      {acState.items.map((item, idx) => (
-                        <button
-                          key={`${item.kind}-${item.label}`}
-                          type="button"
-                          role="option"
-                          aria-selected={idx === acState.activeIndex}
-                          className={`iot-ac-item ${idx === acState.activeIndex ? 'is-active' : ''}`}
-                          onMouseEnter={() =>
-                            setAcState((prev) => (prev ? { ...prev, activeIndex: idx } : null))
-                          }
-                          onMouseDown={(e) => {
-                            e.preventDefault()
-                            acceptAutocomplete(item)
-                          }}
-                        >
-                          <span className={`iot-ac-kind is-${item.kind}`}>{item.kind}</span>
-                          <span className="iot-ac-label">{item.label}</span>
-                          <span className="iot-ac-detail">{en ? item.detailEn : item.detailId}</span>
-                        </button>
-                      ))}
+                      <div className="iot-ac-list">
+                        {acState.items.map((item, idx) => (
+                          <button
+                            key={`${item.kind}-${item.label}`}
+                            type="button"
+                            role="option"
+                            aria-selected={idx === acState.activeIndex}
+                            className={`iot-ac-item ${idx === acState.activeIndex ? 'is-active' : ''}`}
+                            onMouseEnter={() =>
+                              setAcState((prev) => (prev ? { ...prev, activeIndex: idx } : null))
+                            }
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              acceptAutocomplete(item)
+                            }}
+                          >
+                            <span className={`iot-ac-kind is-${item.kind}`} aria-hidden="true">
+                              {AC_KIND_GLYPHS[item.kind]}
+                            </span>
+                            <span className="iot-ac-label">{item.label}</span>
+                            <span className="iot-ac-param-count">
+                              {item.params ? `${item.params.length} param` : item.kind}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      {acActiveItem ? (
+                        <div className="iot-ac-doc" aria-live="polite">
+                          {acActiveSig ? (
+                            <div className="iot-ac-doc-sig">
+                              <code>{acActiveSig}</code>
+                              <span className="iot-ac-param-badge">
+                                {acActiveItem.params?.length ?? 0} {en ? 'params' : 'parameter'}
+                              </span>
+                            </div>
+                          ) : null}
+                          <div className="iot-ac-doc-summary">
+                            {en ? acActiveItem.detailEn : acActiveItem.detailId}
+                          </div>
+                          {acActiveItem.params && acActiveItem.params.length > 0 ? (
+                            <ul className="iot-ac-param-list">
+                              {acActiveItem.params.map((p) => (
+                                <li key={p.name}>
+                                  <code>{p.type} {p.name}</code>
+                                  <span>{en ? p.descEn : p.descId}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="iot-ac-hint">
                         ↑↓ {en ? 'select' : 'pilih'} · Enter/Tab {en ? 'insert' : 'sisipkan'} · Esc {en ? 'close' : 'tutup'}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!acState && sigHelp ? (
+                    <div
+                      className="iot-sig-popup"
+                      role="status"
+                      aria-label={en ? 'Function parameter hints' : 'Info parameter fungsi'}
+                      style={{ top: sigHelp.topPx, left: sigHelp.leftPx }}
+                    >
+                      <div className="iot-sig-head">
+                        <code className="iot-sig-code">
+                          <span className="iot-sig-ret">{sigHelp.returnType}</span>{' '}
+                          <strong>{sigHelp.fnName}</strong>(
+                          {sigHelp.params.length === 0 ? (
+                            <span className="muted">void</span>
+                          ) : (
+                            sigHelp.params.map((p, idx) => (
+                              <span key={p.name}>
+                                {idx > 0 ? ', ' : ''}
+                                <span className={idx === sigHelp.activeParam ? 'iot-sig-active-param' : undefined}>
+                                  {p.type} {p.name}
+                                </span>
+                              </span>
+                            ))
+                          )}
+                          )
+                        </code>
+                        <span className="iot-ac-param-badge">
+                          {sigHelp.params.length === 0
+                            ? en ? '0 params' : '0 parameter'
+                            : en
+                              ? `Param ${sigHelp.activeParam + 1} of ${sigHelp.params.length}`
+                              : `Parameter ${sigHelp.activeParam + 1} dari ${sigHelp.params.length}`}
+                        </span>
+                      </div>
+                      {sigHelp.params.length > 0 ? (
+                        <div className="iot-sig-param-desc">
+                          <strong>
+                            {sigHelp.params[sigHelp.activeParam]?.type} {sigHelp.params[sigHelp.activeParam]?.name}:
+                          </strong>{' '}
+                          <span>
+                            {en
+                              ? sigHelp.params[sigHelp.activeParam]?.descEn
+                              : sigHelp.params[sigHelp.activeParam]?.descId}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="iot-sig-summary">
+                        {en ? sigHelp.summaryEn : sigHelp.summaryId}
                       </div>
                     </div>
                   ) : null}

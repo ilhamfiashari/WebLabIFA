@@ -903,9 +903,17 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   const acBox = page.getByRole('listbox', { name: 'Saran kode C++' })
   await expect(acBox).toBeVisible()
   await expect(acBox.getByRole('option', { name: /digitalWrite/ })).toBeVisible()
+  await expect(acBox).toContainText('2 parameter')
+  await expect(acBox).toContainText('uint8_t pin')
   await page.keyboard.press('Enter')
   await expect(acBox).toHaveCount(0)
   await expect(codeEditor).toHaveValue(/digitalWrite\(\)/)
+  // Signature Help seperti VS Code muncul saat mengetik parameter di dalam (...)
+  const sigBox = page.getByRole('status', { name: 'Info parameter fungsi' })
+  await expect(sigBox).toBeVisible()
+  await expect(sigBox).toContainText('Parameter 1 dari 2')
+  await page.keyboard.type('2, ')
+  await expect(sigBox).toContainText('Parameter 2 dari 2')
 
   // Uji auto-indentation saat Enter di dalam blok `{` serta tombol Rapikan (Format)
   await codeEditor.fill('void loop() {\ndigitalWrite(2, HIGH);\n}')
@@ -1082,6 +1090,12 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   }
   await expect(svgCanvas).toHaveAttribute('viewBox', /^(?!0 0 )/)
   await page.getByRole('button', { name: 'Reset zoom' }).click()
+  await expect(svgCanvas).toHaveAttribute('viewBox', /^0 0 /)
+  // Scroll vertikal di atas kanvas tidak menggeser kanvas secara tidak sengaja
+  if (svgBox) {
+    await page.mouse.move(svgBox.x + 28, svgBox.y + 28)
+    await page.mouse.wheel(2, 140)
+  }
   await expect(svgCanvas).toHaveAttribute('viewBox', /^0 0 /)
 
   // Klik komponen menampilkan simbol putar (handle ↻) di kanvas dan memutar komponen saat diklik

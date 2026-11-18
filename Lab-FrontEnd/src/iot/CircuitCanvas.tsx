@@ -300,6 +300,7 @@ export function CircuitCanvas({
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panMode, setPanMode] = useState(false)
+  const [isDraggingItem, setIsDraggingItem] = useState(false)
   const [showLabels, setShowLabels] = useState(true)
   const [selectedPin, setSelectedPin] = useState<WireEndpoint | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -384,7 +385,8 @@ export function CircuitCanvas({
         }
         return
       }
-      if (Math.abs(e.deltaX) > 0 || e.shiftKey || isFullscreen || focusMode !== 'normal') {
+      const dominantHorizontal = Math.abs(e.deltaX) > 6 && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.6
+      if (panMode || e.shiftKey || dominantHorizontal) {
         e.preventDefault()
         const dx = (e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX) / zoom
         const dy = (e.shiftKey ? 0 : e.deltaY) / zoom
@@ -393,7 +395,7 @@ export function CircuitCanvas({
     }
     svg.addEventListener('wheel', onWheel, { passive: false })
     return () => svg.removeEventListener('wheel', onWheel)
-  }, [zoom, isFullscreen, focusMode])
+  }, [zoom, panMode])
 
   const boardInstances = getBoardInstances(boardId, components)
 
@@ -662,6 +664,7 @@ export function CircuitCanvas({
       if (dist > 4) d.moved = true
       if (!d.moved) return
       onGestureStart?.()
+      setIsDraggingItem(true)
       const dx = (e.clientX - d.startClientX) / zoom
       const dy = (e.clientY - d.startClientY) / zoom
       const nx = Math.max(-1200, Math.min(2400, Math.round((d.origX + dx) / 6) * 6))
@@ -705,6 +708,7 @@ export function CircuitCanvas({
 
   const endDrag = (e?: React.PointerEvent<SVGSVGElement>) => {
     setSnapHighlight(null)
+    setIsDraggingItem(false)
     onGestureEnd?.()
     if (panDragRef.current) {
       const finished = panDragRef.current
@@ -1778,7 +1782,7 @@ export function CircuitCanvas({
 
       <svg
         ref={svgRef}
-        className={`iot-svg-board ${isPanning ? 'is-panning' : ''} ${panMode ? 'is-pan-mode' : ''}`}
+        className={`iot-svg-board ${isPanning ? 'is-panning' : ''} ${panMode ? 'is-pan-mode' : ''} ${isDraggingItem || drawingPreview ? 'is-dragging' : ''}`}
         viewBox={`${pan.x} ${pan.y} ${Math.round(SVG_W / zoom)} ${Math.round(SVG_H / zoom)}`}
         onPointerDownCapture={(e) => {
           if (e.button === 1 || panMode) {
@@ -1796,7 +1800,7 @@ export function CircuitCanvas({
         }}
         onPointerDown={(e) => {
           const isBgTarget = e.target === e.currentTarget || (e.target as Element)?.getAttribute('data-canvas-bg') === '1'
-          if (e.button === 0 && isBgTarget) {
+          if (e.button === 0 && isBgTarget && (e.pointerType !== 'touch' || panMode)) {
             panDragRef.current = {
               startClientX: e.clientX,
               startClientY: e.clientY,
