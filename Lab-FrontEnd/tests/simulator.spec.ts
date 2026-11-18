@@ -1273,6 +1273,32 @@ test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mo
   await mpuSlider.fill('37')
   await expect(page.getByText('Tilt X : 37 deg', { exact: true })).toBeVisible()
 
+  // 6. Pong OLED + Slide Potentiometer (>65% menyalakan buzzer 880Hz) & kabel bebas stub ke atas
+  await presetSelect.selectOption('dosen-wokwi-pong')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  const pongSlider = page.getByLabel('Paddle Control')
+  await expect(pongSlider).toBeVisible()
+  await pongSlider.fill('80')
+  await expect(page.getByText('880Hz', { exact: true })).toBeVisible()
+  const hasWireBacktrack = await page.evaluate(() => {
+    const paths = Array.from(document.querySelectorAll('.iot-wire-group path[stroke-linecap="round"]'))
+    return paths.some((el) => {
+      const d = el.getAttribute('d') ?? ''
+      const nums = (d.match(/-?\d+/g) ?? []).map(Number)
+      const pts: Array<{ x: number; y: number }> = []
+      for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] })
+      for (let i = 1; i + 1 < pts.length; i++) {
+        const dx1 = pts[i].x - pts[i - 1].x
+        const dy1 = pts[i].y - pts[i - 1].y
+        const dx2 = pts[i + 1].x - pts[i].x
+        const dy2 = pts[i + 1].y - pts[i].y
+        if ((dx1 === 0 && dx2 === 0 && dy1 * dy2 < 0) || (dy1 === 0 && dy2 === 0 && dx1 * dx2 < 0)) return true
+      }
+      return false
+    })
+  })
+  expect(hasWireBacktrack).toBe(false)
+
   const audioStats = await page.evaluate(() => {
     const win = window as unknown as { __oscStarts?: number; __oscFreqs?: number[] }
     return { starts: win.__oscStarts ?? 0, freqs: win.__oscFreqs ?? [] }

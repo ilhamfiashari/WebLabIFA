@@ -578,7 +578,7 @@ void loop() {
     oled.println("BOTTOM BOUNCE 440Hz");
   } else {
     noTone(9);
-    oled.println("STATUS: PLAYING...");
+    oled.println("Geser >65/<25: Bunyi");
   }
   oled.display();
   delay(280);
