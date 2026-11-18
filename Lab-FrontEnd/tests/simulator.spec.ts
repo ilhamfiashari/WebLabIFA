@@ -1068,6 +1068,22 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.locator('.iot-compile-error')).toHaveCount(0)
 
+  // Pastikan area kanvas dapat digeser (panning) & di-reset agar mudah menambah/mengedit banyak komponen
+  const svgCanvas = page.locator('.iot-svg-board')
+  const svgBox = await svgCanvas.boundingBox()
+  expect(svgBox).toBeTruthy()
+  if (svgBox) {
+    const startX = svgBox.x + 28
+    const startY = svgBox.y + 28
+    await page.mouse.move(startX, startY)
+    await page.mouse.down()
+    await page.mouse.move(startX - 110, startY - 70, { steps: 6 })
+    await page.mouse.up()
+  }
+  await expect(svgCanvas).toHaveAttribute('viewBox', /^(?!0 0 )/)
+  await page.getByRole('button', { name: 'Reset zoom' }).click()
+  await expect(svgCanvas).toHaveAttribute('viewBox', /^0 0 /)
+
   // Klik komponen menampilkan simbol putar (handle ↻) di kanvas dan memutar komponen saat diklik
   await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerdown')
   await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerup')
