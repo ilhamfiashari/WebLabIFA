@@ -148,12 +148,39 @@
   margin-top: 6px;
 }
 
-/* Main Split Workbench (Left Tabs: Main.ino | Components | Terminal, Right: Circuit Canvas) */
+/* Main Split Workbench (Left Tabs: Main.ino | Components | Terminal, Draggable Resizer, Right: Circuit Canvas) */
 .iot-workbench-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(280px, var(--iot-left-width, 420px)) 14px minmax(0, 1fr);
+  gap: 0;
   align-items: stretch;
+}
+
+.iot-split-resizer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 14px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.iot-split-grip {
+  position: sticky;
+  top: 48vh;
+  margin-top: 24px;
+  width: 4px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background-color 0.15s ease, height 0.15s ease;
+}
+
+.iot-split-resizer:hover .iot-split-grip,
+.iot-split-resizer:focus-visible .iot-split-grip {
+  background: var(--brand);
+  height: 64px;
 }
 
 .iot-left-panel {
@@ -1170,6 +1197,11 @@
 @media (max-width: 1020px) {
   .iot-workbench-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .iot-split-resizer {
+    display: none;
   }
 
   .iot-left-panel {
@@ -1532,6 +1564,10 @@
 
 .iot-studio.is-focus-canvas .iot-workbench-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.iot-studio.is-focus-canvas .iot-split-resizer {
+  display: none;
 }
 
 .iot-studio.is-focus-canvas .iot-svg-board {
