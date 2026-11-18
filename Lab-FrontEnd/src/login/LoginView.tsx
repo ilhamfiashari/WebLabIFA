@@ -248,6 +248,8 @@ export function LoginView() {
             {redirecting && <p role="status">{tr.brand.openingGoogle}</p>}
           </div>
 
+          <p className="login-v2-mobile-note">{tr.brand.mobileAccountNote}</p>
+
           <div className="login-v2-features">
             <div className="login-v2-feature-item">
               <ShieldCheck size={17} className="login-v2-feature-icon" aria-hidden="true" />
@@ -272,13 +274,13 @@ export function LoginView() {
         </div>
 
         <footer className="login-v2-footer">
-          <span>
-            © {new Date().getFullYear()} IFA Lab. {tr.brand.rightsReserved}
+          <span className="login-v2-footer-copy">
+            © {new Date().getFullYear()} IFA Lab<span className="login-v2-rights-suffix">. {tr.brand.rightsReserved}</span>
           </span>
           <nav aria-label={lang === 'en' ? 'Information' : 'Informasi'}>
             <a href="/privasi">{tr.brand.privacy}</a>
             <a href="/bantuan">
-              {tr.brand.help} <ArrowUpRight size={13} aria-hidden="true" />
+              {tr.brand.help} <ArrowUpRight size={13} className="login-v2-help-arrow" aria-hidden="true" />
             </a>
           </nav>
         </footer>
@@ -297,6 +299,7 @@ export function LoginView() {
         <LabScene scene={scene} weather={activeWeather} settings={settings} en={lang === 'en'} onSample={setSeconds} />
         <LaptopMenu time={scene.key} selected={laptopSceneAt(seconds, settings.program).mode} onSelect={program => setSettings(s => ({ ...s, program }))} />
         </div>
+        <span className="login-v2-mobile-preview-label">{tr.brand.labPreviewLabel}</span>
 
         <div className="login-v2-cards-stack">
           <div className="login-v2-glass-card">
