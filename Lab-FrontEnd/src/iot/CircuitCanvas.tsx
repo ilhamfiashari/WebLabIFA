@@ -30,6 +30,8 @@ import {
   getBoardInstances,
   getBoardPin,
   getComponentSpec,
+  isBreadboardKind,
+  resolveBreadboardPinAlias,
   rotatePointAroundBox,
 } from './boards'
 import { BoardHardwareView, ComponentHardwareView } from './CircuitSvgComponents'
@@ -82,7 +84,8 @@ function getEndpointGeometry(
   const comp = components.find((c) => c.id === ep.nodeId && c.kind !== 'mcu')
   if (!comp) return null
   const spec = getComponentSpec(comp.kind)
-  const pin = spec.pins.find((p) => p.id === ep.pinId)
+  const resolvedId = isBreadboardKind(comp.kind) ? resolveBreadboardPinAlias(ep.pinId) : ep.pinId
+  const pin = spec.pins.find((p) => p.id === ep.pinId || p.id === resolvedId)
   if (!pin) return null
   const rot = rotatePointAroundBox(pin.dx, pin.dy, spec.width, spec.height, comp.rotate)
   const x = comp.x + rot.dx
@@ -313,6 +316,14 @@ export function CircuitCanvas({
     index: number
     waypoints: WireWaypoint[]
   } | null>(null)
+  const rotateDragRef = useRef<{
+    compId: string
+    centerX: number
+    centerY: number
+    startAngleDeg: number
+    origRotate: number
+    moved: boolean
+  } | null>(null)
   const suppressNextClickRef = useRef(false)
 
   const boardInstances = getBoardInstances(boardId, components)
@@ -468,6 +479,24 @@ export function CircuitCanvas({
     }
   }
 
+  const startRotateDrag = (compId: string, clientX: number, clientY: number) => {
+    const comp = components.find((c) => c.id === compId && c.kind !== 'mcu')
+    if (!comp) return
+    const spec = getComponentSpec(comp.kind)
+    const centerX = comp.x + spec.width / 2
+    const centerY = comp.y + spec.height / 2
+    const pt = clientToSvg(clientX, clientY)
+    const startAngleDeg = (Math.atan2(pt.y - centerY, pt.x - centerX) * 180) / Math.PI
+    rotateDragRef.current = {
+      compId,
+      centerX,
+      centerY,
+      startAngleDeg,
+      origRotate: comp.rotate ?? 0,
+      moved: false,
+    }
+  }
+
   const startUnplugDrag = (wire: Wire, end: 'from' | 'to', clientX: number, clientY: number) => {
     const anchorEp = end === 'from' ? wire.to : wire.from
     const anchorGeo = getEndpointGeometry(boardId, components, anchorEp)
@@ -525,11 +554,40 @@ export function CircuitCanvas({
       const next = wd.waypoints.map((wp, idx) => (idx === wd.index ? { x: clampedX, y: clampedY } : wp))
       wd.waypoints = next
       onUpdateWire(wd.wireId, { waypoints: next, bendX: undefined, bendY: undefined })
+      return
+    }
+
+    if (rotateDragRef.current) {
+      const rd = rotateDragRef.current
+      const curAngle = (Math.atan2(pt.y - rd.centerY, pt.x - rd.centerX) * 180) / Math.PI
+      const delta = curAngle - rd.startAngleDeg
+      if (Math.abs(delta) > 3) rd.moved = true
+      if (!rd.moved) return
+      let nextDeg = ((Math.round(rd.origRotate + delta) % 360) + 360) % 360
+      if (e.shiftKey) {
+        nextDeg = (Math.round(nextDeg / 45) * 45) % 360
+      } else {
+        for (const ortho of [0, 90, 180, 270, 360]) {
+          if (Math.abs(nextDeg - ortho) <= 3) {
+            nextDeg = ortho % 360
+            break
+          }
+        }
+      }
+      onUpdateComponent(rd.compId, { rotate: nextDeg })
     }
   }
 
   const endDrag = (e?: React.PointerEvent<SVGSVGElement>) => {
     setSnapHighlight(null)
+    if (rotateDragRef.current) {
+      const finished = rotateDragRef.current
+      rotateDragRef.current = null
+      suppressNextClickRef.current = true
+      if (!finished.moved) {
+        onUpdateComponent(finished.compId, { rotate: ((finished.origRotate + 45) % 360) })
+      }
+    }
     if (nodeDragRef.current) {
       const finished = nodeDragRef.current
       nodeDragRef.current = null
@@ -1592,6 +1650,7 @@ export function CircuitCanvas({
               showLabels={showLabels}
               isDark={isDark}
               onStartDrag={startNodeDrag}
+              onStartRotate={startRotateDrag}
               onPinPointerDown={onPinPointerDown}
               onPinPointerUp={onPinPointerUp}
               onUpdateProps={onUpdateProps}

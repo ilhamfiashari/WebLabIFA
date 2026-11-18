@@ -1,4 +1,4 @@
-import { BOARDS, getBoardInstances, getBoardPin, resolveNodeBoardId } from './boards'
+import { BOARDS, getBoardInstances, getBoardPin, isBreadboardKind, resolveBreadboardPinAlias, resolveNodeBoardId } from './boards'
 import type {
   BoardId,
   CircuitDiagnosticItem,
@@ -23,10 +23,16 @@ interface ParsedStatement {
   elseBody?: ParsedStatement[]
 }
 
+export interface SketchFile {
+  name: string
+  content: string
+}
+
 export interface CompiledSketch {
   defines: Record<string, number>
   setupStmts: ParsedStatement[]
   loopStmts: ParsedStatement[]
+  helpers: Record<string, ParsedStatement[]>
   servoPins: number[]
   compileError: string | null
 }
@@ -147,8 +153,32 @@ function parseStatements(lines: Array<{ text: string; num: number }>): ParsedSta
   return stmts
 }
 
-export function compileArduinoSketch(code: string): CompiledSketch {
-  const rawLines = code.split('\n')
+function expandSketchIncludes(
+  code: string,
+  extraFiles: SketchFile[],
+  visited = new Set<string>(),
+): string {
+  if (!extraFiles.length) return code
+  return code
+    .split('\n')
+    .map((line) => {
+      const m = /^\s*#include\s+"([^"]+)"/.exec(line)
+      if (!m) return line
+      const incName = m[1].trim()
+      if (visited.has(incName.toLowerCase())) return ''
+      const file = extraFiles.find(
+        (f) => f.name.toLowerCase() === incName.toLowerCase() || f.name.toLowerCase().endsWith(`/${incName.toLowerCase()}`),
+      )
+      if (!file) return line
+      visited.add(incName.toLowerCase())
+      return expandSketchIncludes(file.content, extraFiles, visited)
+    })
+    .join('\n')
+}
+
+export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []): CompiledSketch {
+  const expanded = expandSketchIncludes(code, extraFiles)
+  const rawLines = expanded.split('\n')
   const defines: Record<string, number> = {
     HIGH: 1,
     LOW: 0,
@@ -161,7 +191,9 @@ export function compileArduinoSketch(code: string): CompiledSketch {
   }
   const setupLines: Array<{ text: string; num: number }> = []
   const loopLines: Array<{ text: string; num: number }> = []
-  let mode: 'top' | 'setup' | 'loop' = 'top'
+  const helperBlocks: Record<string, Array<{ text: string; num: number }>> = {}
+  let mode: 'top' | 'setup' | 'loop' | 'helper' = 'top'
+  let activeHelper = ''
   let braceDepth = 0
   let hasSetup = false
   let hasLoop = false
@@ -193,6 +225,14 @@ export function compileArduinoSketch(code: string): CompiledSketch {
         braceDepth = (clean.match(/\{/g) ?? []).length - (clean.match(/\}/g) ?? []).length
         continue
       }
+      const helperM = /^(?:void|int|bool)\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*\{?$/.exec(clean)
+      if (helperM) {
+        mode = 'helper'
+        activeHelper = helperM[1]
+        helperBlocks[activeHelper] = []
+        braceDepth = (clean.match(/\{/g) ?? []).length - (clean.match(/\}/g) ?? []).length
+        continue
+      }
       continue
     }
 
@@ -206,6 +246,12 @@ export function compileArduinoSketch(code: string): CompiledSketch {
     }
     if (mode === 'setup') setupLines.push({ text: clean, num: idx + 1 })
     else if (mode === 'loop') loopLines.push({ text: clean, num: idx + 1 })
+    else if (mode === 'helper' && activeHelper) helperBlocks[activeHelper].push({ text: clean, num: idx + 1 })
+  }
+
+  const helpers: Record<string, ParsedStatement[]> = {}
+  for (const [fnName, lines] of Object.entries(helperBlocks)) {
+    helpers[fnName] = parseStatements(lines)
   }
 
   if (!hasSetup || !hasLoop) {
@@ -213,6 +259,7 @@ export function compileArduinoSketch(code: string): CompiledSketch {
       defines,
       setupStmts: [],
       loopStmts: [],
+      helpers,
       servoPins: [],
       compileError: !hasSetup
         ? 'Compile Error: Fungsi `void setup()` tidak ditemukan pada sketch.'
@@ -224,6 +271,7 @@ export function compileArduinoSketch(code: string): CompiledSketch {
     defines,
     setupStmts: parseStatements(setupLines),
     loopStmts: parseStatements(loopLines),
+    helpers,
     servoPins: [],
     compileError: null,
   }
@@ -245,37 +293,35 @@ function buildNetGraph(wires: Wire[], components: PlacedComponent[]): NetGraph {
     adj.set(ka, [...(adj.get(ka) ?? []), b])
     adj.set(kb, [...(adj.get(kb) ?? []), a])
   }
-  for (const w of wires) addEdge(w.from, w.to)
-  // Resistors & breadboard terminal pairs conduct across their linked pins
+  const compKindMap = new Map(components.map((c) => [c.id, c.kind]))
+  const normEp = (e: WireEndpoint): WireEndpoint => {
+    const k = compKindMap.get(e.nodeId)
+    return k && isBreadboardKind(k) ? { nodeId: e.nodeId, pinId: resolveBreadboardPinAlias(e.pinId) } : e
+  }
+  for (const w of wires) addEdge(normEp(w.from), normEp(w.to))
+
+  // Resistors & full breadboard conductive rails/columns
   for (const c of components) {
     if (c.kind === 'resistor') {
       addEdge({ nodeId: c.id, pinId: 'P1' }, { nodeId: c.id, pinId: 'P2' })
-    } else if (c.kind === 'breadboard') {
-      // Top & bottom power rails
-      addEdge({ nodeId: c.id, pinId: 'VCC_L' }, { nodeId: c.id, pinId: 'VCC_M' })
-      addEdge({ nodeId: c.id, pinId: 'VCC_M' }, { nodeId: c.id, pinId: 'VCC_R' })
-      addEdge({ nodeId: c.id, pinId: 'GND_L' }, { nodeId: c.id, pinId: 'GND_M' })
-      addEdge({ nodeId: c.id, pinId: 'GND_M' }, { nodeId: c.id, pinId: 'GND_R' })
-      addEdge({ nodeId: c.id, pinId: 'VCC_BL' }, { nodeId: c.id, pinId: 'VCC_BR' })
-      addEdge({ nodeId: c.id, pinId: 'GND_BL' }, { nodeId: c.id, pinId: 'GND_BR' })
-      // Vertical 5-hole terminal columns (a-e & f-j)
-      for (const pair of [
-        ['A1', 'A1_E'],
-        ['A2', 'A2_E'],
-        ['A3', 'A3_E'],
-        ['A4', 'A4_E'],
-        ['A5', 'A5_E'],
-        ['B1', 'B1_J'],
-        ['B2', 'B2_J'],
-        ['B3', 'B3_J'],
-        ['B4', 'B4_J'],
-        ['B5', 'B5_J'],
-      ] as const) {
-        addEdge({ nodeId: c.id, pinId: pair[0] }, { nodeId: c.id, pinId: pair[1] })
+    } else if (isBreadboardKind(c.kind)) {
+      const cols = c.kind === 'breadboard-mini' ? 17 : c.kind === 'breadboard-large' ? 63 : 30
+      for (let col = 1; col <= cols; col++) {
+        const topStrip = ['a', 'b', 'c', 'd', 'e'] as const
+        const botStrip = ['f', 'g', 'h', 'i', 'j'] as const
+        for (let r = 0; r < topStrip.length - 1; r++) {
+          addEdge({ nodeId: c.id, pinId: `c${col}_${topStrip[r]}` }, { nodeId: c.id, pinId: `c${col}_${topStrip[r + 1]}` })
+          addEdge({ nodeId: c.id, pinId: `c${col}_${botStrip[r]}` }, { nodeId: c.id, pinId: `c${col}_${botStrip[r + 1]}` })
+        }
       }
-      // Legacy cross-strip shortcuts for older saved diagrams
-      addEdge({ nodeId: c.id, pinId: 'A1' }, { nodeId: c.id, pinId: 'A2' })
-      addEdge({ nodeId: c.id, pinId: 'B1' }, { nodeId: c.id, pinId: 'B2' })
+      if (c.kind === 'breadboard' || c.kind === 'breadboard-large') {
+        const railLen = c.kind === 'breadboard-large' ? 50 : 25
+        for (const prefix of ['tp_', 'tn_', 'bp_', 'bn_'] as const) {
+          for (let i = 1; i < railLen; i++) {
+            addEdge({ nodeId: c.id, pinId: `${prefix}${i}` }, { nodeId: c.id, pinId: `${prefix}${i + 1}` })
+          }
+        }
+      }
     }
   }
   return { adj }
@@ -473,6 +519,7 @@ export function createVmContext(
   sketch: CompiledSketch,
   components: PlacedComponent[],
   wires: Wire[],
+  extraFiles: SketchFile[] = [],
 ): VmContext {
   const sim = createInitialSimulation(boardId, components, wires)
   const graph = buildNetGraph(wires, components)
@@ -504,7 +551,7 @@ export function createVmContext(
   for (const mcu of extraMcus) {
     const peerBoard = mcu.boardId ?? 'arduino-uno'
     const peerCode = mcu.props.sketchCode ?? defaultMcuSketch(peerBoard, mcu.label)
-    const peerCompiled = compileArduinoSketch(peerCode)
+    const peerCompiled = compileArduinoSketch(peerCode, extraFiles)
     const peerCtx: VmContext = {
       nodeId: mcu.id,
       label: mcu.label || BOARDS[peerBoard].shortName,
@@ -909,6 +956,8 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
         tls,
       }
       ctx.sim.mqttMessages = [...ctx.sim.mqttMessages.slice(-24), msg]
+    } else if (ctx.sketch.helpers[fn]) {
+      delayAccum += runStatements(ctx.sketch.helpers[fn], ctx, components)
     }
   }
   return delayAccum
@@ -1094,9 +1143,10 @@ export function verifyCircuitAndCode(
   code: string,
   components: PlacedComponent[],
   wires: Wire[],
+  extraFiles: SketchFile[] = [],
 ): CircuitDiagnosticItem[] {
   const items: CircuitDiagnosticItem[] = []
-  const compiled = compileArduinoSketch(code)
+  const compiled = compileArduinoSketch(code, extraFiles)
   const extraMcus = components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
 
   if (compiled.compileError) {
@@ -1118,7 +1168,7 @@ export function verifyCircuitAndCode(
   for (const mcu of extraMcus) {
     const peerBoard = mcu.boardId ?? 'arduino-uno'
     const peerCode = mcu.props.sketchCode ?? defaultMcuSketch(peerBoard, mcu.label)
-    const peerComp = compileArduinoSketch(peerCode)
+    const peerComp = compileArduinoSketch(peerCode, extraFiles)
     if (peerComp.compileError) {
       items.push({
         id: `diag-compile-${mcu.id}`,
@@ -1128,7 +1178,7 @@ export function verifyCircuitAndCode(
       })
     }
   }
-  if (extraMcus.length > 0 && extraMcus.every((m) => !compileArduinoSketch(m.props.sketchCode ?? defaultMcuSketch(m.boardId ?? 'arduino-uno', m.label)).compileError)) {
+  if (extraMcus.length > 0 && extraMcus.every((m) => !compileArduinoSketch(m.props.sketchCode ?? defaultMcuSketch(m.boardId ?? 'arduino-uno', m.label), extraFiles).compileError)) {
     const totalMcus = 1 + extraMcus.length
     items.push({
       id: 'diag-multi-mcu',
@@ -1156,7 +1206,7 @@ export function verifyCircuitAndCode(
     })
   }
 
-  const activeParts = components.filter((c) => c.kind !== 'breadboard' && c.kind !== 'mcu')
+  const activeParts = components.filter((c) => !isBreadboardKind(c.kind) && c.kind !== 'mcu')
   if (activeParts.length === 0) {
     items.push({
       id: 'diag-parts',

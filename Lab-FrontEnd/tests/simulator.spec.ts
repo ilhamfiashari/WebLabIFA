@@ -922,13 +922,15 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
   await codeEditor.fill(originalCode)
 
-  // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive
+  // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive & 3 ukuran Breadboard
   await page.getByRole('tab', { name: 'Components' }).click()
   await expect(page.getByRole('button', { name: 'Microcontrollers' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sensors' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Input Devices' })).toBeVisible()
   await expect(page.getByText('Arduino Mega', { exact: true })).toBeVisible()
-  await expect(page.getByText('Breadboard', { exact: true })).toBeVisible()
+  await expect(page.getByText('Mini Breadboard (170-Pt)', { exact: true })).toBeVisible()
+  await expect(page.getByText('Medium Breadboard (Half 400-Pt)', { exact: true })).toBeVisible()
+  await expect(page.getByText('Large Breadboard (Full 830-Pt)', { exact: true })).toBeVisible()
 
   // Klik kabel memilih kabel (tidak langsung menghapus) dan mendukung tarik kabel langsung dari pin
   const wireCountBefore = await page.locator('.iot-wire-group').count()
@@ -1024,6 +1026,33 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
 
   await page.getByRole('tab', { name: 'Libraries' }).click()
   await expect(page.getByText('Adafruit SSD1306')).toBeVisible()
+  const lastLibCard = page.locator('.iot-lib-item').last()
+  await lastLibCard.scrollIntoViewIfNeeded()
+  await expect(lastLibCard).toBeVisible()
+
+  // Uji tambah file header (.h) lewat menu file dropdown & #include "pins.h" di Main.ino
+  await page.getByRole('button', { name: 'Menu file sketch' }).click()
+  await expect(page.getByRole('menu', { name: 'Menu file' })).toBeVisible()
+  await page.getByRole('menuitem', { name: 'New file...' }).click()
+  await page.getByLabel(/Nama file baru/).fill('pins.h')
+  await page.getByRole('button', { name: 'Buat', exact: true }).click()
+  await expect(page.getByRole('tab', { name: 'pins.h' })).toBeVisible()
+  await page.getByLabel('Kode program mikrokontroler').fill('#define CUSTOM_LED 2\n')
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  const mainCodeNow = await page.getByLabel('Kode program mikrokontroler').inputValue()
+  await page.getByLabel('Kode program mikrokontroler').fill(`#include "pins.h"\n${mainCodeNow}`)
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.locator('.iot-compile-error')).toHaveCount(0)
+
+  // Klik komponen menampilkan simbol putar (handle ↻) di kanvas dan memutar komponen saat diklik
+  await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerup')
+  const rotateHandle = page.locator('.iot-rotate-handle')
+  await expect(rotateHandle).toBeVisible()
+  await rotateHandle.click()
+  await page.getByRole('tab', { name: 'diagram.json' }).click()
+  await expect(page.getByLabel('Wokwi diagram.json editor')).toHaveValue(/"rotate": 45/)
 
   await page.getByRole('tab', { name: 'Terminal' }).click()
   const serialLog = page.getByRole('log')
@@ -1053,10 +1082,14 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: 'Simpan Proyek' }).click()
   await expect(page.getByText(/berhasil disimpan ke database/)).toBeVisible()
 
-  // Tambah Breadboard realistis (half 400-pt tanpa label pin bertumpuk) & uji Mode Fokus + Fullscreen
+  // Tambah ketiga ukuran Breadboard (Medium 400-Pt, Mini 170-Pt, Large 830-Pt) & uji semua lubang dapat diklik + Mode Fokus + Fullscreen
   await page.getByRole('tab', { name: 'Components' }).click()
-  await page.getByRole('button', { name: 'Tambah Breadboard ke kanvas' }).click()
-  await expect(page.locator('.iot-bb-pin')).toHaveCount(30)
+  await page.getByRole('button', { name: 'Tambah Medium Breadboard (Half 400-Pt) ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(400)
+  await page.getByRole('button', { name: 'Tambah Mini Breadboard (170-Pt) ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(570)
+  await page.getByRole('button', { name: 'Tambah Large Breadboard (Full 830-Pt) ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(1400)
 
   await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Fokus Studio' }).click()
   await expect(page.locator('.iot-studio')).toHaveClass(/is-focus-focus/)

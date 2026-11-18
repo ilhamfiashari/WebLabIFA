@@ -6,16 +6,19 @@ import {
   Award,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   Code2,
   Cpu,
   Download,
   Expand,
+  FileCode2,
   FileJson,
   Focus,
   FolderOpen,
   LayoutGrid,
   Minimize2,
   PanelLeftClose,
+  Pencil,
   Pin,
   Plus,
   Save,
@@ -23,13 +26,14 @@ import {
   Sparkles,
   Terminal,
   Trash2,
+  Upload,
   Volume2,
   VolumeX,
 } from 'lucide-react'
 import { Badge, PageHead } from '../portal/ui'
 import { useI18n } from '../shared/i18n'
 import { simApi } from '../simulator/api'
-import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getBoardInstances, getComponentSpec } from './boards'
+import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getBoardInstances, getComponentSpec, isBreadboardKind } from './boards'
 import { CircuitCanvas } from './CircuitCanvas'
 import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
 import {
@@ -55,6 +59,7 @@ import {
   stepLoop,
   stepSetup,
   verifyCircuitAndCode,
+  type SketchFile,
   type VmContext,
 } from './firmwareVm'
 import { IOT_MISSIONS, IOT_PRESETS } from './presets'
@@ -190,7 +195,14 @@ export function IotSimulatorStudio({
   const componentsRef = useRef(components)
   const wiresRef = useRef(wires)
   const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const fileMenuRef = useRef<HTMLDivElement | null>(null)
+  const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
   const [editingNodeId, setEditingNodeId] = useState<string>('board')
+  const [extraFiles, setExtraFiles] = useState<SketchFile[]>([])
+  const [activeCustomFile, setActiveCustomFile] = useState<string | null>(null)
+  const [showFileMenu, setShowFileMenu] = useState(false)
+  const [fileActionMode, setFileActionMode] = useState<'new' | 'rename' | null>(null)
+  const [fileNameDraft, setFileNameDraft] = useState('')
   const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 })
   const [acState, setAcState] = useState<{
     replaceStart: number
@@ -200,6 +212,17 @@ export function IotSimulatorStudio({
     topPx: number
     leftPx: number
   } | null>(null)
+
+  useEffect(() => {
+    if (!showFileMenu) return
+    const onPointerDown = (e: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target as Node)) {
+        setShowFileMenu(false)
+      }
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    return () => window.removeEventListener('mousedown', onPointerDown)
+  }, [showFileMenu])
 
   const boardInstances = useMemo(() => getBoardInstances(boardId, components), [boardId, components])
   const activeEditingNodeId = boardInstances.some((b) => b.nodeId === editingNodeId) ? editingNodeId : 'board'
@@ -220,6 +243,20 @@ export function IotSimulatorStudio({
         c.id === activeEditingNodeId ? { ...c, props: { ...c.props, sketchCode: next } } : c,
       ),
     )
+  }
+
+  const activeExtraFileObj = activeCustomFile
+    ? (extraFiles.find((f) => f.name === activeCustomFile) ?? null)
+    : null
+  const displayedCode = activeExtraFileObj ? activeExtraFileObj.content : activeCode
+  const setDisplayedCode = (next: string) => {
+    if (activeExtraFileObj) {
+      setExtraFiles((prev) =>
+        prev.map((f) => (f.name === activeExtraFileObj.name ? { ...f, content: next } : f)),
+      )
+      return
+    }
+    setActiveCode(next)
   }
 
   const refreshAutocomplete = (nextCode: string, cursor: number | null, force = false) => {
@@ -252,14 +289,14 @@ export function IotSimulatorStudio({
       ta.setSelectionRange(pending.start, pending.end)
       pendingSelectionRef.current = null
     }
-  }, [activeCode])
+  }, [displayedCode])
 
   const applyEditorMutation = (nextCode: string, selStart: number, selEnd = selStart, runAc = false) => {
     setCursorPos(getLineCol(nextCode, selStart))
     if (runAc) refreshAutocomplete(nextCode, selStart, false)
     else setAcState(null)
     const ta = codeTextareaRef.current
-    if (nextCode === activeCode) {
+    if (nextCode === displayedCode) {
       if (ta) {
         ta.focus()
         ta.setSelectionRange(selStart, selEnd)
@@ -271,19 +308,121 @@ export function IotSimulatorStudio({
       ta.value = nextCode
       ta.setSelectionRange(selStart, selEnd)
     }
-    setActiveCode(nextCode)
+    setDisplayedCode(nextCode)
   }
 
   const formatSketchCode = () => {
-    const formatted = formatArduinoCpp(activeCode)
+    const formatted = formatArduinoCpp(displayedCode)
     applyEditorMutation(formatted, Math.min(formatted.length, codeTextareaRef.current?.selectionStart ?? 0))
     setStatusNotice(en ? 'Code auto-indented cleanly.' : 'Kode dirapikan dengan auto-indent.')
   }
 
   const acceptAutocomplete = (item: AcSuggestion) => {
     if (!acState) return
-    const { nextCode, nextCursor } = applyAutocompleteItem(activeCode, acState.replaceStart, acState.replaceEnd, item)
+    const { nextCode, nextCursor } = applyAutocompleteItem(displayedCode, acState.replaceStart, acState.replaceEnd, item)
     applyEditorMutation(nextCode, nextCursor)
+  }
+
+  const normalizeSketchFileName = (raw: string): string => {
+    const clean = raw.trim().replace(/[/\\]/g, '')
+    if (!clean) return ''
+    if (!clean.includes('.')) return `${clean}.h`
+    return clean
+  }
+
+  const starterContentForFile = (fileName: string): string => {
+    const lower = fileName.toLowerCase()
+    if (lower.endsWith('.h') || lower.endsWith('.hpp')) {
+      return `// ${fileName}\n// Definisi pin, konstanta, atau helper untuk di-#include di Main.ino\n`
+    }
+    if (lower.endsWith('.cpp') || lower.endsWith('.c')) {
+      return `#include <Arduino.h>\n\n`
+    }
+    return `// ${fileName}\n`
+  }
+
+  const commitFileAction = () => {
+    const normalized = normalizeSketchFileName(fileNameDraft)
+    if (!normalized || normalized.toLowerCase() === 'main.ino') {
+      setStatusNotice(en ? 'Provide a valid filename other than Main.ino.' : 'Masukkan nama file yang valid selain Main.ino.')
+      return
+    }
+    if (fileActionMode === 'new') {
+      const existing = extraFiles.find((f) => f.name.toLowerCase() === normalized.toLowerCase())
+      if (existing) {
+        setLeftTab('code')
+        setActiveCustomFile(existing.name)
+        setFileActionMode(null)
+        setFileNameDraft('')
+        setStatusNotice(en ? `Opened existing file ${existing.name}.` : `Membuka file ${existing.name}.`)
+        return
+      }
+      setExtraFiles((prev) => [...prev, { name: normalized, content: starterContentForFile(normalized) }])
+      setLeftTab('code')
+      setActiveCustomFile(normalized)
+      setFileActionMode(null)
+      setFileNameDraft('')
+      setAcState(null)
+      setStatusNotice(
+        en
+          ? `Created ${normalized}. Include it via #include "${normalized}".`
+          : `File ${normalized} dibuat. Panggil di sketch dengan #include "${normalized}".`,
+      )
+      return
+    }
+    if (fileActionMode === 'rename' && activeExtraFileObj) {
+      const conflict = extraFiles.some(
+        (f) => f.name.toLowerCase() === normalized.toLowerCase() && f.name !== activeExtraFileObj.name,
+      )
+      if (conflict) {
+        setStatusNotice(en ? `File "${normalized}" already exists.` : `File "${normalized}" sudah ada.`)
+        return
+      }
+      const oldName = activeExtraFileObj.name
+      setExtraFiles((prev) => prev.map((f) => (f.name === oldName ? { ...f, name: normalized } : f)))
+      setActiveCustomFile(normalized)
+      setFileActionMode(null)
+      setFileNameDraft('')
+      setStatusNotice(en ? `Renamed ${oldName} to ${normalized}.` : `Nama file ${oldName} diubah menjadi ${normalized}.`)
+    }
+  }
+
+  const deleteActiveCustomFile = () => {
+    if (!activeExtraFileObj) return
+    const target = activeExtraFileObj.name
+    setExtraFiles((prev) => prev.filter((f) => f.name !== target))
+    setActiveCustomFile(null)
+    setShowFileMenu(false)
+    setFileActionMode(null)
+    setStatusNotice(en ? `Deleted ${target}.` : `File ${target} dihapus.`)
+  }
+
+  const handleUploadExtraFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const loaded: SketchFile[] = []
+    for (const file of Array.from(files)) {
+      const cleanName = normalizeSketchFileName(file.name)
+      if (!cleanName || cleanName.toLowerCase() === 'main.ino') continue
+      const content = await file.text()
+      loaded.push({ name: cleanName, content })
+    }
+    if (loaded.length === 0) return
+    setExtraFiles((prev) => {
+      const next = [...prev]
+      for (const item of loaded) {
+        const idx = next.findIndex((f) => f.name.toLowerCase() === item.name.toLowerCase())
+        if (idx >= 0) next[idx] = item
+        else next.push(item)
+      }
+      return next
+    })
+    setLeftTab('code')
+    setActiveCustomFile(loaded[0].name)
+    setStatusNotice(
+      en
+        ? `Uploaded ${loaded.length} file(s): ${loaded.map((f) => f.name).join(', ')}.`
+        : `${loaded.length} file berhasil diunggah: ${loaded.map((f) => f.name).join(', ')}.`,
+    )
   }
   useEffect(() => {
     componentsRef.current = components
@@ -422,6 +561,9 @@ export function IotSimulatorStudio({
     vmRef.current = null
     setBoardId(preset.board)
     setEditingNodeId('board')
+    setExtraFiles([])
+    setActiveCustomFile(null)
+    setFileActionMode(null)
     setAcState(null)
     setActivePresetId(preset.id)
     setActiveMissionId(preset.missionId ?? null)
@@ -512,19 +654,19 @@ export function IotSimulatorStudio({
   }
 
   const runCheckCircuit = () => {
-    const report = verifyCircuitAndCode(boardId, code, components, wires)
+    const report = verifyCircuitAndCode(boardId, code, components, wires, extraFiles)
     setDiagnostics(report)
   }
 
   const startSimulation = () => {
-    const report = verifyCircuitAndCode(boardId, code, components, wires)
+    const report = verifyCircuitAndCode(boardId, code, components, wires, extraFiles)
     setDiagnostics(report)
-    const compiled = compileArduinoSketch(code)
+    const compiled = compileArduinoSketch(code, extraFiles)
     if (compiled.compileError) {
       setSimState((prev) => ({ ...prev, running: false, compileError: compiled.compileError }))
       return
     }
-    const ctx = createVmContext(boardId, compiled, components, wires)
+    const ctx = createVmContext(boardId, compiled, components, wires, extraFiles)
     stepSetup(ctx, components, wires)
     stepLoop(ctx, components, wires)
     ctx.sim.running = true
@@ -551,8 +693,8 @@ export function IotSimulatorStudio({
     const newComp: PlacedComponent = {
       id: nextUid(kind),
       kind,
-      x: kind === 'breadboard' ? 290 : 330 + offset,
-      y: kind === 'breadboard' ? 275 : 80 + (components.length % 4) * 58,
+      x: isBreadboardKind(kind) ? 260 : 330 + offset,
+      y: isBreadboardKind(kind) ? 265 : 80 + (components.length % 4) * 58,
       label: en ? spec.nameEn : spec.nameId,
       color:
         kind === 'led' || kind === 'pushbutton' || kind === 'seven-seg' || kind === 'seven-seg-4' || kind === 'max7219-matrix'
@@ -661,12 +803,15 @@ export function IotSimulatorStudio({
   })
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
-  const lineCount = Math.max(18, activeCode.split('\n').length)
-  const highlightedTokens = useMemo(() => tokenizeArduinoCpp(activeCode), [activeCode])
+  const lineCount = Math.max(18, displayedCode.split('\n').length)
+  const highlightedTokens = useMemo(() => tokenizeArduinoCpp(displayedCode), [displayedCode])
   const activeMcuCompileError = useMemo(() => {
-    if (activeEditingNodeId === 'board') return simState.compileError
-    return compileArduinoSketch(activeCode).compileError
-  }, [activeEditingNodeId, activeCode, simState.compileError])
+    if (activeEditingNodeId === 'board') {
+      if (extraFiles.length > 0) return compileArduinoSketch(activeCode, extraFiles).compileError
+      return simState.compileError
+    }
+    return compileArduinoSketch(activeCode, extraFiles).compileError
+  }, [activeEditingNodeId, activeCode, extraFiles, simState.compileError])
 
   const focusBarControls = (
     <div className="iot-focus-controls">
@@ -933,9 +1078,13 @@ export function IotSimulatorStudio({
             <button
               type="button"
               role="tab"
-              aria-selected={leftTab === 'code'}
-              className={`iot-left-tab ${leftTab === 'code' ? 'is-active' : ''}`}
-              onClick={() => setLeftTab('code')}
+              aria-selected={leftTab === 'code' && !activeCustomFile}
+              className={`iot-left-tab ${leftTab === 'code' && !activeCustomFile ? 'is-active' : ''}`}
+              onClick={() => {
+                setLeftTab('code')
+                setActiveCustomFile(null)
+                setAcState(null)
+              }}
             >
               Main.ino
             </button>
@@ -975,15 +1124,142 @@ export function IotSimulatorStudio({
             >
               Terminal
             </button>
+            {extraFiles.map((f) => (
+              <button
+                key={f.name}
+                type="button"
+                role="tab"
+                aria-selected={leftTab === 'code' && activeExtraFileObj?.name === f.name}
+                className={`iot-left-tab iot-custom-file-tab ${leftTab === 'code' && activeExtraFileObj?.name === f.name ? 'is-active' : ''}`}
+                onClick={() => {
+                  setLeftTab('code')
+                  setActiveCustomFile(f.name)
+                  setAcState(null)
+                }}
+              >
+                {f.name}
+              </button>
+            ))}
+            <div className="iot-file-menu-wrap" ref={fileMenuRef}>
+              <button
+                type="button"
+                className="iot-file-menu-btn"
+                aria-label={en ? 'Sketch file actions' : 'Menu file sketch'}
+                aria-expanded={showFileMenu}
+                title={en ? 'New file, rename, format, or upload' : 'Tambah file, rename, rapikan, atau unggah'}
+                onClick={() => setShowFileMenu((v) => !v)}
+              >
+                <ChevronDown size={14} />
+              </button>
+              <input
+                ref={uploadFilesInputRef}
+                type="file"
+                multiple
+                accept=".h,.hpp,.c,.cpp,.ino,.txt,.json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  void handleUploadExtraFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+              {showFileMenu ? (
+                <div className="iot-file-dropdown" role="menu" aria-label={en ? 'File menu' : 'Menu file'}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="iot-file-dropdown-item"
+                    onClick={() => {
+                      setLeftTab('code')
+                      setShowFileMenu(false)
+                      formatSketchCode()
+                    }}
+                  >
+                    <Code2 size={14} />
+                    <span>Format code</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="iot-file-dropdown-item"
+                    disabled={!activeExtraFileObj}
+                    title={!activeExtraFileObj ? (en ? 'Select a custom file tab to rename' : 'Pilih tab file tambahan untuk rename') : undefined}
+                    onClick={() => {
+                      if (!activeExtraFileObj) return
+                      setShowFileMenu(false)
+                      setLeftTab('code')
+                      setFileActionMode('rename')
+                      setFileNameDraft(activeExtraFileObj.name)
+                    }}
+                  >
+                    <Pencil size={14} />
+                    <span>Rename</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="iot-file-dropdown-item"
+                    disabled={!activeExtraFileObj}
+                    title={!activeExtraFileObj ? (en ? 'Main.ino cannot be deleted' : 'Main.ino tidak dapat dihapus') : undefined}
+                    onClick={deleteActiveCustomFile}
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="iot-file-dropdown-item"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      setLeftTab('code')
+                      setFileActionMode('new')
+                      setFileNameDraft('')
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>New file...</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="iot-file-dropdown-item"
+                    onClick={() => {
+                      setShowFileMenu(false)
+                      uploadFilesInputRef.current?.click()
+                    }}
+                  >
+                    <Upload size={14} />
+                    <span>Upload file(s)...</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </header>
 
           {leftTab === 'code' ? (
             <div className={`iot-editor-shell ${isDark ? 'theme-dark' : 'theme-light'}`}>
               <div className="iot-panel-head">
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
-                  <Code2 size={14} /> &lt;/&gt; {boardInstances.length > 1 ? `${editingBoardSpec.label}.ino` : 'Main.ino'}
+                  {activeExtraFileObj ? <FileCode2 size={14} /> : <Code2 size={14} />}
+                  &lt;/&gt;{' '}
+                  {activeExtraFileObj
+                    ? activeExtraFileObj.name
+                    : boardInstances.length > 1
+                      ? `${editingBoardSpec.label}.ino`
+                      : 'Main.ino'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={() => {
+                      setFileActionMode('new')
+                      setFileNameDraft('')
+                    }}
+                    title={en ? 'Add header/module file (.h/.cpp/.ino)' : 'Tambah file header/modul baru (.h/.cpp/.ino)'}
+                  >
+                    <Plus size={12} /> {en ? 'New file' : 'Tambah File'}
+                  </button>
                   <button
                     type="button"
                     className="btn-outline iot-mini-btn"
@@ -997,6 +1273,47 @@ export function IotSimulatorStudio({
                   </Badge>
                 </div>
               </div>
+              {fileActionMode ? (
+                <div className="iot-file-prompt" role="region" aria-label={fileActionMode === 'new' ? 'Create new sketch file' : 'Rename sketch file'}>
+                  <label htmlFor="iot-file-name-input" className="iot-file-prompt-label">
+                    {fileActionMode === 'new'
+                      ? en ? 'New filename (.h / .cpp / .ino):' : 'Nama file baru (.h / .cpp / .ino):'
+                      : en ? 'Rename file:' : 'Ubah nama file:'}
+                  </label>
+                  <input
+                    id="iot-file-name-input"
+                    type="text"
+                    autoFocus
+                    className="iot-file-prompt-input"
+                    value={fileNameDraft}
+                    onChange={(e) => setFileNameDraft(e.target.value)}
+                    placeholder="pins.h"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        commitFileAction()
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault()
+                        setFileActionMode(null)
+                        setFileNameDraft('')
+                      }
+                    }}
+                  />
+                  <button type="button" className="btn-primary iot-mini-btn" onClick={commitFileAction}>
+                    {fileActionMode === 'new' ? (en ? 'Create' : 'Buat') : (en ? 'Save' : 'Simpan')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={() => {
+                      setFileActionMode(null)
+                      setFileNameDraft('')
+                    }}
+                  >
+                    {en ? 'Cancel' : 'Batal'}
+                  </button>
+                </div>
+              ) : null}
               {boardInstances.length > 1 ? (
                 <div className="iot-mcu-switcher" role="group" aria-label={en ? 'Select MCU firmware' : 'Pilih firmware MCU'}>
                   {boardInstances.map((b, idx) => (
@@ -1047,13 +1364,13 @@ export function IotSimulatorStudio({
                     className="iot-code-textarea"
                     spellCheck={false}
                     wrap="off"
-                    value={activeCode}
+                    value={displayedCode}
                     aria-autocomplete="list"
                     aria-expanded={Boolean(acState)}
                     onChange={(e) => {
                       const val = e.target.value
                       const cursor = e.target.selectionStart
-                      setActiveCode(val)
+                      setDisplayedCode(val)
                       setCursorPos(getLineCol(val, cursor ?? 0))
                       refreshAutocomplete(val, cursor, false)
                     }}

@@ -1,5 +1,5 @@
 import type { BoardId, BoardSpec, ComponentKind, PlacedComponent, SimulationState, WireEndpoint } from './types'
-import { decodeResistorBands, formatOhms, getComponentSpec, rotatePointAroundBox } from './boards'
+import { decodeResistorBands, formatOhms, getComponentSpec, isBreadboardKind, rotatePointAroundBox } from './boards'
 import { RealBoardBodySvg, WokwiExtendedPartSvg, WokwiPartThumbnail } from './WokwiPartsSvg'
 
 export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
@@ -130,6 +130,20 @@ export function PartThumbnail({ kind }: { kind: ComponentKind }) {
           <rect x={50} y={7.5} width={5} height={13} fill="#78350f" />
           <rect x={63} y={6.5} width={4} height={15} fill="#eab308" />
         </g>
+      ) : kind === 'breadboard-mini' ? (
+        <g transform="translate(18, 8)">
+          <rect x={2} y={2} width={70} height={44} rx={3} fill="#d6d3c9" />
+          <rect x={0} y={0} width={70} height={42} rx={3} fill="#f7f6f0" stroke="#cbd5e1" strokeWidth={1.1} />
+          <rect x={3} y={19} width={64} height={4} rx={1} fill="#e5e3d8" />
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (
+            <g key={c}>
+              <rect x={8 + c * 5.8} y={7} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={8 + c * 5.8} y={12} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={8 + c * 5.8} y={28} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={8 + c * 5.8} y={33} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+            </g>
+          ))}
+        </g>
       ) : kind === 'breadboard' ? (
         <g transform="translate(8, 5)">
           <rect x={2} y={2} width={88} height={52} rx={3} fill="#d6d3c9" />
@@ -145,6 +159,24 @@ export function PartThumbnail({ kind }: { kind: ComponentKind }) {
               <rect x={9 + c * 6.2} y={19} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
               <rect x={9 + c * 6.2} y={29} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
               <rect x={9 + c * 6.2} y={33.5} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+            </g>
+          ))}
+        </g>
+      ) : kind === 'breadboard-large' ? (
+        <g transform="translate(4, 6)">
+          <rect x={2} y={2} width={98} height={48} rx={3} fill="#d6d3c9" />
+          <rect x={0} y={0} width={98} height={46} rx={3} fill="#f7f6f0" stroke="#cbd5e1" strokeWidth={1.1} />
+          <line x1={5} y1={4.5} x2={93} y2={4.5} stroke="#2563eb" strokeWidth={1.1} />
+          <line x1={5} y1={9.5} x2={93} y2={9.5} stroke="#dc2626" strokeWidth={1.1} />
+          <line x1={5} y1={36.5} x2={93} y2={36.5} stroke="#2563eb" strokeWidth={1.1} />
+          <line x1={5} y1={41.5} x2={93} y2={41.5} stroke="#dc2626" strokeWidth={1.1} />
+          <rect x={3} y={21} width={92} height={4} rx={1} fill="#e5e3d8" />
+          {Array.from({ length: 16 }, (_, c) => (
+            <g key={c}>
+              <rect x={7 + c * 5.4} y={13} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
+              <rect x={7 + c * 5.4} y={17} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
+              <rect x={7 + c * 5.4} y={27} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
+              <rect x={7 + c * 5.4} y={31} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
             </g>
           ))}
         </g>
@@ -358,6 +390,7 @@ export function ComponentHardwareView({
   showLabels,
   isDark,
   onStartDrag,
+  onStartRotate,
   onPinPointerDown,
   onPinPointerUp,
   onUpdateProps,
@@ -369,6 +402,7 @@ export function ComponentHardwareView({
   showLabels: boolean
   isDark: boolean
   onStartDrag: (compId: string, clientX: number, clientY: number) => void
+  onStartRotate?: (compId: string, clientX: number, clientY: number) => void
   onPinPointerDown: (ep: WireEndpoint, clientX: number, clientY: number) => void
   onPinPointerUp: (ep: WireEndpoint) => void
   onUpdateProps: (compId: string, patch: Partial<PlacedComponent['props']>) => void
@@ -469,6 +503,40 @@ export function ComponentHardwareView({
             </g>
           )
         })()
+      ) : comp.kind === 'breadboard-mini' ? (
+        <g>
+          <rect x={44} y={-2.5} width={16} height={3.5} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={124} y={-2.5} width={16} height={3.5} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={-2.5} y={24} width={3.5} height={14} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={-2.5} y={66} width={3.5} height={14} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={1} y={2} width={184} height={106} rx={5} fill="#d6d2c4" />
+          <rect x={0} y={0} width={184} height={104} rx={5} fill="#f7f6f1" stroke="#c8c4b6" strokeWidth={1.3} />
+          <rect x={8} y={52.5} width={168} height={8} rx={2} fill="#e7e4da" stroke="#d5d1c3" strokeWidth={0.7} />
+          {(['a', 'b', 'c', 'd', 'e'] as const).map((ltr, r) => (
+            <text key={`mb-t-${ltr}`} x={9} y={18 + r * 7.5 + 2} textAnchor="middle" fontSize="5.4" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {(['f', 'g', 'h', 'i', 'j'] as const).map((ltr, r) => (
+            <text key={`mb-b-${ltr}`} x={9} y={65 + r * 7.5 + 2} textAnchor="middle" fontSize="5.4" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {[1, 5, 10, 15].map((n) => (
+            <text key={`mb-c-${n}`} x={20 + (n - 1) * 9} y={12} textAnchor="middle" fontSize="5.2" fontWeight={700} fontFamily="monospace" fill="#64748b">{n}</text>
+          ))}
+          {Array.from({ length: 17 }, (_, col) => {
+            const hx = 20 + col * 9
+            return (
+              <g key={`mb-col-${col}`}>
+                {[0, 1, 2, 3, 4].map((r) => (
+                  <g key={`mb-r-${r}`}>
+                    <rect x={hx - 2.2} y={18 + r * 7.5 - 2.2} width={4.4} height={4.4} rx={0.8} fill="#cbc7b9" />
+                    <rect x={hx - 1.75} y={18 + r * 7.5 - 1.75} width={3.5} height={3.5} rx={0.5} fill="#18181b" />
+                    <rect x={hx - 2.2} y={65 + r * 7.5 - 2.2} width={4.4} height={4.4} rx={0.8} fill="#cbc7b9" />
+                    <rect x={hx - 1.75} y={65 + r * 7.5 - 1.75} width={3.5} height={3.5} rx={0.5} fill="#18181b" />
+                  </g>
+                ))}
+              </g>
+            )
+          })}
+        </g>
       ) : comp.kind === 'breadboard' ? (
         <g>
           {/* Side interlocking ABS dovetail tabs */}
@@ -571,6 +639,60 @@ export function ComponentHardwareView({
                     </g>
                   )
                 })}
+              </g>
+            )
+          })}
+        </g>
+      ) : comp.kind === 'breadboard-large' ? (
+        <g>
+          {/* Large 830-Point Full Breadboard Housing */}
+          <rect x={1} y={2} width={472} height={148} rx={5} fill="#d6d2c4" />
+          <rect x={0} y={0} width={472} height={146} rx={5} fill="#f7f6f1" stroke="#c8c4b6" strokeWidth={1.3} />
+          <line x1={24} y1={6.5} x2={448} y2={6.5} stroke="#2563eb" strokeWidth={1.2} />
+          <line x1={24} y1={25.5} x2={448} y2={25.5} stroke="#dc2626" strokeWidth={1.2} />
+          <line x1={24} y1={122.5} x2={448} y2={122.5} stroke="#2563eb" strokeWidth={1.2} />
+          <line x1={24} y1={141.5} x2={448} y2={141.5} stroke="#dc2626" strokeWidth={1.2} />
+          <text x={13} y={14.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={459} y={14.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={13} y={22.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={459} y={22.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={13} y={130.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={459} y={130.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={13} y={138.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={459} y={138.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <rect x={10} y={71} width={452} height={7} rx={1.8} fill="#e7e4da" stroke="#d5d1c3" strokeWidth={0.7} />
+          {[1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((colNum) => (
+            <text key={`lc-${colNum}`} x={26 + (colNum - 1) * 6.8} y={33.8} textAnchor="middle" fontSize="5" fontWeight={700} fontFamily="monospace" fill="#64748b">{colNum}</text>
+          ))}
+          {(['a', 'b', 'c', 'd', 'e'] as const).map((ltr, r) => (
+            <text key={`lt-${ltr}`} x={13} y={38 + r * 7 + 2} textAnchor="middle" fontSize="5.2" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {(['f', 'g', 'h', 'i', 'j'] as const).map((ltr, r) => (
+            <text key={`lb-${ltr}`} x={13} y={83 + r * 7 + 2} textAnchor="middle" fontSize="5.2" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {Array.from({ length: 10 }, (_, grp) =>
+            [0, 1, 2, 3, 4].map((h) => {
+              const hx = (grp < 5 ? 32 + grp * 41 : 246 + (grp - 5) * 41) + h * 6.8
+              return (
+                <g key={`lr-${grp}-${h}`}>
+                  <rect x={hx - 1.5} y={10.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  <rect x={hx - 1.5} y={18.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  <rect x={hx - 1.5} y={126.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  <rect x={hx - 1.5} y={134.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                </g>
+              )
+            }),
+          )}
+          {Array.from({ length: 63 }, (_, col) => {
+            const hx = 26 + col * 6.8
+            return (
+              <g key={`lcol-${col}`}>
+                {[0, 1, 2, 3, 4].map((r) => (
+                  <g key={`lr-${r}`}>
+                    <rect x={hx - 1.5} y={38 + r * 7 - 1.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                    <rect x={hx - 1.5} y={83 + r * 7 - 1.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  </g>
+                ))}
               </g>
             )
           })}
@@ -876,13 +998,21 @@ export function ComponentHardwareView({
         const isSel = selectedPin?.nodeId === comp.id && selectedPin?.pinId === p.id
         const color = isSel ? '#f59e0b' : p.role === 'power' ? '#ef4444' : p.role === 'gnd' || p.role === 'cathode' ? '#475569' : '#38bdf8'
         const shortTag = p.id === 'A' ? '+' : p.id === 'K' ? '-' : p.id
-        if (comp.kind === 'breadboard') {
+        if (isBreadboardKind(comp.kind)) {
           return (
-            <g
+            <rect
               key={p.id}
-              className="iot-pin iot-bb-pin"
+              className="iot-pin iot-bb-pin iot-bb-socket-ring"
               data-node-id={comp.id}
               data-pin-id={p.id}
+              x={rot.dx - 3.2}
+              y={rot.dy - 3.2}
+              width={6.4}
+              height={6.4}
+              rx={1.2}
+              fill="transparent"
+              stroke={isSel ? '#f59e0b' : 'transparent'}
+              strokeWidth={isSel ? 1.8 : 1.1}
               style={{ cursor: 'crosshair' }}
               onPointerDown={(e) => {
                 e.stopPropagation()
@@ -893,21 +1023,8 @@ export function ComponentHardwareView({
                 onPinPointerUp({ nodeId: comp.id, pinId: p.id })
               }}
             >
-              <circle className="iot-pin-hit" cx={rot.dx} cy={rot.dy} r={6.5} fill="transparent" />
-              <rect
-                className="iot-bb-socket-ring"
-                x={rot.dx - 3}
-                y={rot.dy - 3}
-                width={6}
-                height={6}
-                rx={1.2}
-                fill="none"
-                stroke={isSel ? '#f59e0b' : color}
-                strokeWidth={isSel ? 1.8 : 0.9}
-                opacity={isSel ? 1 : 0.55}
-              />
               <title>{p.label}</title>
-            </g>
+            </rect>
           )
         }
         return (
@@ -947,6 +1064,23 @@ export function ComponentHardwareView({
           </g>
         )
       })}
+      {selectedComp && onStartRotate ? (
+        <g
+          className="iot-rotate-handle iot-interactive-control"
+          data-rotate-node={comp.id}
+          transform={`translate(${spec.width + 6}, -6)`}
+          style={{ cursor: 'grab' }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onStartRotate(comp.id, e.clientX, e.clientY)
+          }}
+        >
+          <circle r={9.5} fill="#16a34a" stroke="#ffffff" strokeWidth={1.6} />
+          <path d="M 3.5 -2.5 A 4.2 4.2 0 1 0 4.1 1.6" fill="none" stroke="#ffffff" strokeWidth={1.6} strokeLinecap="round" />
+          <path d="M 1.2 -3.4 L 4.3 -2.6 L 3.8 0.5" fill="none" stroke="#ffffff" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+          <title>Tarik bebas untuk memutar / klik +45°</title>
+        </g>
+      ) : null}
     </g>
   )
 }

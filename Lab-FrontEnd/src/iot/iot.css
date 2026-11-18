@@ -167,10 +167,11 @@
 }
 
 .iot-left-tabs {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   flex-shrink: 0;
-  gap: 4px;
+  gap: 3px;
   padding: 6px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
@@ -178,12 +179,12 @@
 
 .iot-left-tab {
   flex: 1 1 auto;
-  padding: 6px 8px;
+  padding: 5px 7px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--ink-2);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -200,7 +201,8 @@
 .iot-editor-shell {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .iot-panel-head {
@@ -1220,10 +1222,12 @@
 
 /* diagram.json, Library Manager, & 8-Channel Logic Analyzer styles */
 .iot-diagram-pane,
-.iot-libs-pane {
-  display: grid;
+.iot-libs-pane,
+.iot-terminal-tab-pane {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 12px;
+  padding: 12px 12px 28px;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -1260,8 +1264,9 @@
 .iot-lib-list {
   display: grid;
   gap: 8px;
-  max-height: 410px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
+  padding-bottom: 18px;
 }
 
 .iot-lib-item {
@@ -1407,12 +1412,116 @@
 }
 
 /* Realistic Breadboard socket hover highlight */
-.iot-bb-pin .iot-bb-socket-ring {
-  transition: stroke 120ms ease, stroke-width 120ms ease, opacity 120ms ease;
+.iot-bb-pin {
+  transition: stroke 120ms ease, stroke-width 120ms ease;
 }
 
-.iot-bb-pin:hover .iot-bb-socket-ring {
-  stroke: #f59e0b;
-  stroke-width: 1.8;
-  opacity: 1;
+.iot-bb-pin:hover {
+  stroke: #f59e0b !important;
+  stroke-width: 1.6 !important;
+}
+
+.iot-rotate-handle circle {
+  transition: transform 120ms ease, fill 120ms ease;
+}
+
+.iot-rotate-handle:hover circle {
+  fill: #15803d;
+}
+
+/* Wokwi-style file menu dropdown & extra file tabs */
+.iot-custom-file-tab {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.iot-file-menu-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.iot-file-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #166534;
+  background: #2e5930;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.iot-file-menu-btn:hover {
+  background: #15803d;
+}
+
+.iot-file-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 8px;
+  z-index: 80;
+  min-width: 196px;
+  padding: 6px 0;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #2b2b2b;
+  color: #f8fafc;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.36);
+}
+
+.iot-file-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.iot-file-dropdown-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.iot-file-dropdown-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.iot-file-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.iot-file-prompt-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.iot-file-prompt-input {
+  flex: 1 1 130px;
+  min-width: 110px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
 }

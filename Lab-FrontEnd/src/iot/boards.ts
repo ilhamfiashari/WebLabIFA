@@ -308,6 +308,105 @@ export const BOARDS: Record<BoardId, BoardSpec> = {
   },
 }
 
+const TOP_ROWS = ['a', 'b', 'c', 'd', 'e'] as const
+const BOT_ROWS = ['f', 'g', 'h', 'i', 'j'] as const
+
+function buildBreadboardPins(variant: 'mini' | 'medium' | 'large') {
+  const pins: ComponentSpec['pins'] = []
+  if (variant === 'mini') {
+    for (let col = 1; col <= 17; col++) {
+      const dx = +(20 + (col - 1) * 9).toFixed(1)
+      TOP_ROWS.forEach((row, r) => pins.push({ id: `c${col}_${row}`, label: `Col ${col} · ${row}`, dx, dy: +(18 + r * 7.5).toFixed(1), role: 'signal' }))
+      BOT_ROWS.forEach((row, r) => pins.push({ id: `c${col}_${row}`, label: `Col ${col} · ${row}`, dx, dy: +(65 + r * 7.5).toFixed(1), role: 'signal' }))
+    }
+    return pins
+  }
+
+  if (variant === 'medium') {
+    let idx = 0
+    for (let grp = 0; grp < 5; grp++) {
+      for (let h = 0; h < 5; h++) {
+        idx++
+        const dx = +(34 + grp * 54 + h * 9).toFixed(1)
+        pins.push({ id: `tn_${idx}`, label: `Top - Rail #${idx}`, dx, dy: 13, role: 'gnd' })
+        pins.push({ id: `tp_${idx}`, label: `Top + Rail #${idx}`, dx, dy: 22, role: 'power' })
+        pins.push({ id: `bn_${idx}`, label: `Bot - Rail #${idx}`, dx, dy: 137, role: 'gnd' })
+        pins.push({ id: `bp_${idx}`, label: `Bot + Rail #${idx}`, dx, dy: 146, role: 'power' })
+      }
+    }
+    for (let col = 1; col <= 30; col++) {
+      const dx = +(28 + (col - 1) * 9).toFixed(1)
+      TOP_ROWS.forEach((row, r) => pins.push({ id: `c${col}_${row}`, label: `Col ${col} · ${row}`, dx, dy: +(42 + r * 7.5).toFixed(1), role: 'signal' }))
+      BOT_ROWS.forEach((row, r) => pins.push({ id: `c${col}_${row}`, label: `Col ${col} · ${row}`, dx, dy: +(90 + r * 7.5).toFixed(1), role: 'signal' }))
+    }
+    return pins
+  }
+
+  // large (830 tie-points: 63 cols x 10 + 100 top rail + 100 bot rail)
+  let rIdx = 0
+  for (let grp = 0; grp < 10; grp++) {
+    const base = grp < 5 ? 32 + grp * 41 : 246 + (grp - 5) * 41
+    for (let h = 0; h < 5; h++) {
+      rIdx++
+      const dx = +(base + h * 6.8).toFixed(1)
+      pins.push({ id: `tn_${rIdx}`, label: `Top - Rail #${rIdx}`, dx, dy: 12, role: 'gnd' })
+      pins.push({ id: `tp_${rIdx}`, label: `Top + Rail #${rIdx}`, dx, dy: 20, role: 'power' })
+      pins.push({ id: `bn_${rIdx}`, label: `Bot - Rail #${rIdx}`, dx, dy: 128, role: 'gnd' })
+      pins.push({ id: `bp_${rIdx}`, label: `Bot + Rail #${rIdx}`, dx, dy: 136, role: 'power' })
+    }
+  }
+  for (let col = 1; col <= 63; col++) {
+    const dx = +(26 + (col - 1) * 6.8).toFixed(1)
+    TOP_ROWS.forEach((row, r) => pins.push({ id: `c${col}_${row}`, label: `Col ${col} · ${row}`, dx, dy: +(38 + r * 7).toFixed(1), role: 'signal' }))
+    BOT_ROWS.forEach((row, r) => pins.push({ id: `c${col}_${row}`, label: `Col ${col} · ${row}`, dx, dy: +(83 + r * 7).toFixed(1), role: 'signal' }))
+  }
+  return pins
+}
+
+const MINI_BB_PINS = buildBreadboardPins('mini')
+const MEDIUM_BB_PINS = buildBreadboardPins('medium')
+const LARGE_BB_PINS = buildBreadboardPins('large')
+
+export function isBreadboardKind(kind: ComponentKind): boolean {
+  return kind === 'breadboard' || kind === 'breadboard-mini' || kind === 'breadboard-large'
+}
+
+export function resolveBreadboardPinAlias(pinId: string): string {
+  switch (pinId) {
+    case 'VCC_L': return 'tp_1'
+    case 'VCC_M': return 'tp_13'
+    case 'VCC_R': return 'tp_25'
+    case 'GND_L': return 'tn_1'
+    case 'GND_M': return 'tn_13'
+    case 'GND_R': return 'tn_25'
+    case 'VCC_BL': return 'bp_1'
+    case 'VCC_BR': return 'bp_25'
+    case 'GND_BL': return 'bn_1'
+    case 'GND_BR': return 'bn_25'
+    case 'A1': return 'c5_a'
+    case 'A1_E': return 'c5_e'
+    case 'A2': return 'c10_a'
+    case 'A2_E': return 'c10_e'
+    case 'A3': return 'c15_a'
+    case 'A3_E': return 'c15_e'
+    case 'A4': return 'c20_a'
+    case 'A4_E': return 'c20_e'
+    case 'A5': return 'c25_a'
+    case 'A5_E': return 'c25_e'
+    case 'B1': return 'c5_f'
+    case 'B1_J': return 'c5_j'
+    case 'B2': return 'c10_f'
+    case 'B2_J': return 'c10_j'
+    case 'B3': return 'c15_f'
+    case 'B3_J': return 'c15_j'
+    case 'B4': return 'c20_f'
+    case 'B4_J': return 'c20_j'
+    case 'B5': return 'c25_f'
+    case 'B5_J': return 'c25_j'
+    default: return pinId
+  }
+}
+
 export const COMPONENT_CATALOG: ComponentSpec[] = [
   // Basic / Passive
   {
@@ -357,46 +456,37 @@ export const COMPONENT_CATALOG: ComponentSpec[] = [
     ],
   },
   {
+    kind: 'breadboard-mini',
+    category: 'passives',
+    nameId: 'Mini Breadboard (170-Pt)',
+    nameEn: 'Mini Breadboard (170-Pt)',
+    subtitleId: 'Passive · 170 Titik · Ringkas',
+    subtitleEn: 'Passive · 170 Tie-Points',
+    width: 184,
+    height: 106,
+    pins: MINI_BB_PINS,
+  },
+  {
     kind: 'breadboard',
     category: 'passives',
-    nameId: 'Breadboard',
-    nameEn: 'Breadboard',
-    subtitleId: 'Passive · Half 400-Pt',
+    nameId: 'Medium Breadboard (Half 400-Pt)',
+    nameEn: 'Medium Breadboard (Half 400-Pt)',
+    subtitleId: 'Passive · 400 Titik · 5.5×4.5 cm',
     subtitleEn: 'Passive · Half 400-Pt',
     width: 318,
     height: 156,
-    pins: [
-      { id: 'GND_L', label: 'Top - Rail (L)', dx: 34, dy: 13, role: 'gnd' },
-      { id: 'GND_M', label: 'Top - Rail (M)', dx: 160, dy: 13, role: 'gnd' },
-      { id: 'GND_R', label: 'Top - Rail (R)', dx: 286, dy: 13, role: 'gnd' },
-      { id: 'VCC_L', label: 'Top + Rail (L)', dx: 34, dy: 22, role: 'power' },
-      { id: 'VCC_M', label: 'Top + Rail (M)', dx: 160, dy: 22, role: 'power' },
-      { id: 'VCC_R', label: 'Top + Rail (R)', dx: 286, dy: 22, role: 'power' },
-      { id: 'A1', label: 'Col 5 · Row a', dx: 64, dy: 42, role: 'signal' },
-      { id: 'A1_E', label: 'Col 5 · Row e', dx: 64, dy: 72, role: 'signal' },
-      { id: 'A2', label: 'Col 10 · Row a', dx: 109, dy: 42, role: 'signal' },
-      { id: 'A2_E', label: 'Col 10 · Row e', dx: 109, dy: 72, role: 'signal' },
-      { id: 'A3', label: 'Col 15 · Row a', dx: 154, dy: 42, role: 'signal' },
-      { id: 'A3_E', label: 'Col 15 · Row e', dx: 154, dy: 72, role: 'signal' },
-      { id: 'A4', label: 'Col 20 · Row a', dx: 199, dy: 42, role: 'signal' },
-      { id: 'A4_E', label: 'Col 20 · Row e', dx: 199, dy: 72, role: 'signal' },
-      { id: 'A5', label: 'Col 25 · Row a', dx: 244, dy: 42, role: 'signal' },
-      { id: 'A5_E', label: 'Col 25 · Row e', dx: 244, dy: 72, role: 'signal' },
-      { id: 'B1', label: 'Col 5 · Row f', dx: 64, dy: 90, role: 'signal' },
-      { id: 'B1_J', label: 'Col 5 · Row j', dx: 64, dy: 120, role: 'signal' },
-      { id: 'B2', label: 'Col 10 · Row f', dx: 109, dy: 90, role: 'signal' },
-      { id: 'B2_J', label: 'Col 10 · Row j', dx: 109, dy: 120, role: 'signal' },
-      { id: 'B3', label: 'Col 15 · Row f', dx: 154, dy: 90, role: 'signal' },
-      { id: 'B3_J', label: 'Col 15 · Row j', dx: 154, dy: 120, role: 'signal' },
-      { id: 'B4', label: 'Col 20 · Row f', dx: 199, dy: 90, role: 'signal' },
-      { id: 'B4_J', label: 'Col 20 · Row j', dx: 199, dy: 120, role: 'signal' },
-      { id: 'B5', label: 'Col 25 · Row f', dx: 244, dy: 90, role: 'signal' },
-      { id: 'B5_J', label: 'Col 25 · Row j', dx: 244, dy: 120, role: 'signal' },
-      { id: 'GND_BL', label: 'Bottom - Rail (L)', dx: 34, dy: 137, role: 'gnd' },
-      { id: 'GND_BR', label: 'Bottom - Rail (R)', dx: 286, dy: 137, role: 'gnd' },
-      { id: 'VCC_BL', label: 'Bottom + Rail (L)', dx: 34, dy: 146, role: 'power' },
-      { id: 'VCC_BR', label: 'Bottom + Rail (R)', dx: 286, dy: 146, role: 'power' },
-    ],
+    pins: MEDIUM_BB_PINS,
+  },
+  {
+    kind: 'breadboard-large',
+    category: 'passives',
+    nameId: 'Large Breadboard (Full 830-Pt)',
+    nameEn: 'Large Breadboard (Full 830-Pt)',
+    subtitleId: 'Passive · 830 Titik + Power Rail',
+    subtitleEn: 'Passive · Full 830-Pt',
+    width: 472,
+    height: 148,
+    pins: LARGE_BB_PINS,
   },
   // Input Devices
   {
@@ -1090,7 +1180,8 @@ export function rotatePointAroundBox(
   height: number,
   rotateDeg = 0,
 ): { dx: number; dy: number } {
-  const r = ((Math.round(rotateDeg) % 360) + 360) % 360
+  const r = ((rotateDeg % 360) + 360) % 360
+  if (r === 0) return { dx, dy }
   const cx = width / 2
   const cy = height / 2
   const vx = dx - cx
@@ -1098,7 +1189,13 @@ export function rotatePointAroundBox(
   if (r === 90) return { dx: Math.round(cx - vy), dy: Math.round(cy + vx) }
   if (r === 180) return { dx: Math.round(cx - vx), dy: Math.round(cy - vy) }
   if (r === 270) return { dx: Math.round(cx + vy), dy: Math.round(cy - vx) }
-  return { dx, dy }
+  const rad = (r * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  return {
+    dx: Math.round((cx + vx * cos - vy * sin) * 10) / 10,
+    dy: Math.round((cy + vx * sin + vy * cos) * 10) / 10,
+  }
 }
 
 export function getComponentSpec(kind: ComponentKind, boardId?: BoardId): ComponentSpec {

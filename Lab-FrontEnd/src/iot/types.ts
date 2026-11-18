@@ -53,6 +53,8 @@ export type ComponentKind =
   | 'slide-switch'
   | 'resistor'
   | 'breadboard'
+  | 'breadboard-mini'
+  | 'breadboard-large'
   | 'potentiometer'
   | 'slide-pot'
   | 'joystick'
