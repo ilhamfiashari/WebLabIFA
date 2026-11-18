@@ -66,6 +66,13 @@ pub async fn start_or_resume_session(
     let level = LevelId::parse(&req.level_id).ok_or(ApiError(StatusCode::UNPROCESSABLE_ENTITY))?;
 
     if actor.role == "mahasiswa" {
+        let settings = crate::latihan::load_platform_settings(&state.pool).await;
+        if let Some(list) = settings.active_tracks.as_array()
+            && !list.iter().any(|v| v.as_str() == Some(lab.track))
+        {
+            return Err(ApiError(StatusCode::FORBIDDEN));
+        }
+
         let mod_status: Option<(String,)> =
             sqlx::query_as("SELECT status FROM lab_modules WHERE lab_id=$1")
                 .bind(lab.id)
@@ -75,6 +82,56 @@ pub async fn start_or_resume_session(
             && (status == "Draft" || status == "Rencana")
         {
             return Err(ApiError(StatusCode::FORBIDDEN));
+        }
+
+        #[derive(FromRow)]
+        struct AssignGuardRow {
+            due_at: DateTime<Utc>,
+            allow_late: bool,
+            max_attempts: i32,
+        }
+        let class_assigns: Vec<AssignGuardRow> = sqlx::query_as(
+            "SELECT a.due_at,a.allow_late,a.max_attempts FROM assignments a JOIN class_memberships m ON m.class_id=a.class_id WHERE m.user_id=$1 AND a.lab_id=$2 AND a.required_level=$3",
+        )
+        .bind(actor.id)
+        .bind(lab.id)
+        .bind(level.as_str())
+        .fetch_all(&state.pool)
+        .await?;
+
+        if !class_assigns.is_empty() {
+            let now = Utc::now();
+            let all_locked_deadline = class_assigns.iter().all(|a| {
+                is_assignment_locked_by_deadline(
+                    a.due_at,
+                    now,
+                    a.allow_late,
+                    settings.strict_deadline_lock,
+                )
+            });
+            if all_locked_deadline {
+                return Err(ApiError(StatusCode::FORBIDDEN));
+            }
+            if req.force_new {
+                let cap = class_assigns
+                    .iter()
+                    .map(|a| a.max_attempts)
+                    .filter(|&n| n > 0)
+                    .max();
+                if let Some(max_att) = cap {
+                    let existing_cnt: (i64,) = sqlx::query_as(
+                        "SELECT count(*) FROM lab_sessions WHERE user_id=$1 AND lab_id=$2 AND level_id=$3",
+                    )
+                    .bind(actor.id)
+                    .bind(lab.id)
+                    .bind(level.as_str())
+                    .fetch_one(&state.pool)
+                    .await?;
+                    if existing_cnt.0 >= i64::from(max_att) {
+                        return Err(ApiError(StatusCode::CONFLICT));
+                    }
+                }
+            }
         }
     }
 

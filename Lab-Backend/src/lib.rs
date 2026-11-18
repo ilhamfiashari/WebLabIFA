@@ -128,6 +128,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/dosen/assignments", post(portal::create_assignment))
         .route(
+            "/api/dosen/assignments/{assignment_id}",
+            delete(portal::delete_assignment),
+        )
+        .route(
             "/api/dosen/sessions/{session_id}/feedback",
             post(portal::add_session_feedback),
         )
@@ -144,6 +148,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/admin/catalog/{lab_id}/status",
             post(portal::admin_update_module_status),
+        )
+        .route(
+            "/api/admin/settings",
+            get(portal::admin_get_settings).post(portal::admin_update_settings),
         )
         .route(
             "/api/account/security",
