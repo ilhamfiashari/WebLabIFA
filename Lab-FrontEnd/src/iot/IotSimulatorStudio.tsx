@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  AlignLeft,
   Award,
   BookOpen,
   CheckCircle2,
@@ -36,6 +37,15 @@ import {
   getArduinoAutocomplete,
   type AcSuggestion,
 } from './cppAutocomplete'
+import {
+  formatArduinoCpp,
+  getLineCol,
+  handleSmartBackspace,
+  handleSmartClosingBrace,
+  handleSmartEnter,
+  handleSmartIndent,
+  handleSmartPairOrClose,
+} from './cppEditorHelpers'
 import { tokenizeArduinoCpp } from './cppHighlight'
 import {
   compileArduinoSketch,
@@ -179,6 +189,7 @@ export function IotSimulatorStudio({
   const componentsRef = useRef(components)
   const wiresRef = useRef(wires)
   const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 })
   const [acState, setAcState] = useState<{
     replaceStart: number
     replaceEnd: number
@@ -209,18 +220,30 @@ export function IotSimulatorStudio({
     })
   }
 
-  const acceptAutocomplete = (item: AcSuggestion) => {
-    if (!acState) return
-    const { nextCode, nextCursor } = applyAutocompleteItem(code, acState.replaceStart, acState.replaceEnd, item)
+  const applyEditorMutation = (nextCode: string, selStart: number, selEnd = selStart, runAc = false) => {
     setCode(nextCode)
-    setAcState(null)
+    setCursorPos(getLineCol(nextCode, selStart))
+    if (runAc) refreshAutocomplete(nextCode, selStart, false)
+    else setAcState(null)
     requestAnimationFrame(() => {
       const ta = codeTextareaRef.current
       if (ta) {
         ta.focus()
-        ta.setSelectionRange(nextCursor, nextCursor)
+        ta.setSelectionRange(selStart, selEnd)
       }
     })
+  }
+
+  const formatSketchCode = () => {
+    const formatted = formatArduinoCpp(code)
+    applyEditorMutation(formatted, Math.min(formatted.length, codeTextareaRef.current?.selectionStart ?? 0))
+    setStatusNotice(en ? 'Code auto-indented cleanly.' : 'Kode dirapikan dengan auto-indent.')
+  }
+
+  const acceptAutocomplete = (item: AcSuggestion) => {
+    if (!acState) return
+    const { nextCode, nextCursor } = applyAutocompleteItem(code, acState.replaceStart, acState.replaceEnd, item)
+    applyEditorMutation(nextCode, nextCursor)
   }
   useEffect(() => {
     componentsRef.current = components
@@ -904,7 +927,14 @@ export function IotSimulatorStudio({
                   <Code2 size={14} /> &lt;/&gt; Main.ino
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="muted" style={{ fontSize: 11 }}>Ctrl+Space</span>
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={formatSketchCode}
+                    title={en ? 'Auto-indent & format code (Shift+Alt+F)' : 'Rapikan indentasi kode (Shift+Alt+F)'}
+                  >
+                    <AlignLeft size={12} /> {en ? 'Format' : 'Rapikan'}
+                  </button>
                   <Badge tone={simState.compileError ? 'bad' : 'good'}>
                     {simState.compileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[boardId].shortName} C++`}
                   </Badge>
@@ -916,10 +946,17 @@ export function IotSimulatorStudio({
               <div className="iot-code-wrap">
                 <div className="iot-line-gutter" aria-hidden="true">
                   {Array.from({ length: lineCount }, (_, idx) => (
-                    <div key={idx}>{idx + 1}</div>
+                    <div key={idx} className={cursorPos.line === idx + 1 ? 'is-active-line' : undefined}>
+                      {idx + 1}
+                    </div>
                   ))}
                 </div>
                 <div className="iot-code-stage">
+                  <div
+                    className="iot-active-line-bg"
+                    style={{ top: (cursorPos.line - 1) * 19.375 + 12 }}
+                    aria-hidden="true"
+                  />
                   <pre className="iot-code-highlight" aria-hidden="true">
                     <code>
                       {highlightedTokens.map((tok, i) => (
@@ -943,35 +980,91 @@ export function IotSimulatorStudio({
                       const val = e.target.value
                       const cursor = e.target.selectionStart
                       setCode(val)
+                      setCursorPos(getLineCol(val, cursor ?? 0))
                       refreshAutocomplete(val, cursor, false)
                     }}
+                    onClick={(e) => setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
+                    onSelect={(e) => setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
                     onKeyDown={(e) => {
                       if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
                         e.preventDefault()
                         refreshAutocomplete(e.currentTarget.value, e.currentTarget.selectionStart, true)
                         return
                       }
-                      if (!acState) return
-                      if (e.key === 'ArrowDown') {
+                      if ((e.shiftKey && e.altKey && e.key.toLowerCase() === 'f') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f')) {
                         e.preventDefault()
-                        setAcState((prev) =>
-                          prev ? { ...prev, activeIndex: (prev.activeIndex + 1) % prev.items.length } : null,
-                        )
-                      } else if (e.key === 'ArrowUp') {
+                        formatSketchCode()
+                        return
+                      }
+                      if (acState) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setAcState((prev) =>
+                            prev ? { ...prev, activeIndex: (prev.activeIndex + 1) % prev.items.length } : null,
+                          )
+                          return
+                        }
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setAcState((prev) =>
+                            prev
+                              ? { ...prev, activeIndex: (prev.activeIndex - 1 + prev.items.length) % prev.items.length }
+                              : null,
+                          )
+                          return
+                        }
+                        if (e.key === 'Enter' || e.key === 'Tab') {
+                          e.preventDefault()
+                          const item = acState.items[acState.activeIndex]
+                          if (item) acceptAutocomplete(item)
+                          return
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setAcState(null)
+                          return
+                        }
+                      }
+
+                      const ta = e.currentTarget
+                      const start = ta.selectionStart ?? 0
+                      const end = ta.selectionEnd ?? start
+
+                      if (e.key === 'Enter') {
                         e.preventDefault()
-                        setAcState((prev) =>
-                          prev
-                            ? { ...prev, activeIndex: (prev.activeIndex - 1 + prev.items.length) % prev.items.length }
-                            : null,
-                        )
-                      } else if (e.key === 'Enter' || e.key === 'Tab') {
+                        const res = handleSmartEnter(ta.value, start, end)
+                        applyEditorMutation(res.nextCode, res.nextCursor)
+                        return
+                      }
+                      if (e.key === 'Tab') {
                         e.preventDefault()
-                        const item = acState.items[acState.activeIndex]
-                        if (item) acceptAutocomplete(item)
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setAcState(null)
+                        const res = handleSmartIndent(ta.value, start, end, e.shiftKey)
+                        applyEditorMutation(res.nextCode, res.nextSelStart, res.nextSelEnd)
+                        return
+                      }
+                      if (e.key === '}' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                        const out = handleSmartClosingBrace(ta.value, start, end)
+                        if (out) {
+                          e.preventDefault()
+                          applyEditorMutation(out.nextCode, out.nextCursor)
+                          return
+                        }
+                      }
+                      if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                        const bs = handleSmartBackspace(ta.value, start, end)
+                        if (bs) {
+                          e.preventDefault()
+                          applyEditorMutation(bs.nextCode, bs.nextCursor)
+                          return
+                        }
+                      }
+                      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                        const pair = handleSmartPairOrClose(ta.value, start, end, e.key)
+                        if (pair) {
+                          e.preventDefault()
+                          applyEditorMutation(pair.nextCode, pair.nextCursor)
+                        }
                       }
                     }}
                     onBlur={() => setAcState(null)}
@@ -1009,6 +1102,10 @@ export function IotSimulatorStudio({
                     </div>
                   ) : null}
                 </div>
+              </div>
+              <div className="iot-editor-statusbar">
+                <span>Ln {cursorPos.line}, Kol {cursorPos.col}</span>
+                <span>Spaces: 2 · Tab indent · Ctrl+Space saran · Shift+Alt+F rapikan</span>
               </div>
             </div>
           ) : leftTab === 'diagram' ? (

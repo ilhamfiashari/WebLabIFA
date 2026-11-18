@@ -429,6 +429,42 @@
   background: var(--surface-2);
 }
 
+.iot-line-gutter .is-active-line {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.iot-active-line-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 19.375px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.iot-editor-shell.theme-light .iot-active-line-bg {
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.iot-editor-shell.theme-dark .iot-active-line-bg {
+  background: rgba(148, 163, 184, 0.09);
+}
+
+.iot-editor-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
 /* Components Visual Catalog Browser */
 .iot-components-browser {
   display: grid;

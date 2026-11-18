@@ -906,6 +906,19 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.keyboard.press('Enter')
   await expect(acBox).toHaveCount(0)
   await expect(codeEditor).toHaveValue(/digitalWrite\(\)/)
+
+  // Uji auto-indentation saat Enter di dalam blok `{` serta tombol Rapikan (Format)
+  await codeEditor.fill('void loop() {\ndigitalWrite(2, HIGH);\n}')
+  await page.getByRole('button', { name: 'Rapikan' }).click()
+  await expect(codeEditor).toHaveValue('void loop() {\n  digitalWrite(2, HIGH);\n}')
+  await codeEditor.evaluate((el: HTMLTextAreaElement) => {
+    const idx = el.value.indexOf('{') + 1
+    el.selectionStart = idx
+    el.selectionEnd = idx
+  })
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('delay(100);')
+  await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
   await codeEditor.fill(originalCode)
 
   // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive
