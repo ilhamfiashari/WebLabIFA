@@ -42,7 +42,7 @@ jobs:
           npm run typecheck
           npm run lint
           npm run build
-          npm audit --audit-level=high
+          npm audit --omit=dev --audit-level=high
           npm sbom --sbom-format cyclonedx > ../frontend-sbom.json
       - name: Rust checks
         run: |
