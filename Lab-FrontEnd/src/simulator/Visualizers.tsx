@@ -34,73 +34,73 @@ function getMissionSpec(labId: string): WebGoatMissionSpec {
   switch (labId) {
     case 'a01-idor':
       return {
-        badge: 'WebGoat Track · Broken Access Control (IDOR)',
+        badge: 'Lab Interaktif · Broken Access Control (IDOR)',
         goal: 'Ubah ID pesanan/invoice pada URL API milik pengguna Bima (102 atau 9c4e-102) saat login memakai sesi Rani.',
         lessonTip: 'Uji baseline milik sendiri (#101), lalu ganti parameter ID atau berpindah ke rute /invoices/:id.',
       }
     case 'a02-misconfig':
       return {
-        badge: 'WebGoat Track · Security Misconfiguration',
+        badge: 'Lab Interaktif · Security Misconfiguration',
         goal: 'Picu parse error atau telusuri jalur proxy fallback dan berkas cadangan (/backup.sql.bak) yang bocor.',
         lessonTip: 'Bandingkan endpoint /api/health yang sah dengan respons error debug & file statis.',
       }
     case 'a03-supply-chain':
       return {
-        badge: 'WebGoat Track · Supply Chain & SBOM Gate',
+        badge: 'Lab Interaktif · Supply Chain & SBOM Gate',
         goal: 'Uji apakah gerbang rilis meloloskan artefak dengan CVE langsung, CVE transitif SBOM, atau builder asing.',
         lessonTip: 'Amati bagaimana lockfile & provenance SLSA menahan artefak bermasalah sebelum produksi.',
       }
     case 'a04-crypto':
       return {
-        badge: 'WebGoat Track · Cryptographic Failures',
+        badge: 'Lab Interaktif · Cryptographic Failures',
         goal: 'Periksa tabel kredensial untuk membuktikan hash lemah/tanpa salt atau migrasi hash saat login gagal.',
         lessonTip: 'Bandingkan hash milik rani_demo dan bima_demo bila memakai password yang sama.',
       }
     case 'a05-sqli':
       return {
-        badge: 'WebGoat Track · SQL Injection & Dynamic Sort',
+        badge: 'Lab Interaktif · SQL Injection & Dynamic Sort',
         goal: 'Gunakan pencarian produk atau parameter ORDER BY untuk mengekstrak baris produk rahasia (is_public=false).',
         lessonTip: 'Coba baseline normal dengan kutip ("Kabel\'Pro"), lalu masukkan tautologi SQL atau CASE WHEN pada kolom sortir.',
       }
     case 'a05-xss':
       return {
-        badge: 'WebGoat Track · Cross-Site Scripting (XSS)',
+        badge: 'Lab Interaktif · Cross-Site Scripting (XSS)',
         goal: 'Kirim payload HTML/event handler ke forum komentar dan amati pemicu sink DOM pada browser korban/moderator.',
         lessonTip: 'Semua simulasi aman di React sandbox tanpa mengeksekusi JavaScript nyata.',
       }
     case 'a06-coupon':
       return {
-        badge: 'WebGoat Track · Race Condition & Logika Bisnis',
+        badge: 'Lab Interaktif · Race Condition & Logika Bisnis',
         goal: 'Kirim klaim kupon satu kali secara paralel agar kupon terpakai dua kali sebelum transaksi terkunci.',
         lessonTip: 'Gunakan skenario race paralel lalu bandingkan terhadap kupon kedaluwarsa.',
       }
     case 'a07-auth':
       return {
-        badge: 'WebGoat Track · Auth, Rate Limit & Enumeration',
+        badge: 'Lab Interaktif · Auth, Rate Limit & Enumeration',
         goal: 'Uji rotasi IP untuk melewati rate limiter atau deteksi enumerasi akun lewat perbedaan status 404 vs 200.',
         lessonTip: 'Manfaatkan tombol +15 menit jam virtual untuk melihat reset jendela blokir.',
       }
     case 'a08-webhook':
       return {
-        badge: 'WebGoat Track · Webhook HMAC & Replay Integrity',
+        badge: 'Lab Interaktif · Webhook HMAC & Replay Integrity',
         goal: 'Kirim payload webhook tanpa tanda tangan HMAC atau replay event lama untuk mengubah status order.',
         lessonTip: 'Pastikan raw bytes body dan jendela timestamp diverifikasi server.',
       }
     case 'a09-logging':
       return {
-        badge: 'WebGoat Track · Security Logging & Alerting',
+        badge: 'Lab Interaktif · Security Logging & Alerting',
         goal: 'Simulasikan credential spraying, injeksi baris log CRLF (\\n), dan kegagalan sink SIEM.',
         lessonTip: 'Periksa apakah alert tetap terpicu dan field sensitif tetap teredaksi.',
       }
     case 'a10-checkout':
       return {
-        badge: 'WebGoat Track · Mishandling Exceptional Conditions',
+        badge: 'Lab Interaktif · Mishandling Exceptional Conditions',
         goal: 'Picu kegagalan transaksi setelah reservasi stok atau timeout + retry untuk mendeteksi stok hilang / double order.',
         lessonTip: 'Bandingkan mode non-atomik terhadap transaksi DB atomik + idempotency key.',
       }
     default:
       return {
-        badge: 'WebGoat Track · Interactive Security Lab',
+        badge: 'Lab Interaktif · Interactive Security Lab',
         goal: 'Jalankan skenario baseline yang sah terlebih dahulu, lalu buktikan celah pada skenario serangan.',
         lessonTip: 'Amati Trace Events untuk melihat komponen mana yang menahan atau meloloskan request.',
       }
@@ -221,7 +221,7 @@ function getPresets(labId: string): PresetBtn[] {
         },
         {
           label: "Uji Login SQLi: admin' --",
-          hint: 'Suntik form login WebGoat tanpa password valid',
+          hint: 'Suntik form login target tanpa password valid',
           tone: 'attack',
           input: { action: 'login_form', payload: "admin' --", secondary: 'salah123' },
         },

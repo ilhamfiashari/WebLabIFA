@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CheckSquare,
   Copy,
+  Expand,
+  Focus,
   Maximize2,
+  Minimize2,
+  PanelLeftClose,
   Pause,
   Play,
   RotateCcw,
   RotateCw,
+  Shrink,
   Sparkles,
   Trash2,
   Type,
@@ -25,6 +30,8 @@ import {
   getBoardInstances,
   getBoardPin,
   getComponentSpec,
+  isBreadboardKind,
+  resolveBreadboardPinAlias,
   rotatePointAroundBox,
 } from './boards'
 import { BoardHardwareView, ComponentHardwareView } from './CircuitSvgComponents'
@@ -77,7 +84,8 @@ function getEndpointGeometry(
   const comp = components.find((c) => c.id === ep.nodeId && c.kind !== 'mcu')
   if (!comp) return null
   const spec = getComponentSpec(comp.kind)
-  const pin = spec.pins.find((p) => p.id === ep.pinId)
+  const resolvedId = isBreadboardKind(comp.kind) ? resolveBreadboardPinAlias(ep.pinId) : ep.pinId
+  const pin = spec.pins.find((p) => p.id === ep.pinId || p.id === resolvedId)
   if (!pin) return null
   const rot = rotatePointAroundBox(pin.dx, pin.dy, spec.width, spec.height, comp.rotate)
   const x = comp.x + rot.dx
@@ -240,6 +248,11 @@ export function CircuitCanvas({
   onDeleteNode,
   onDuplicateNode,
   onSelectPrimaryBoard,
+  onSelectMcuCode,
+  focusMode = 'normal',
+  onChangeFocusMode,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: {
   boardId: BoardId
   components: PlacedComponent[]
@@ -260,6 +273,11 @@ export function CircuitCanvas({
   onDeleteNode: (nodeId: string) => void
   onDuplicateNode?: (nodeId: string) => void
   onSelectPrimaryBoard?: (boardId: BoardId) => void
+  onSelectMcuCode?: (nodeId: string) => void
+  focusMode?: 'normal' | 'focus' | 'canvas'
+  onChangeFocusMode?: (mode: 'normal' | 'focus' | 'canvas') => void
+  isFullscreen?: boolean
+  onToggleFullscreen?: () => void
 }) {
   const en = lang === 'en'
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -297,6 +315,14 @@ export function CircuitCanvas({
     wireId: string
     index: number
     waypoints: WireWaypoint[]
+  } | null>(null)
+  const rotateDragRef = useRef<{
+    compId: string
+    centerX: number
+    centerY: number
+    startAngleDeg: number
+    origRotate: number
+    moved: boolean
   } | null>(null)
   const suppressNextClickRef = useRef(false)
 
@@ -453,6 +479,24 @@ export function CircuitCanvas({
     }
   }
 
+  const startRotateDrag = (compId: string, clientX: number, clientY: number) => {
+    const comp = components.find((c) => c.id === compId && c.kind !== 'mcu')
+    if (!comp) return
+    const spec = getComponentSpec(comp.kind)
+    const centerX = comp.x + spec.width / 2
+    const centerY = comp.y + spec.height / 2
+    const pt = clientToSvg(clientX, clientY)
+    const startAngleDeg = (Math.atan2(pt.y - centerY, pt.x - centerX) * 180) / Math.PI
+    rotateDragRef.current = {
+      compId,
+      centerX,
+      centerY,
+      startAngleDeg,
+      origRotate: comp.rotate ?? 0,
+      moved: false,
+    }
+  }
+
   const startUnplugDrag = (wire: Wire, end: 'from' | 'to', clientX: number, clientY: number) => {
     const anchorEp = end === 'from' ? wire.to : wire.from
     const anchorGeo = getEndpointGeometry(boardId, components, anchorEp)
@@ -510,11 +554,40 @@ export function CircuitCanvas({
       const next = wd.waypoints.map((wp, idx) => (idx === wd.index ? { x: clampedX, y: clampedY } : wp))
       wd.waypoints = next
       onUpdateWire(wd.wireId, { waypoints: next, bendX: undefined, bendY: undefined })
+      return
+    }
+
+    if (rotateDragRef.current) {
+      const rd = rotateDragRef.current
+      const curAngle = (Math.atan2(pt.y - rd.centerY, pt.x - rd.centerX) * 180) / Math.PI
+      const delta = curAngle - rd.startAngleDeg
+      if (Math.abs(delta) > 3) rd.moved = true
+      if (!rd.moved) return
+      let nextDeg = ((Math.round(rd.origRotate + delta) % 360) + 360) % 360
+      if (e.shiftKey) {
+        nextDeg = (Math.round(nextDeg / 45) * 45) % 360
+      } else {
+        for (const ortho of [0, 90, 180, 270, 360]) {
+          if (Math.abs(nextDeg - ortho) <= 3) {
+            nextDeg = ortho % 360
+            break
+          }
+        }
+      }
+      onUpdateComponent(rd.compId, { rotate: nextDeg })
     }
   }
 
   const endDrag = (e?: React.PointerEvent<SVGSVGElement>) => {
     setSnapHighlight(null)
+    if (rotateDragRef.current) {
+      const finished = rotateDragRef.current
+      rotateDragRef.current = null
+      suppressNextClickRef.current = true
+      if (!finished.moved) {
+        onUpdateComponent(finished.compId, { rotate: ((finished.origRotate + 45) % 360) })
+      }
+    }
     if (nodeDragRef.current) {
       const finished = nodeDragRef.current
       nodeDragRef.current = null
@@ -587,7 +660,7 @@ export function CircuitCanvas({
     const placeRight = targetX + targetW + 270 < viewW
     const anchorX = placeRight ? targetX + targetW + 14 : Math.max(10, targetX - 260)
     const leftPct = Math.min(68, Math.max(2, (anchorX / viewW) * 100))
-    const topPct = Math.min(58, Math.max(16, ((targetY + 4) / viewH) * 100))
+    const topPct = Math.min(58, Math.max(4, ((targetY + 4) / viewH) * 100))
     return { leftPct, topPct }
   })()
 
@@ -638,9 +711,48 @@ export function CircuitCanvas({
           <button type="button" className="iot-pill-btn" onClick={() => setZoom(1)} aria-label="Reset zoom">
             <Maximize2 size={13} />
           </button>
-          <button type="button" className="iot-pill-btn" onClick={() => setZoom((z) => Math.min(1.4, +(z + 0.1).toFixed(2)))} aria-label="Zoom in">
+          <button type="button" className="iot-pill-btn" onClick={() => setZoom((z) => Math.min(1.8, +(z + 0.1).toFixed(2)))} aria-label="Zoom in">
             <ZoomIn size={14} />
           </button>
+
+          {onChangeFocusMode ? (
+            <>
+              <span className="iot-pill-divider" aria-hidden="true" />
+              <button
+                type="button"
+                className={`iot-pill-btn ${focusMode === 'focus' ? 'is-on' : ''}`}
+                onClick={() => onChangeFocusMode(focusMode === 'focus' ? 'normal' : 'focus')}
+                title={en ? 'Studio Focus Mode (hide top panels)' : 'Mode Fokus Studio (sembunyikan panel atas)'}
+                aria-label={en ? 'Studio Focus' : 'Fokus Studio'}
+              >
+                <Focus size={14} />
+                <span>{en ? 'Focus' : 'Fokus'}</span>
+              </button>
+              <button
+                type="button"
+                className={`iot-pill-btn ${focusMode === 'canvas' ? 'is-on' : ''}`}
+                onClick={() => onChangeFocusMode(focusMode === 'canvas' ? 'normal' : 'canvas')}
+                title={en ? 'Canvas-only Focus (expand circuit)' : 'Fokus Kanvas Penuh (perbesar rangkaian)'}
+                aria-label={en ? 'Canvas Focus' : 'Fokus Kanvas'}
+              >
+                {focusMode === 'canvas' ? <Shrink size={14} /> : <PanelLeftClose size={14} />}
+                <span>{en ? 'Canvas' : 'Kanvas'}</span>
+              </button>
+            </>
+          ) : null}
+
+          {onToggleFullscreen ? (
+            <button
+              type="button"
+              className={`iot-pill-btn ${isFullscreen ? 'is-on' : ''}`}
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? (en ? 'Exit Fullscreen (Esc)' : 'Keluar Layar Penuh (Esc)') : en ? 'Fullscreen Simulator' : 'Tampilan Layar Penuh'}
+              aria-label={isFullscreen ? (en ? 'Exit Fullscreen' : 'Keluar Layar Penuh') : en ? 'Fullscreen' : 'Layar Penuh'}
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Expand size={14} />}
+              <span>{isFullscreen ? (en ? 'Exit' : 'Keluar') : en ? 'Fullscreen' : 'Layar Penuh'}</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -744,6 +856,7 @@ export function CircuitCanvas({
         </div>
       </div>
 
+      <div className="iot-svg-stage" style={{ position: 'relative' }}>
       {/* Inline Component/MCU Popover Card anchored over SVG body */}
       {popupPos && (inspectedComp || inspectedBoard) ? (
         <div
@@ -1448,6 +1561,33 @@ export function CircuitCanvas({
                   ))}
                 </div>
               ) : null}
+              <div className="iot-popover-footer">
+                {onSelectMcuCode ? (
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={() => {
+                      onSelectMcuCode(inspectedBoard.nodeId)
+                      setInspectedNodeId(null)
+                    }}
+                  >
+                    {en ? 'Edit Code (.ino)' : 'Edit Kode (.ino)'}
+                  </button>
+                ) : null}
+                {!inspectedBoard.isPrimary ? (
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={() => {
+                      onDeleteNode(inspectedBoard.nodeId)
+                      setSelectedNodeId(null)
+                      setInspectedNodeId(null)
+                    }}
+                  >
+                    <Trash2 size={12} /> {en ? 'Remove MCU' : 'Hapus MCU'}
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>
@@ -1510,6 +1650,7 @@ export function CircuitCanvas({
               showLabels={showLabels}
               isDark={isDark}
               onStartDrag={startNodeDrag}
+              onStartRotate={startRotateDrag}
               onPinPointerDown={onPinPointerDown}
               onPinPointerUp={onPinPointerUp}
               onUpdateProps={onUpdateProps}
@@ -1705,6 +1846,7 @@ export function CircuitCanvas({
           />
         ) : null}
       </svg>
+      </div>
     </div>
   )
 }

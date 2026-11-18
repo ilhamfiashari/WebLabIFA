@@ -53,6 +53,8 @@ export type ComponentKind =
   | 'slide-switch'
   | 'resistor'
   | 'breadboard'
+  | 'breadboard-mini'
+  | 'breadboard-large'
   | 'potentiometer'
   | 'slide-pot'
   | 'joystick'
@@ -174,6 +176,8 @@ export interface PlacedComponent {
     ldrThreshold?: number
     ldrRl10?: number
     ldrGamma?: number
+    /** Per-MCU sketch source code when extra MCUs (kind === 'mcu') are placed on canvas */
+    sketchCode?: string
   }
 }
 

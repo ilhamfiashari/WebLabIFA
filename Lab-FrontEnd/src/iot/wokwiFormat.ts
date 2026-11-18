@@ -18,6 +18,8 @@ export const WOKWI_PART_TYPE_MAP: Record<Exclude<ComponentKind, 'mcu'>, string> 
   'slide-switch': 'wokwi-slide-switch',
   resistor: 'wokwi-resistor',
   breadboard: 'wokwi-breadboard-half',
+  'breadboard-mini': 'wokwi-breadboard-mini',
+  'breadboard-large': 'wokwi-breadboard',
   potentiometer: 'wokwi-potentiometer',
   'slide-pot': 'wokwi-slide-potentiometer',
   joystick: 'wokwi-analog-joystick',

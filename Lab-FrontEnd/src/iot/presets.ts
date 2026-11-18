@@ -369,6 +369,76 @@ void loop() {
       { id: 'w-pw6', from: { nodeId: 'board', pinId: 'GP15' }, to: { nodeId: 'rel-1', pinId: 'IN' }, color: '#8b5cf6' },
     ],
   },
+  {
+    id: 'multi-mcu-bridge',
+    board: 'esp32-c3',
+    titleId: 'Multi-MCU · ESP32-C3 + Arduino Uno (Komunikasi 2 Board)',
+    titleEn: 'Multi-MCU · ESP32-C3 + Arduino Uno (2-Board Link)',
+    badge: 'Multi-MCU · 2 Boards',
+    summaryId: 'Simulasi 2 mikrokontroler dalam 1 kanvas: ESP32-C3 mengirim sinyal GPIO2 ke D4 Arduino Uno untuk menyalakan LED node kedua.',
+    summaryEn: 'Simulate 2 microcontrollers on one canvas: ESP32-C3 sends GPIO2 signal to Arduino Uno D4 to drive the secondary node LED.',
+    code: `// MCU 1: ESP32-C3 (Sender / Master)
+#define TX_SIG_PIN 2
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(TX_SIG_PIN, OUTPUT);
+  Serial.println("Master ESP32-C3 Siap");
+}
+
+void loop() {
+  digitalWrite(TX_SIG_PIN, HIGH);
+  Serial.println("TX -> HIGH (Relay/Node Active)");
+  delay(650);
+
+  digitalWrite(TX_SIG_PIN, LOW);
+  Serial.println("TX -> LOW");
+  delay(650);
+}`,
+    components: [
+      {
+        id: 'mcu-2',
+        kind: 'mcu',
+        boardId: 'arduino-uno',
+        x: 315,
+        y: 76,
+        label: 'Arduino Uno #2',
+        props: {
+          sketchCode: `// MCU 2: Arduino Uno (Receiver / Node)
+#define RX_PIN 4
+#define LED_NODE 8
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RX_PIN, INPUT);
+  pinMode(LED_NODE, OUTPUT);
+  Serial.println("Node Arduino Uno Siap");
+}
+
+void loop() {
+  int sig = digitalRead(RX_PIN);
+  if (sig == HIGH) {
+    digitalWrite(LED_NODE, HIGH);
+    Serial.println("RX=HIGH -> LED Node ON");
+  } else {
+    digitalWrite(LED_NODE, LOW);
+    Serial.println("RX=LOW -> LED Node OFF");
+  }
+  delay(650);
+}`,
+        },
+      },
+      { id: 'res-m1', kind: 'resistor', x: 560, y: 155, label: 'R1 (220Ω)', ohms: 220, props: {} },
+      { id: 'led-m2', kind: 'led', x: 695, y: 118, label: 'LED Node #2', color: 'cyan', props: {} },
+    ],
+    wires: [
+      { id: 'w-mcu-link', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'mcu-2', pinId: 'D4' }, color: '#10b981' },
+      { id: 'w-mcu-gnd', from: { nodeId: 'board', pinId: 'GND1' }, to: { nodeId: 'mcu-2', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-uno-res', from: { nodeId: 'mcu-2', pinId: 'D8' }, to: { nodeId: 'res-m1', pinId: 'P1' }, color: '#3b82f6' },
+      { id: 'w-res-led2', from: { nodeId: 'res-m1', pinId: 'P2' }, to: { nodeId: 'led-m2', pinId: 'A' }, color: '#f59e0b' },
+      { id: 'w-led2-gnd', from: { nodeId: 'led-m2', pinId: 'K' }, to: { nodeId: 'mcu-2', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
 ]
 
 export const IOT_MISSIONS: IotMissionSpec[] = [

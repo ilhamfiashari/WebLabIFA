@@ -33,6 +33,11 @@ for (const width of [360, 390, 768, 1440]) {
     if (width >= 768) {
       await expect(page.locator('.hero-image')).toBeVisible()
       await expect(page.getByTestId('login-atmosphere')).toBeVisible()
+    } else {
+      await expect(page.locator('.hero-image')).toBeVisible()
+      await expect(page.getByText('Pratinjau laboratorium', { exact: true })).toBeVisible()
+      await expect(page.getByText('Gunakan akun Google yang terdaftar.', { exact: true })).toBeVisible()
+      await expect(page.locator('.login-v2-features')).toBeHidden()
     }
     await page.screenshot({ path: `../docs/screenshots/login-${width}.png`, fullPage: true })
   })

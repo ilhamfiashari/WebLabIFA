@@ -33,8 +33,8 @@ export function WebGoatSqliTarget({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700 }}>
           <Terminal size={14} aria-hidden="true" />
           {lang === 'en'
-            ? 'OWASP WebGoat Interactive Target: SQL Injection'
-            : 'Target Interaktif Gaya OWASP WebGoat: SQL Injection'}
+            ? 'Interactive Target: SQL Injection'
+            : 'Target Interaktif: SQL Injection'}
         </div>
         <div className="sim-tabs" style={{ gap: 6 }}>
           <button
@@ -237,8 +237,8 @@ export function WebGoatXssCommentFileTarget({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700 }}>
           <MessageSquarePlus size={14} aria-hidden="true" />
           {lang === 'en'
-            ? 'OWASP WebGoat File Comment & Stored XSS Sandbox'
-            : 'Komentarin File & Forum Stored XSS (Gaya OWASP WebGoat)'}
+            ? 'File Comment & Stored XSS Sandbox'
+            : 'Komentar File & Forum Stored XSS'}
         </div>
         <span className="pill" style={{ fontSize: 11 }}>{selectedFile}</span>
       </div>
@@ -373,8 +373,8 @@ export function WebGoatMisconfigCodeTarget({ busy, onProbe }: SandboxProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700 }}>
           <ShieldAlert size={14} aria-hidden="true" />
           {lang === 'en'
-            ? 'Code & Config Comment Inspector (WebGoat Style)'
-            : 'Inspektor Komentar File & Konfigurasi Server (Gaya WebGoat)'}
+            ? 'Code & Config Comment Inspector'
+            : 'Inspektor Komentar File & Konfigurasi Server'}
         </div>
         <div className="sim-tabs" style={{ gap: 6 }}>
           {CONFIG_FILES.map((f, i) => (
@@ -437,7 +437,7 @@ export function WebGoatAuthTarget({ busy, onProbe }: SandboxProps) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700 }}>
         <KeyRound size={14} aria-hidden="true" />
-        {lang === 'en' ? 'Target Auth Form & Virtual Clock (WebGoat)' : 'Form Target Autentikasi & Jam Virtual'}
+        {lang === 'en' ? 'Target Auth Form & Virtual Clock' : 'Form Target Autentikasi & Jam Virtual'}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
         <div className="sim-form-field">

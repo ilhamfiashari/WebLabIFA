@@ -683,7 +683,7 @@ test('halaman error konsisten memiliki tombol kembali ke halaman sekarang dan be
   await expect(page.getByRole('button', { name: 'Back to Home' })).toBeVisible()
 })
 
-test('webgoat target form login SQL injection dan leaderboard dosen berfungsi', async ({ page }) => {
+test('target form login SQL injection dan leaderboard dosen berfungsi', async ({ page }) => {
   await page.route('**/api/me', r => r.fulfill({ json: student }))
   await buildMockSimulatorRoutes(page)()
   await page.route('**/api/labs/sessions/ses-sqli-1/probe', async r => {
@@ -878,17 +878,59 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByRole('heading', { level: 1, name: 'Simulator Hardware IoT & ESP32' })).toBeVisible()
   await expect(page.getByText('ESP32-C3', { exact: true }).first()).toBeVisible()
 
-  // Background kode putih pada mode terang
+  // Background kode putih pada mode terang + syntax highlighting C++ (.ino)
   const codeBg = await page.locator('.iot-code-wrap').evaluate((el) => getComputedStyle(el).backgroundColor)
   expect(codeBg).toBe('rgb(255, 255, 255)')
+  await expect(page.locator('.iot-code-highlight .tok-comment').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-preproc').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-type').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-builtin').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-string').first()).toBeVisible()
+  const preprocColor = await page.locator('.iot-code-highlight .tok-preproc').first().evaluate((el) => getComputedStyle(el).color)
+  const commentColor = await page.locator('.iot-code-highlight .tok-comment').first().evaluate((el) => getComputedStyle(el).color)
+  expect(preprocColor).not.toBe('rgb(30, 41, 59)')
+  expect(commentColor).not.toBe(preprocColor)
 
-  // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive
+  // Autocomplete suggestion muncul saat mengetik kode C++/Arduino dan dapat disisipkan via Enter
+  const codeEditor = page.getByLabel('Kode program mikrokontroler')
+  const originalCode = await codeEditor.inputValue()
+  await codeEditor.click()
+  await codeEditor.evaluate((el: HTMLTextAreaElement) => {
+    el.selectionStart = el.value.length
+    el.selectionEnd = el.value.length
+  })
+  await page.keyboard.type('\n  dig')
+  const acBox = page.getByRole('listbox', { name: 'Saran kode C++' })
+  await expect(acBox).toBeVisible()
+  await expect(acBox.getByRole('option', { name: /digitalWrite/ })).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(acBox).toHaveCount(0)
+  await expect(codeEditor).toHaveValue(/digitalWrite\(\)/)
+
+  // Uji auto-indentation saat Enter di dalam blok `{` serta tombol Rapikan (Format)
+  await codeEditor.fill('void loop() {\ndigitalWrite(2, HIGH);\n}')
+  await page.getByRole('button', { name: 'Rapikan' }).click()
+  await expect(codeEditor).toHaveValue('void loop() {\n  digitalWrite(2, HIGH);\n}')
+  await codeEditor.focus()
+  await codeEditor.evaluate((el: HTMLTextAreaElement) => {
+    const idx = el.value.indexOf('{') + 1
+    el.selectionStart = idx
+    el.selectionEnd = idx
+  })
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('delay(100);')
+  await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
+  await codeEditor.fill(originalCode)
+
+  // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive & 3 ukuran Breadboard
   await page.getByRole('tab', { name: 'Components' }).click()
   await expect(page.getByRole('button', { name: 'Microcontrollers' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sensors' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Input Devices' })).toBeVisible()
   await expect(page.getByText('Arduino Mega', { exact: true })).toBeVisible()
-  await expect(page.getByText('Breadboard', { exact: true })).toBeVisible()
+  await expect(page.getByText('Mini Breadboard (170-Pt)', { exact: true })).toBeVisible()
+  await expect(page.getByText('Medium Breadboard (Half 400-Pt)', { exact: true })).toBeVisible()
+  await expect(page.getByText('Large Breadboard (Full 830-Pt)', { exact: true })).toBeVisible()
 
   // Klik kabel memilih kabel (tidak langsung menghapus) dan mendukung tarik kabel langsung dari pin
   const wireCountBefore = await page.locator('.iot-wire-group').count()
@@ -930,7 +972,7 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: '220Ω', exact: true }).click()
   await page.getByRole('button', { name: 'Tutup', exact: true }).click()
 
-  // Bisa menambah lebih dari 1 mikrokontroler ke dalam 1 desain dengan bentuk fisik berbeda & menghapus tambahan MCU
+  // Bisa menambah lebih dari 1 mikrokontroler (2 atau 3 MCU sekaligus) di 1 kanvas, masing-masing punya sketch & simulasi
   await expect(page.getByText('MQ2 Gas Sensor', { exact: true })).toBeVisible()
   await expect(page.getByText('Keypad 4×4 Matrix', { exact: true })).toBeVisible()
   await expect(page.getByText('Arduino Nano', { exact: true })).toBeVisible()
@@ -939,12 +981,26 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await bottomPart.scrollIntoViewIfNeeded()
   await expect(bottomPart).toBeVisible()
   await page.getByRole('button', { name: 'Tambah Arduino Uno ke kanvas' }).click()
-  await expect(page.getByText('Arduino Uno #2')).toBeVisible()
+  await expect(page.getByText('Arduino Uno #2', { exact: true })).toBeVisible()
   await expect(page.getByText('ATMEGA328P-PU', { exact: true })).toBeVisible()
-  await page.getByText('Arduino Uno #2').dispatchEvent('pointerdown')
-  await page.getByText('Arduino Uno #2').dispatchEvent('pointerup')
+  await page.getByRole('button', { name: 'Tambah Pi Pico ke kanvas' }).click()
+  await expect(page.getByText('Pi Pico #3', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  const mcuGroup = page.getByRole('group', { name: 'Pilih firmware MCU' })
+  await expect(mcuGroup.getByRole('button', { name: /MCU 1/ })).toBeVisible()
+  await expect(mcuGroup.getByRole('button', { name: /Arduino Uno #2/ })).toBeVisible()
+  await expect(mcuGroup.getByRole('button', { name: /Pi Pico #3/ })).toBeVisible()
+  await mcuGroup.getByRole('button', { name: /Arduino Uno #2/ }).click()
+  await expect(page.getByLabel('Kode program mikrokontroler')).toHaveValue(/Firmware Arduino Uno #2/)
+  await mcuGroup.getByRole('button', { name: /MCU 1/ }).click()
+  await page.getByText('Pi Pico #3', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('Pi Pico #3', { exact: true }).dispatchEvent('pointerup')
   await page.getByRole('button', { name: 'Hapus Komponen' }).click()
-  await expect(page.getByText('Arduino Uno #2')).toHaveCount(0)
+  await expect(page.getByText('Pi Pico #3', { exact: true })).toHaveCount(0)
+  await page.getByText('Arduino Uno #2', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('Arduino Uno #2', { exact: true }).dispatchEvent('pointerup')
+  await page.getByRole('button', { name: 'Hapus Komponen' }).click()
+  await expect(page.getByText('Arduino Uno #2', { exact: true })).toHaveCount(0)
 
   // Cek kustomisasi atribut Wokwi pada LED di kanvas & sinkronisasi diagram.json
   await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerdown')
@@ -970,6 +1026,33 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
 
   await page.getByRole('tab', { name: 'Libraries' }).click()
   await expect(page.getByText('Adafruit SSD1306')).toBeVisible()
+  const lastLibCard = page.locator('.iot-lib-item').last()
+  await lastLibCard.scrollIntoViewIfNeeded()
+  await expect(lastLibCard).toBeVisible()
+
+  // Uji tambah file header (.h) lewat menu file dropdown & #include "pins.h" di Main.ino
+  await page.getByRole('button', { name: 'Menu file sketch' }).click()
+  await expect(page.getByRole('menu', { name: 'Menu file' })).toBeVisible()
+  await page.getByRole('menuitem', { name: 'New file...' }).click()
+  await page.getByLabel(/Nama file baru/).fill('pins.h')
+  await page.getByRole('button', { name: 'Buat', exact: true }).click()
+  await expect(page.getByRole('tab', { name: 'pins.h' })).toBeVisible()
+  await page.getByLabel('Kode program mikrokontroler').fill('#define CUSTOM_LED 2\n')
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  const mainCodeNow = await page.getByLabel('Kode program mikrokontroler').inputValue()
+  await page.getByLabel('Kode program mikrokontroler').fill(`#include "pins.h"\n${mainCodeNow}`)
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.locator('.iot-compile-error')).toHaveCount(0)
+
+  // Klik komponen menampilkan simbol putar (handle ↻) di kanvas dan memutar komponen saat diklik
+  await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerup')
+  const rotateHandle = page.locator('.iot-rotate-handle')
+  await expect(rotateHandle).toBeVisible()
+  await rotateHandle.click()
+  await page.getByRole('tab', { name: 'diagram.json' }).click()
+  await expect(page.getByLabel('Wokwi diagram.json editor')).toHaveValue(/"rotate": 45/)
 
   await page.getByRole('tab', { name: 'Terminal' }).click()
   const serialLog = page.getByRole('log')
@@ -990,7 +1073,79 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('tab', { name: /Serial Plotter/ }).click()
   await expect(page.locator('.iot-plot-legend')).toContainText('temp:')
 
+  // Uji template Multi-MCU: 2 board berjalan paralel (ESP32-C3 GPIO2 -> Arduino Uno D4 -> LED Node #2)
+  await page.getByLabel('Pilih template atau misi').selectOption('multi-mcu-bridge')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('[Arduino Uno #2] RX=HIGH -> LED Node ON')
+
   // Simpan proyek ke database
   await page.getByRole('button', { name: 'Simpan Proyek' }).click()
   await expect(page.getByText(/berhasil disimpan ke database/)).toBeVisible()
+
+  // Tambah ketiga ukuran Breadboard (Medium 400-Pt, Mini 170-Pt, Large 830-Pt) & uji semua lubang dapat diklik + Mode Fokus + Fullscreen
+  await page.getByRole('tab', { name: 'Components' }).click()
+  await page.getByRole('button', { name: 'Tambah Medium Breadboard (Half 400-Pt) ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(400)
+  await page.getByRole('button', { name: 'Tambah Mini Breadboard (170-Pt) ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(570)
+  await page.getByRole('button', { name: 'Tambah Large Breadboard (Full 830-Pt) ke kanvas' }).click()
+  await expect(page.locator('.iot-bb-pin')).toHaveCount(1400)
+
+  await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Fokus Studio' }).click()
+  await expect(page.locator('.iot-studio')).toHaveClass(/is-focus-focus/)
+  await expect(page.getByLabel('Bar Mode Fokus')).toBeVisible()
+
+  await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Fokus Kanvas' }).click()
+  await expect(page.locator('.iot-studio')).toHaveClass(/is-focus-canvas/)
+  await expect(page.locator('.iot-left-panel')).toHaveCount(0)
+
+  await page.getByLabel('Bar Mode Fokus').getByRole('button', { name: 'Layar Penuh' }).click()
+  await expect(page.locator('.iot-studio')).toHaveClass(/is-fullscreen/)
+  await page.getByLabel('Bar Mode Fokus').getByRole('button', { name: 'Keluar Layar Penuh' }).click()
+  await expect(page.locator('.iot-studio')).not.toHaveClass(/is-fullscreen/)
+  await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Normal' }).click()
+  await expect(page.locator('.iot-left-panel')).toBeVisible()
+})
+
+test('halaman simulator web bersih dari label DVWA dan WebGoat', async ({ page }) => {
+  await page.route('**/api/me', r => r.fulfill({ json: student }))
+  await buildMockSimulatorRoutes(page)()
+  await page.route('**/api/labs/a05-sqli', r =>
+    r.fulfill({
+      json: {
+        id: 'a05-sqli',
+        track: 'web',
+        owasp_code: 'A05',
+        title: 'SQL Injection & Query Builder Aman',
+        subtitle: 'Pencarian katalog produk.',
+        objective: 'Mengamankan query pencarian.',
+        context: 'Katalog produk publik.',
+        cwe_id: 'CWE-89',
+        wstg_ref: 'WSTG-INPV-05',
+        asvs_ref: 'ASVS V5.3',
+        estimated_minutes: 20,
+        prerequisite: 'Tidak ada',
+        fixture_actors: ['pengunjung'],
+        trust_nodes: [],
+        trust_edges: [],
+        code_stacks: [],
+        gamification_enabled: true,
+        solution_unlocked: false,
+        official_summary: null,
+        levels: [
+          { level: 'easy', label: 'Easy', xp: 50, title: 'Level Low', scenario: 'Tanpa proteksi', initial_control: 'Kosong', expected_baseline: '1 baris', expected_exploit: 'Semua baris', passed: false, unlocked: true, unlock_requirement: null, best_score: null, active_session_id: null, current_step: null },
+        ],
+      },
+    }),
+  )
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab')
+  await expect(page.getByRole('heading', { name: /OWASP Top 10/ })).toBeVisible()
+  const catalogBody = await page.locator('main').innerText()
+  expect(catalogBody).not.toMatch(/dvwa|webgoat/i)
+
+  await page.goto('/lab/web/A05/a05-sqli')
+  await expect(page.getByRole('heading', { name: 'Pilih Tingkat Kesulitan (4 Level Bertahap)' })).toBeVisible()
+  const detailBody = await page.locator('main').innerText()
+  expect(detailBody).not.toMatch(/dvwa|webgoat/i)
 })

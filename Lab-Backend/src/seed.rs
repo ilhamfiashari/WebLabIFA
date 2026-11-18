@@ -299,7 +299,7 @@ pub async fn seed_demo_data(
         (
             "asg-if3b-sqli",
             "IF-3B",
-            "Tugas 1 · WebGoat SQL Injection Login & Search",
+            "Tugas 1 · SQL Injection Login & Search",
             "a05-sqli",
             "easy",
             10,

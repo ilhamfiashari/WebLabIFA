@@ -1,5 +1,5 @@
 import type { BoardId, BoardSpec, ComponentKind, PlacedComponent, SimulationState, WireEndpoint } from './types'
-import { decodeResistorBands, formatOhms, getComponentSpec, rotatePointAroundBox } from './boards'
+import { decodeResistorBands, formatOhms, getComponentSpec, isBreadboardKind, rotatePointAroundBox } from './boards'
 import { RealBoardBodySvg, WokwiExtendedPartSvg, WokwiPartThumbnail } from './WokwiPartsSvg'
 
 export function BoardThumbnail({ boardId }: { boardId: BoardId }) {
@@ -130,18 +130,53 @@ export function PartThumbnail({ kind }: { kind: ComponentKind }) {
           <rect x={50} y={7.5} width={5} height={13} fill="#78350f" />
           <rect x={63} y={6.5} width={4} height={15} fill="#eab308" />
         </g>
-      ) : kind === 'breadboard' ? (
-        <g transform="translate(18, 6)">
-          <rect x={0} y={0} width={74} height={52} rx={3} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.2} />
-          <line x1={4} y1={6} x2={70} y2={6} stroke="#ef4444" strokeWidth={1.2} />
-          <line x1={4} y1={46} x2={70} y2={46} stroke="#3b82f6" strokeWidth={1.2} />
-          <rect x={3} y={24} width={68} height={4} fill="#e2e8f0" />
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((c) => (
+      ) : kind === 'breadboard-mini' ? (
+        <g transform="translate(18, 8)">
+          <rect x={2} y={2} width={70} height={44} rx={3} fill="#d6d3c9" />
+          <rect x={0} y={0} width={70} height={42} rx={3} fill="#f7f6f0" stroke="#cbd5e1" strokeWidth={1.1} />
+          <rect x={3} y={19} width={64} height={4} rx={1} fill="#e5e3d8" />
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => (
             <g key={c}>
-              <circle cx={9 + c * 7} cy={14} r={1.2} fill="#334155" />
-              <circle cx={9 + c * 7} cy={20} r={1.2} fill="#334155" />
-              <circle cx={9 + c * 7} cy={32} r={1.2} fill="#334155" />
-              <circle cx={9 + c * 7} cy={38} r={1.2} fill="#334155" />
+              <rect x={8 + c * 5.8} y={7} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={8 + c * 5.8} y={12} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={8 + c * 5.8} y={28} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={8 + c * 5.8} y={33} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+            </g>
+          ))}
+        </g>
+      ) : kind === 'breadboard' ? (
+        <g transform="translate(8, 5)">
+          <rect x={2} y={2} width={88} height={52} rx={3} fill="#d6d3c9" />
+          <rect x={0} y={0} width={88} height={50} rx={3} fill="#f7f6f0" stroke="#cbd5e1" strokeWidth={1.1} />
+          <line x1={6} y1={5} x2={82} y2={5} stroke="#2563eb" strokeWidth={1.1} />
+          <line x1={6} y1={11} x2={82} y2={11} stroke="#dc2626" strokeWidth={1.1} />
+          <line x1={6} y1={39} x2={82} y2={39} stroke="#2563eb" strokeWidth={1.1} />
+          <line x1={6} y1={45} x2={82} y2={45} stroke="#dc2626" strokeWidth={1.1} />
+          <rect x={3} y={23} width={82} height={4} rx={1} fill="#e5e3d8" />
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((c) => (
+            <g key={c}>
+              <rect x={9 + c * 6.2} y={14.5} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={9 + c * 6.2} y={19} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={9 + c * 6.2} y={29} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+              <rect x={9 + c * 6.2} y={33.5} width={2.2} height={2.2} rx={0.4} fill="#1e293b" />
+            </g>
+          ))}
+        </g>
+      ) : kind === 'breadboard-large' ? (
+        <g transform="translate(4, 6)">
+          <rect x={2} y={2} width={98} height={48} rx={3} fill="#d6d3c9" />
+          <rect x={0} y={0} width={98} height={46} rx={3} fill="#f7f6f0" stroke="#cbd5e1" strokeWidth={1.1} />
+          <line x1={5} y1={4.5} x2={93} y2={4.5} stroke="#2563eb" strokeWidth={1.1} />
+          <line x1={5} y1={9.5} x2={93} y2={9.5} stroke="#dc2626" strokeWidth={1.1} />
+          <line x1={5} y1={36.5} x2={93} y2={36.5} stroke="#2563eb" strokeWidth={1.1} />
+          <line x1={5} y1={41.5} x2={93} y2={41.5} stroke="#dc2626" strokeWidth={1.1} />
+          <rect x={3} y={21} width={92} height={4} rx={1} fill="#e5e3d8" />
+          {Array.from({ length: 16 }, (_, c) => (
+            <g key={c}>
+              <rect x={7 + c * 5.4} y={13} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
+              <rect x={7 + c * 5.4} y={17} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
+              <rect x={7 + c * 5.4} y={27} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
+              <rect x={7 + c * 5.4} y={31} width={1.9} height={1.9} rx={0.3} fill="#1e293b" />
             </g>
           ))}
         </g>
@@ -355,6 +390,7 @@ export function ComponentHardwareView({
   showLabels,
   isDark,
   onStartDrag,
+  onStartRotate,
   onPinPointerDown,
   onPinPointerUp,
   onUpdateProps,
@@ -366,6 +402,7 @@ export function ComponentHardwareView({
   showLabels: boolean
   isDark: boolean
   onStartDrag: (compId: string, clientX: number, clientY: number) => void
+  onStartRotate?: (compId: string, clientX: number, clientY: number) => void
   onPinPointerDown: (ep: WireEndpoint, clientX: number, clientY: number) => void
   onPinPointerUp: (ep: WireEndpoint) => void
   onUpdateProps: (compId: string, patch: Partial<PlacedComponent['props']>) => void
@@ -466,20 +503,199 @@ export function ComponentHardwareView({
             </g>
           )
         })()
+      ) : comp.kind === 'breadboard-mini' ? (
+        <g>
+          <rect x={44} y={-2.5} width={16} height={3.5} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={124} y={-2.5} width={16} height={3.5} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={-2.5} y={24} width={3.5} height={14} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={-2.5} y={66} width={3.5} height={14} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={1} y={2} width={184} height={106} rx={5} fill="#d6d2c4" />
+          <rect x={0} y={0} width={184} height={104} rx={5} fill="#f7f6f1" stroke="#c8c4b6" strokeWidth={1.3} />
+          <rect x={8} y={52.5} width={168} height={8} rx={2} fill="#e7e4da" stroke="#d5d1c3" strokeWidth={0.7} />
+          {(['a', 'b', 'c', 'd', 'e'] as const).map((ltr, r) => (
+            <text key={`mb-t-${ltr}`} x={9} y={18 + r * 7.5 + 2} textAnchor="middle" fontSize="5.4" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {(['f', 'g', 'h', 'i', 'j'] as const).map((ltr, r) => (
+            <text key={`mb-b-${ltr}`} x={9} y={65 + r * 7.5 + 2} textAnchor="middle" fontSize="5.4" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {[1, 5, 10, 15].map((n) => (
+            <text key={`mb-c-${n}`} x={20 + (n - 1) * 9} y={12} textAnchor="middle" fontSize="5.2" fontWeight={700} fontFamily="monospace" fill="#64748b">{n}</text>
+          ))}
+          {Array.from({ length: 17 }, (_, col) => {
+            const hx = 20 + col * 9
+            return (
+              <g key={`mb-col-${col}`}>
+                {[0, 1, 2, 3, 4].map((r) => (
+                  <g key={`mb-r-${r}`}>
+                    <rect x={hx - 2.2} y={18 + r * 7.5 - 2.2} width={4.4} height={4.4} rx={0.8} fill="#cbc7b9" />
+                    <rect x={hx - 1.75} y={18 + r * 7.5 - 1.75} width={3.5} height={3.5} rx={0.5} fill="#18181b" />
+                    <rect x={hx - 2.2} y={65 + r * 7.5 - 2.2} width={4.4} height={4.4} rx={0.8} fill="#cbc7b9" />
+                    <rect x={hx - 1.75} y={65 + r * 7.5 - 1.75} width={3.5} height={3.5} rx={0.5} fill="#18181b" />
+                  </g>
+                ))}
+              </g>
+            )
+          })}
+        </g>
       ) : comp.kind === 'breadboard' ? (
         <g>
-          <rect x={0} y={0} width={170} height={112} rx={6} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.5} />
-          <line x1={8} y1={14} x2={162} y2={14} stroke="#ef4444" strokeWidth={1.6} />
-          <line x1={8} y1={26} x2={162} y2={26} stroke="#3b82f6" strokeWidth={1.6} />
-          <rect x={6} y={62} width={158} height={8} rx={2} fill="#e2e8f0" />
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((col) => (
-            <g key={col}>
-              <circle cx={26 + col * 12} cy={42} r={1.8} fill="#334155" />
-              <circle cx={26 + col * 12} cy={52} r={1.8} fill="#334155" />
-              <circle cx={26 + col * 12} cy={82} r={1.8} fill="#334155" />
-              <circle cx={26 + col * 12} cy={92} r={1.8} fill="#334155" />
-            </g>
+          {/* Side interlocking ABS dovetail tabs */}
+          <rect x={72} y={-2.5} width={18} height={3.5} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={228} y={-2.5} width={18} height={3.5} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={-2.5} y={40} width={3.5} height={16} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          <rect x={-2.5} y={100} width={3.5} height={16} rx={0.8} fill="#e7e4da" stroke="#cbd5e1" strokeWidth={0.7} />
+          {/* 3D bottom lip & molded ABS cream/white housing */}
+          <rect x={1} y={2} width={318} height={156} rx={5} fill="#d6d2c4" />
+          <rect x={0} y={0} width={318} height={154} rx={5} fill="#f7f6f1" stroke="#c8c4b6" strokeWidth={1.3} />
+          <rect x={2.5} y={2.5} width={313} height={149} rx={3.5} fill="none" stroke="#ffffff" strokeWidth={0.8} opacity={0.8} />
+
+          {/* Top Power Rail Stripes & Polarity Marks */}
+          <line x1={26} y1={7} x2={294} y2={7} stroke="#2563eb" strokeWidth={1.35} strokeLinecap="round" />
+          <line x1={26} y1={28} x2={294} y2={28} stroke="#dc2626" strokeWidth={1.35} strokeLinecap="round" />
+          <text x={15} y={15.5} textAnchor="middle" fontSize="9.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={303} y={15.5} textAnchor="middle" fontSize="9.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={15} y={24.5} textAnchor="middle" fontSize="9" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={303} y={24.5} textAnchor="middle" fontSize="9" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+
+          {/* Bottom Power Rail Stripes & Polarity Marks */}
+          <line x1={26} y1={131} x2={294} y2={131} stroke="#2563eb" strokeWidth={1.35} strokeLinecap="round" />
+          <line x1={26} y1={151} x2={294} y2={151} stroke="#dc2626" strokeWidth={1.35} strokeLinecap="round" />
+          <text x={15} y={139.5} textAnchor="middle" fontSize="9.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={303} y={139.5} textAnchor="middle" fontSize="9.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={15} y={148.5} textAnchor="middle" fontSize="9" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={303} y={148.5} textAnchor="middle" fontSize="9" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+
+          {/* Power Rail Hairline Divider & Central DIP IC Trench */}
+          <line x1={8} y1={31.5} x2={310} y2={31.5} stroke="#e2dfd3" strokeWidth={0.8} />
+          <line x1={8} y1={128} x2={310} y2={128} stroke="#e2dfd3" strokeWidth={0.8} />
+          <rect x={10} y={76.5} width={298} height={9} rx={2} fill="#e7e4da" stroke="#d5d1c3" strokeWidth={0.7} />
+          <line x1={12} y1={78} x2={306} y2={78} stroke="#cac5b6" strokeWidth={0.7} />
+
+          {/* Printed Row Letters (a-e & f-j on Left & Right) */}
+          {(['a', 'b', 'c', 'd', 'e'] as const).map((ltr, r) => {
+            const ry = 42 + r * 7.5
+            return (
+              <g key={`row-top-${ltr}`}>
+                <text x={15} y={ry + 2} textAnchor="middle" fontSize="5.8" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+                <text x={303} y={ry + 2} textAnchor="middle" fontSize="5.8" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+              </g>
+            )
+          })}
+          {(['f', 'g', 'h', 'i', 'j'] as const).map((ltr, r) => {
+            const ry = 90 + r * 7.5
+            return (
+              <g key={`row-bot-${ltr}`}>
+                <text x={15} y={ry + 2} textAnchor="middle" fontSize="5.8" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+                <text x={303} y={ry + 2} textAnchor="middle" fontSize="5.8" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+              </g>
+            )
+          })}
+
+          {/* Printed Column Numbers (1, 5, 10, 15, 20, 25, 30) */}
+          {[1, 5, 10, 15, 20, 25, 30].map((colNum) => {
+            const cx = 28 + (colNum - 1) * 9
+            return (
+              <g key={`col-num-${colNum}`}>
+                <text x={cx} y={37.5} textAnchor="middle" fontSize="5.4" fontWeight={700} fontFamily="monospace" fill="#64748b">{colNum}</text>
+                <text x={cx} y={126.8} textAnchor="middle" fontSize="5.4" fontWeight={700} fontFamily="monospace" fill="#64748b">{colNum}</text>
+              </g>
+            )
+          })}
+
+          {/* Power Rail 25-hole Split Clusters (5 groups x 5 holes on Top & Bottom) */}
+          {[0, 1, 2, 3, 4].map((grp) =>
+            [0, 1, 2, 3, 4].map((idx) => {
+              const hx = 34 + grp * 54 + idx * 9
+              return (
+                <g key={`rail-${grp}-${idx}`}>
+                  {[13, 22, 137, 146].map((hy) => (
+                    <g key={`rh-${hy}`}>
+                      <rect x={hx - 2.3} y={hy - 2.3} width={4.6} height={4.6} rx={0.9} fill="#bdb9aa" />
+                      <rect x={hx - 1.8} y={hy - 1.8} width={3.6} height={3.6} rx={0.6} fill="#18181b" />
+                      <rect x={hx - 0.7} y={hy - 0.7} width={1.4} height={1.4} rx={0.3} fill="#64748b" />
+                    </g>
+                  ))}
+                </g>
+              )
+            }),
+          )}
+
+          {/* 30 Columns x 10 Terminal Strip Square Sockets (300 Main Holes) */}
+          {Array.from({ length: 30 }, (_, col) => {
+            const hx = 28 + col * 9
+            return (
+              <g key={`col-${col}`}>
+                {[0, 1, 2, 3, 4].map((r) => {
+                  const hyTop = 42 + r * 7.5
+                  const hyBot = 90 + r * 7.5
+                  return (
+                    <g key={`r-${r}`}>
+                      <rect x={hx - 2.2} y={hyTop - 2.2} width={4.4} height={4.4} rx={0.8} fill="#cbc7b9" />
+                      <rect x={hx - 1.75} y={hyTop - 1.75} width={3.5} height={3.5} rx={0.5} fill="#18181b" />
+                      <rect x={hx - 0.6} y={hyTop - 0.6} width={1.2} height={1.2} rx={0.2} fill="#64748b" />
+                      <rect x={hx - 2.2} y={hyBot - 2.2} width={4.4} height={4.4} rx={0.8} fill="#cbc7b9" />
+                      <rect x={hx - 1.75} y={hyBot - 1.75} width={3.5} height={3.5} rx={0.5} fill="#18181b" />
+                      <rect x={hx - 0.6} y={hyBot - 0.6} width={1.2} height={1.2} rx={0.2} fill="#64748b" />
+                    </g>
+                  )
+                })}
+              </g>
+            )
+          })}
+        </g>
+      ) : comp.kind === 'breadboard-large' ? (
+        <g>
+          {/* Large 830-Point Full Breadboard Housing */}
+          <rect x={1} y={2} width={472} height={148} rx={5} fill="#d6d2c4" />
+          <rect x={0} y={0} width={472} height={146} rx={5} fill="#f7f6f1" stroke="#c8c4b6" strokeWidth={1.3} />
+          <line x1={24} y1={6.5} x2={448} y2={6.5} stroke="#2563eb" strokeWidth={1.2} />
+          <line x1={24} y1={25.5} x2={448} y2={25.5} stroke="#dc2626" strokeWidth={1.2} />
+          <line x1={24} y1={122.5} x2={448} y2={122.5} stroke="#2563eb" strokeWidth={1.2} />
+          <line x1={24} y1={141.5} x2={448} y2={141.5} stroke="#dc2626" strokeWidth={1.2} />
+          <text x={13} y={14.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={459} y={14.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={13} y={22.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={459} y={22.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={13} y={130.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={459} y={130.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#2563eb" fontFamily="monospace">-</text>
+          <text x={13} y={138.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <text x={459} y={138.5} textAnchor="middle" fontSize="8.5" fontWeight={800} fill="#dc2626" fontFamily="monospace">+</text>
+          <rect x={10} y={71} width={452} height={7} rx={1.8} fill="#e7e4da" stroke="#d5d1c3" strokeWidth={0.7} />
+          {[1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((colNum) => (
+            <text key={`lc-${colNum}`} x={26 + (colNum - 1) * 6.8} y={33.8} textAnchor="middle" fontSize="5" fontWeight={700} fontFamily="monospace" fill="#64748b">{colNum}</text>
           ))}
+          {(['a', 'b', 'c', 'd', 'e'] as const).map((ltr, r) => (
+            <text key={`lt-${ltr}`} x={13} y={38 + r * 7 + 2} textAnchor="middle" fontSize="5.2" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {(['f', 'g', 'h', 'i', 'j'] as const).map((ltr, r) => (
+            <text key={`lb-${ltr}`} x={13} y={83 + r * 7 + 2} textAnchor="middle" fontSize="5.2" fontWeight={700} fontFamily="monospace" fill="#64748b">{ltr}</text>
+          ))}
+          {Array.from({ length: 10 }, (_, grp) =>
+            [0, 1, 2, 3, 4].map((h) => {
+              const hx = (grp < 5 ? 32 + grp * 41 : 246 + (grp - 5) * 41) + h * 6.8
+              return (
+                <g key={`lr-${grp}-${h}`}>
+                  <rect x={hx - 1.5} y={10.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  <rect x={hx - 1.5} y={18.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  <rect x={hx - 1.5} y={126.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  <rect x={hx - 1.5} y={134.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                </g>
+              )
+            }),
+          )}
+          {Array.from({ length: 63 }, (_, col) => {
+            const hx = 26 + col * 6.8
+            return (
+              <g key={`lcol-${col}`}>
+                {[0, 1, 2, 3, 4].map((r) => (
+                  <g key={`lr-${r}`}>
+                    <rect x={hx - 1.5} y={38 + r * 7 - 1.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                    <rect x={hx - 1.5} y={83 + r * 7 - 1.5} width={3} height={3} rx={0.5} fill="#18181b" />
+                  </g>
+                ))}
+              </g>
+            )
+          })}
         </g>
       ) : comp.kind === 'pushbutton' ? (
         (() => {
@@ -782,6 +998,35 @@ export function ComponentHardwareView({
         const isSel = selectedPin?.nodeId === comp.id && selectedPin?.pinId === p.id
         const color = isSel ? '#f59e0b' : p.role === 'power' ? '#ef4444' : p.role === 'gnd' || p.role === 'cathode' ? '#475569' : '#38bdf8'
         const shortTag = p.id === 'A' ? '+' : p.id === 'K' ? '-' : p.id
+        if (isBreadboardKind(comp.kind)) {
+          return (
+            <rect
+              key={p.id}
+              className="iot-pin iot-bb-pin iot-bb-socket-ring"
+              data-node-id={comp.id}
+              data-pin-id={p.id}
+              x={rot.dx - 3.2}
+              y={rot.dy - 3.2}
+              width={6.4}
+              height={6.4}
+              rx={1.2}
+              fill="transparent"
+              stroke={isSel ? '#f59e0b' : 'transparent'}
+              strokeWidth={isSel ? 1.8 : 1.1}
+              style={{ cursor: 'crosshair' }}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                onPinPointerDown({ nodeId: comp.id, pinId: p.id }, e.clientX, e.clientY)
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation()
+                onPinPointerUp({ nodeId: comp.id, pinId: p.id })
+              }}
+            >
+              <title>{p.label}</title>
+            </rect>
+          )
+        }
         return (
           <g
             key={p.id}
@@ -819,6 +1064,23 @@ export function ComponentHardwareView({
           </g>
         )
       })}
+      {selectedComp && onStartRotate ? (
+        <g
+          className="iot-rotate-handle iot-interactive-control"
+          data-rotate-node={comp.id}
+          transform={`translate(${spec.width + 6}, -6)`}
+          style={{ cursor: 'grab' }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            onStartRotate(comp.id, e.clientX, e.clientY)
+          }}
+        >
+          <circle r={9.5} fill="#16a34a" stroke="#ffffff" strokeWidth={1.6} />
+          <path d="M 3.5 -2.5 A 4.2 4.2 0 1 0 4.1 1.6" fill="none" stroke="#ffffff" strokeWidth={1.6} strokeLinecap="round" />
+          <path d="M 1.2 -3.4 L 4.3 -2.6 L 3.8 0.5" fill="none" stroke="#ffffff" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+          <title>Tarik bebas untuk memutar / klik +45°</title>
+        </g>
+      ) : null}
     </g>
   )
 }
