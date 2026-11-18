@@ -174,6 +174,8 @@ export interface PlacedComponent {
     ldrThreshold?: number
     ldrRl10?: number
     ldrGamma?: number
+    /** Per-MCU sketch source code when extra MCUs (kind === 'mcu') are placed on canvas */
+    sketchCode?: string
   }
 }
 

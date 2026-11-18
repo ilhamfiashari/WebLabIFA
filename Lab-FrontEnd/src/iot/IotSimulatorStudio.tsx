@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -29,7 +29,7 @@ import {
 import { Badge, PageHead } from '../portal/ui'
 import { useI18n } from '../shared/i18n'
 import { simApi } from '../simulator/api'
-import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getComponentSpec } from './boards'
+import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getBoardInstances, getComponentSpec } from './boards'
 import { CircuitCanvas } from './CircuitCanvas'
 import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
 import {
@@ -51,6 +51,7 @@ import {
   compileArduinoSketch,
   createInitialSimulation,
   createVmContext,
+  defaultMcuSketch,
   stepLoop,
   stepSetup,
   verifyCircuitAndCode,
@@ -189,6 +190,7 @@ export function IotSimulatorStudio({
   const componentsRef = useRef(components)
   const wiresRef = useRef(wires)
   const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [editingNodeId, setEditingNodeId] = useState<string>('board')
   const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 })
   const [acState, setAcState] = useState<{
     replaceStart: number
@@ -198,6 +200,27 @@ export function IotSimulatorStudio({
     topPx: number
     leftPx: number
   } | null>(null)
+
+  const boardInstances = useMemo(() => getBoardInstances(boardId, components), [boardId, components])
+  const activeEditingNodeId = boardInstances.some((b) => b.nodeId === editingNodeId) ? editingNodeId : 'board'
+  const editingBoardSpec = boardInstances.find((b) => b.nodeId === activeEditingNodeId) ?? boardInstances[0]
+  const activeCode =
+    activeEditingNodeId === 'board'
+      ? code
+      : (components.find((c) => c.id === activeEditingNodeId)?.props.sketchCode ??
+        defaultMcuSketch(editingBoardSpec.boardId, editingBoardSpec.label))
+
+  const setActiveCode = (next: string) => {
+    if (activeEditingNodeId === 'board') {
+      setCode(next)
+      return
+    }
+    setComponents((prev) =>
+      prev.map((c) =>
+        c.id === activeEditingNodeId ? { ...c, props: { ...c.props, sketchCode: next } } : c,
+      ),
+    )
+  }
 
   const refreshAutocomplete = (nextCode: string, cursor: number | null, force = false) => {
     if (cursor === null || cursor < 0) {
@@ -220,29 +243,46 @@ export function IotSimulatorStudio({
     })
   }
 
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const pending = pendingSelectionRef.current
+    const ta = codeTextareaRef.current
+    if (pending && ta) {
+      ta.setSelectionRange(pending.start, pending.end)
+      pendingSelectionRef.current = null
+    }
+  }, [activeCode])
+
   const applyEditorMutation = (nextCode: string, selStart: number, selEnd = selStart, runAc = false) => {
-    setCode(nextCode)
     setCursorPos(getLineCol(nextCode, selStart))
     if (runAc) refreshAutocomplete(nextCode, selStart, false)
     else setAcState(null)
-    requestAnimationFrame(() => {
-      const ta = codeTextareaRef.current
+    const ta = codeTextareaRef.current
+    if (nextCode === activeCode) {
       if (ta) {
         ta.focus()
         ta.setSelectionRange(selStart, selEnd)
       }
-    })
+      return
+    }
+    pendingSelectionRef.current = { start: selStart, end: selEnd }
+    if (ta) {
+      ta.value = nextCode
+      ta.setSelectionRange(selStart, selEnd)
+    }
+    setActiveCode(nextCode)
   }
 
   const formatSketchCode = () => {
-    const formatted = formatArduinoCpp(code)
+    const formatted = formatArduinoCpp(activeCode)
     applyEditorMutation(formatted, Math.min(formatted.length, codeTextareaRef.current?.selectionStart ?? 0))
     setStatusNotice(en ? 'Code auto-indented cleanly.' : 'Kode dirapikan dengan auto-indent.')
   }
 
   const acceptAutocomplete = (item: AcSuggestion) => {
     if (!acState) return
-    const { nextCode, nextCursor } = applyAutocompleteItem(code, acState.replaceStart, acState.replaceEnd, item)
+    const { nextCode, nextCursor } = applyAutocompleteItem(activeCode, acState.replaceStart, acState.replaceEnd, item)
     applyEditorMutation(nextCode, nextCursor)
   }
   useEffect(() => {
@@ -381,6 +421,8 @@ export function IotSimulatorStudio({
     if (!preset) return
     vmRef.current = null
     setBoardId(preset.board)
+    setEditingNodeId('board')
+    setAcState(null)
     setActivePresetId(preset.id)
     setActiveMissionId(preset.missionId ?? null)
     setActiveProjectId(null)
@@ -409,21 +451,31 @@ export function IotSimulatorStudio({
   }
 
   const addExtraBoard = (extraBoard: BoardId) => {
-    const hasPrimary = components.some((c) => c.kind === 'mcu' && c.id === 'board')
-    const idx = components.filter((c) => c.kind === 'mcu').length + (hasPrimary ? 1 : 2)
+    const existingExtras = components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
+    const idx = existingExtras.length + 2
+    const slot = existingExtras.length
     const spec = BOARDS[extraBoard]
+    const label = `${spec.shortName} #${idx}`
     const newMcu: PlacedComponent = {
       id: nextUid('mcu'),
       kind: 'mcu',
       boardId: extraBoard,
-      x: 320 + ((idx - 1) % 3) * 40,
-      y: 76 + ((idx - 1) % 3) * 26,
-      label: `${spec.shortName} #${idx}`,
-      props: {},
+      x: 310 + (slot % 2) * 280,
+      y: 76 + Math.floor(slot / 2) * 200,
+      label,
+      props: {
+        sketchCode: defaultMcuSketch(extraBoard, label),
+      },
     }
     const nextComps = [...components, newMcu]
     setComponents(nextComps)
+    setEditingNodeId(newMcu.id)
     setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+    setStatusNotice(
+      en
+        ? `${label} added (${1 + existingExtras.length + 1} MCUs on canvas).`
+        : `${label} ditambahkan (${1 + existingExtras.length + 1} mikrokontroler di kanvas).`,
+    )
   }
 
   const moveBoardOrComponent = (nodeId: string, x: number, y: number) => {
@@ -609,8 +661,12 @@ export function IotSimulatorStudio({
   })
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
-  const lineCount = Math.max(18, code.split('\n').length)
-  const highlightedTokens = useMemo(() => tokenizeArduinoCpp(code), [code])
+  const lineCount = Math.max(18, activeCode.split('\n').length)
+  const highlightedTokens = useMemo(() => tokenizeArduinoCpp(activeCode), [activeCode])
+  const activeMcuCompileError = useMemo(() => {
+    if (activeEditingNodeId === 'board') return simState.compileError
+    return compileArduinoSketch(activeCode).compileError
+  }, [activeEditingNodeId, activeCode, simState.compileError])
 
   const focusBarControls = (
     <div className="iot-focus-controls">
@@ -669,6 +725,7 @@ export function IotSimulatorStudio({
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <Badge tone="info">
                 <Cpu size={13} /> {BOARDS[boardId].shortName} · {BOARDS[boardId].logicVoltage}V
+                {boardInstances.length > 1 ? ` · ${boardInstances.length} MCU` : ''}
               </Badge>
               {focusBarControls}
               <button type="button" className="btn-outline" onClick={() => setShowSavedDrawer((v) => !v)}>
@@ -924,7 +981,7 @@ export function IotSimulatorStudio({
             <div className={`iot-editor-shell ${isDark ? 'theme-dark' : 'theme-light'}`}>
               <div className="iot-panel-head">
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
-                  <Code2 size={14} /> &lt;/&gt; Main.ino
+                  <Code2 size={14} /> &lt;/&gt; {boardInstances.length > 1 ? `${editingBoardSpec.label}.ino` : 'Main.ino'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
@@ -935,13 +992,30 @@ export function IotSimulatorStudio({
                   >
                     <AlignLeft size={12} /> {en ? 'Format' : 'Rapikan'}
                   </button>
-                  <Badge tone={simState.compileError ? 'bad' : 'good'}>
-                    {simState.compileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[boardId].shortName} C++`}
+                  <Badge tone={activeMcuCompileError ? 'bad' : 'good'}>
+                    {activeMcuCompileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[editingBoardSpec.boardId].shortName} C++`}
                   </Badge>
                 </div>
               </div>
-              {simState.compileError ? (
-                <div className="iot-compile-error">{simState.compileError}</div>
+              {boardInstances.length > 1 ? (
+                <div className="iot-mcu-switcher" role="group" aria-label={en ? 'Select MCU firmware' : 'Pilih firmware MCU'}>
+                  {boardInstances.map((b, idx) => (
+                    <button
+                      key={b.nodeId}
+                      type="button"
+                      className={`iot-mcu-tab ${activeEditingNodeId === b.nodeId ? 'is-active' : ''}`}
+                      onClick={() => {
+                        setEditingNodeId(b.nodeId)
+                        setAcState(null)
+                      }}
+                    >
+                      MCU {idx + 1}: {b.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {activeMcuCompileError ? (
+                <div className="iot-compile-error">{activeMcuCompileError}</div>
               ) : null}
               <div className="iot-code-wrap">
                 <div className="iot-line-gutter" aria-hidden="true">
@@ -973,13 +1047,13 @@ export function IotSimulatorStudio({
                     className="iot-code-textarea"
                     spellCheck={false}
                     wrap="off"
-                    value={code}
+                    value={activeCode}
                     aria-autocomplete="list"
                     aria-expanded={Boolean(acState)}
                     onChange={(e) => {
                       const val = e.target.value
                       const cursor = e.target.selectionStart
-                      setCode(val)
+                      setActiveCode(val)
                       setCursorPos(getLineCol(val, cursor ?? 0))
                       refreshAutocomplete(val, cursor, false)
                     }}
@@ -1411,6 +1485,11 @@ export function IotSimulatorStudio({
             }}
             onDuplicateNode={duplicateNode}
             onSelectPrimaryBoard={switchBoard}
+            onSelectMcuCode={(nodeId) => {
+              setEditingNodeId(nodeId)
+              setLeftTab('code')
+              setAcState(null)
+            }}
             focusMode={focusMode}
             onChangeFocusMode={setFocusMode}
             isFullscreen={isFullscreen}

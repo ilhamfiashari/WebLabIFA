@@ -245,6 +245,7 @@ export function CircuitCanvas({
   onDeleteNode,
   onDuplicateNode,
   onSelectPrimaryBoard,
+  onSelectMcuCode,
   focusMode = 'normal',
   onChangeFocusMode,
   isFullscreen = false,
@@ -269,6 +270,7 @@ export function CircuitCanvas({
   onDeleteNode: (nodeId: string) => void
   onDuplicateNode?: (nodeId: string) => void
   onSelectPrimaryBoard?: (boardId: BoardId) => void
+  onSelectMcuCode?: (nodeId: string) => void
   focusMode?: 'normal' | 'focus' | 'canvas'
   onChangeFocusMode?: (mode: 'normal' | 'focus' | 'canvas') => void
   isFullscreen?: boolean
@@ -1501,6 +1503,33 @@ export function CircuitCanvas({
                   ))}
                 </div>
               ) : null}
+              <div className="iot-popover-footer">
+                {onSelectMcuCode ? (
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={() => {
+                      onSelectMcuCode(inspectedBoard.nodeId)
+                      setInspectedNodeId(null)
+                    }}
+                  >
+                    {en ? 'Edit Code (.ino)' : 'Edit Kode (.ino)'}
+                  </button>
+                ) : null}
+                {!inspectedBoard.isPrimary ? (
+                  <button
+                    type="button"
+                    className="btn-outline iot-mini-btn"
+                    onClick={() => {
+                      onDeleteNode(inspectedBoard.nodeId)
+                      setSelectedNodeId(null)
+                      setInspectedNodeId(null)
+                    }}
+                  >
+                    <Trash2 size={12} /> {en ? 'Remove MCU' : 'Hapus MCU'}
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>

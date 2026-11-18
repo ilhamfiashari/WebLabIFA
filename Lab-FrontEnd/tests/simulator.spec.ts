@@ -911,6 +911,7 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await codeEditor.fill('void loop() {\ndigitalWrite(2, HIGH);\n}')
   await page.getByRole('button', { name: 'Rapikan' }).click()
   await expect(codeEditor).toHaveValue('void loop() {\n  digitalWrite(2, HIGH);\n}')
+  await codeEditor.focus()
   await codeEditor.evaluate((el: HTMLTextAreaElement) => {
     const idx = el.value.indexOf('{') + 1
     el.selectionStart = idx
@@ -969,7 +970,7 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: '220Ω', exact: true }).click()
   await page.getByRole('button', { name: 'Tutup', exact: true }).click()
 
-  // Bisa menambah lebih dari 1 mikrokontroler ke dalam 1 desain dengan bentuk fisik berbeda & menghapus tambahan MCU
+  // Bisa menambah lebih dari 1 mikrokontroler (2 atau 3 MCU sekaligus) di 1 kanvas, masing-masing punya sketch & simulasi
   await expect(page.getByText('MQ2 Gas Sensor', { exact: true })).toBeVisible()
   await expect(page.getByText('Keypad 4×4 Matrix', { exact: true })).toBeVisible()
   await expect(page.getByText('Arduino Nano', { exact: true })).toBeVisible()
@@ -978,12 +979,26 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await bottomPart.scrollIntoViewIfNeeded()
   await expect(bottomPart).toBeVisible()
   await page.getByRole('button', { name: 'Tambah Arduino Uno ke kanvas' }).click()
-  await expect(page.getByText('Arduino Uno #2')).toBeVisible()
+  await expect(page.getByText('Arduino Uno #2', { exact: true })).toBeVisible()
   await expect(page.getByText('ATMEGA328P-PU', { exact: true })).toBeVisible()
-  await page.getByText('Arduino Uno #2').dispatchEvent('pointerdown')
-  await page.getByText('Arduino Uno #2').dispatchEvent('pointerup')
+  await page.getByRole('button', { name: 'Tambah Pi Pico ke kanvas' }).click()
+  await expect(page.getByText('Pi Pico #3', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  const mcuGroup = page.getByRole('group', { name: 'Pilih firmware MCU' })
+  await expect(mcuGroup.getByRole('button', { name: /MCU 1/ })).toBeVisible()
+  await expect(mcuGroup.getByRole('button', { name: /Arduino Uno #2/ })).toBeVisible()
+  await expect(mcuGroup.getByRole('button', { name: /Pi Pico #3/ })).toBeVisible()
+  await mcuGroup.getByRole('button', { name: /Arduino Uno #2/ }).click()
+  await expect(page.getByLabel('Kode program mikrokontroler')).toHaveValue(/Firmware Arduino Uno #2/)
+  await mcuGroup.getByRole('button', { name: /MCU 1/ }).click()
+  await page.getByText('Pi Pico #3', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('Pi Pico #3', { exact: true }).dispatchEvent('pointerup')
   await page.getByRole('button', { name: 'Hapus Komponen' }).click()
-  await expect(page.getByText('Arduino Uno #2')).toHaveCount(0)
+  await expect(page.getByText('Pi Pico #3', { exact: true })).toHaveCount(0)
+  await page.getByText('Arduino Uno #2', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('Arduino Uno #2', { exact: true }).dispatchEvent('pointerup')
+  await page.getByRole('button', { name: 'Hapus Komponen' }).click()
+  await expect(page.getByText('Arduino Uno #2', { exact: true })).toHaveCount(0)
 
   // Cek kustomisasi atribut Wokwi pada LED di kanvas & sinkronisasi diagram.json
   await page.getByText('LED Status', { exact: true }).dispatchEvent('pointerdown')
@@ -1028,6 +1043,11 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByText('Temp: 28 C', { exact: true })).toBeVisible()
   await page.getByRole('tab', { name: /Serial Plotter/ }).click()
   await expect(page.locator('.iot-plot-legend')).toContainText('temp:')
+
+  // Uji template Multi-MCU: 2 board berjalan paralel (ESP32-C3 GPIO2 -> Arduino Uno D4 -> LED Node #2)
+  await page.getByLabel('Pilih template atau misi').selectOption('multi-mcu-bridge')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('[Arduino Uno #2] RX=HIGH -> LED Node ON')
 
   // Simpan proyek ke database
   await page.getByRole('button', { name: 'Simpan Proyek' }).click()

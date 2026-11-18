@@ -390,10 +390,13 @@ export function analyzeCircuitSafety(
 }
 
 export interface VmContext {
+  nodeId: string
+  label: string
   boardId: BoardId
   sketch: CompiledSketch
   vars: Record<string, number | string>
   sim: SimulationState
+  localGpio: Record<number, GpioRuntime>
   servoPinMap: Record<string, number>
   serialRxQueue: string[]
   oledBuffer: string[]
@@ -401,6 +404,41 @@ export interface VmContext {
   loopIterations: number
   loopCursor: number
   graph: NetGraph
+  peers: VmContext[]
+  allNodes?: Map<string, VmContext>
+}
+
+export function defaultMcuSketch(boardId: BoardId, label?: string): string {
+  const spec = BOARDS[boardId]
+  const ledPin = spec.builtinLedGpio
+  const title = label || spec.shortName
+  return `// Firmware ${title} (${spec.shortName})
+#define NODE_LED ${ledPin}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(NODE_LED, OUTPUT);
+  Serial.println("${title} siap!");
+}
+
+void loop() {
+  digitalWrite(NODE_LED, HIGH);
+  Serial.println("${title}: HIGH");
+  delay(650);
+
+  digitalWrite(NODE_LED, LOW);
+  delay(650);
+}`
+}
+
+function buildBoardGpioMap(boardId: BoardId): Record<number, GpioRuntime> {
+  const gpioStates: Record<number, GpioRuntime> = {}
+  for (const p of BOARDS[boardId].pins) {
+    if (p.gpio !== undefined) {
+      gpioStates[p.gpio] = { gpio: p.gpio, mode: 'INPUT', digital: 0, pwmDuty: 0, adcValue: 0, voltage: 0 }
+    }
+  }
+  return gpioStates
 }
 
 export function createInitialSimulation(
@@ -408,12 +446,7 @@ export function createInitialSimulation(
   components: PlacedComponent[],
   wires: Wire[],
 ): SimulationState {
-  const gpioStates: Record<number, GpioRuntime> = {}
-  for (const p of BOARDS[boardId].pins) {
-    if (p.gpio !== undefined) {
-      gpioStates[p.gpio] = { gpio: p.gpio, mode: 'INPUT', digital: 0, pwmDuty: 0, adcValue: 0, voltage: 0 }
-    }
-  }
+  const gpioStates = buildBoardGpioMap(boardId)
   return {
     running: false,
     elapsedMs: 0,
@@ -442,19 +475,59 @@ export function createVmContext(
   wires: Wire[],
 ): VmContext {
   const sim = createInitialSimulation(boardId, components, wires)
-  return {
+  const graph = buildNetGraph(wires, components)
+  const primaryComp = components.find((c) => c.kind === 'mcu' && c.id === 'board')
+  const primaryLabel = primaryComp?.label ?? BOARDS[boardId].shortName
+  const allNodes = new Map<string, VmContext>()
+
+  const root: VmContext = {
+    nodeId: 'board',
+    label: primaryLabel,
     boardId,
     sketch,
     vars: { ...sketch.defines },
     sim,
+    localGpio: sim.gpioStates,
     servoPinMap: {},
     serialRxQueue: [],
     oledBuffer: [],
     oledStarted: false,
     loopIterations: 0,
     loopCursor: 0,
-    graph: buildNetGraph(wires, components),
+    graph,
+    peers: [],
+    allNodes,
   }
+  allNodes.set('board', root)
+
+  const extraMcus = components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
+  for (const mcu of extraMcus) {
+    const peerBoard = mcu.boardId ?? 'arduino-uno'
+    const peerCode = mcu.props.sketchCode ?? defaultMcuSketch(peerBoard, mcu.label)
+    const peerCompiled = compileArduinoSketch(peerCode)
+    const peerCtx: VmContext = {
+      nodeId: mcu.id,
+      label: mcu.label || BOARDS[peerBoard].shortName,
+      boardId: peerBoard,
+      sketch: peerCompiled,
+      vars: { ...peerCompiled.defines },
+      sim,
+      localGpio: buildBoardGpioMap(peerBoard),
+      servoPinMap: {},
+      serialRxQueue: [],
+      oledBuffer: [],
+      oledStarted: false,
+      loopIterations: 0,
+      loopCursor: 0,
+      graph,
+      peers: [],
+      allNodes,
+    }
+    root.peers.push(peerCtx)
+    allNodes.set(mcu.id, peerCtx)
+  }
+
+  return root
 }
 
 function gpioPinIds(boardId: BoardId, gpio: number): string[] {
@@ -468,9 +541,9 @@ function findConnectedComponent(
   kind?: PlacedComponent['kind'],
 ): PlacedComponent | undefined {
   for (const pid of gpioPinIds(ctx.boardId, gpio)) {
-    const reach = traceReachable(ctx.graph, { nodeId: 'board', pinId: pid })
+    const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, components)
     for (const ep of reach.endpoints) {
-      if (ep.nodeId === 'board') continue
+      if (ep.nodeId === ctx.nodeId) continue
       const comp = components.find((c) => c.id === ep.nodeId && (!kind || c.kind === kind))
       if (comp) return comp
     }
@@ -555,7 +628,24 @@ function evalExpr(
       if (btn) return btn.props.pressed || btn.props.latched ? 0 : 1
       const pir = findConnectedComponent(ctx, components, gpio, 'pir')
       if (pir) return pir.props.motion ? 1 : 0
-      return ctx.sim.gpioStates[gpio]?.digital ?? 0
+      // Check wired peer MCU output signals driving this pin
+      for (const pid of gpioPinIds(ctx.boardId, gpio)) {
+        const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, components)
+        for (const ep of reach.endpoints) {
+          if (ep.nodeId === ctx.nodeId) continue
+          const peer = ctx.allNodes?.get(ep.nodeId)
+          if (!peer) continue
+          const peerPin = getBoardPin(peer.boardId, ep.pinId)
+          if (peerPin?.kind === 'power') return 1
+          if (peerPin?.gpio !== undefined) {
+            const pgs = peer.localGpio[peerPin.gpio]
+            if (pgs && (pgs.mode === 'OUTPUT' || pgs.mode === 'PWM') && pgs.digital === 1) {
+              return 1
+            }
+          }
+        }
+      }
+      return ctx.localGpio[gpio]?.digital ?? 0
     }
     if (fn === 'analogRead') {
       const gpio = Number(args[0] ?? 0)
@@ -661,17 +751,35 @@ function extractPlotMetrics(text: string): Record<string, number> | null {
   return null
 }
 
-function pushSerial(ctx: VmContext, text: string) {
+function pushSerial(ctx: VmContext, text: string, components: PlacedComponent[] = []) {
+  const isMulti = (ctx.allNodes?.size ?? 1) > 1
+  const formatted = isMulti ? `[${ctx.label}] ${text}` : text
   const entry: SerialEntry = {
     id: `ser-${ctx.sim.serialLog.length + 1}-${ctx.sim.elapsedMs}`,
     timeMs: ctx.sim.elapsedMs,
-    text,
+    text: formatted,
     kind: 'rx',
   }
   ctx.sim.serialLog = [...ctx.sim.serialLog.slice(-79), entry]
   const metrics = extractPlotMetrics(text)
   if (metrics) {
     ctx.sim.plotHistory = [...ctx.sim.plotHistory.slice(-49), { t: ctx.sim.elapsedMs, series: metrics }]
+  }
+  // Forward UART messages across any wired TX/UART pin to connected peer MCUs
+  if (isMulti && ctx.allNodes) {
+    const uartPins = BOARDS[ctx.boardId].pins.filter((p) => p.kind === 'uart' || p.id.includes('TX'))
+    const delivered = new Set<string>()
+    for (const up of uartPins) {
+      const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: up.id }, components)
+      for (const ep of reach.endpoints) {
+        if (ep.nodeId === ctx.nodeId || delivered.has(ep.nodeId)) continue
+        const peer = ctx.allNodes.get(ep.nodeId)
+        if (peer) {
+          peer.serialRxQueue.push(text)
+          delivered.add(ep.nodeId)
+        }
+      }
+    }
   }
 }
 
@@ -703,13 +811,13 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       const gpio = Number(args[0] ?? 0)
       const modeNum = Number(args[1] ?? 0)
       const mode = modeNum === 1 ? 'OUTPUT' : modeNum === 2 ? 'INPUT_PULLUP' : 'INPUT'
-      if (ctx.sim.gpioStates[gpio]) ctx.sim.gpioStates[gpio] = { ...ctx.sim.gpioStates[gpio], mode }
+      if (ctx.localGpio[gpio]) ctx.localGpio[gpio] = { ...ctx.localGpio[gpio], mode }
     } else if (fn === 'digitalWrite') {
       const gpio = Number(args[0] ?? 0)
       const val = Number(args[1] ?? 0) ? 1 : 0
       const v = val ? BOARDS[ctx.boardId].logicVoltage : 0
-      ctx.sim.gpioStates[gpio] = {
-        ...(ctx.sim.gpioStates[gpio] ?? { gpio, mode: 'OUTPUT', adcValue: 0 }),
+      ctx.localGpio[gpio] = {
+        ...(ctx.localGpio[gpio] ?? { gpio, mode: 'OUTPUT', adcValue: 0 }),
         mode: 'OUTPUT',
         digital: val,
         pwmDuty: val * 255,
@@ -719,8 +827,8 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       const gpio = Number(args[0] ?? 0)
       const duty = Math.max(0, Math.min(255, Math.round(Number(args[1] ?? 0))))
       const v = Math.round((duty / 255) * BOARDS[ctx.boardId].logicVoltage * 100) / 100
-      ctx.sim.gpioStates[gpio] = {
-        ...(ctx.sim.gpioStates[gpio] ?? { gpio, mode: 'PWM', adcValue: 0 }),
+      ctx.localGpio[gpio] = {
+        ...(ctx.localGpio[gpio] ?? { gpio, mode: 'PWM', adcValue: 0 }),
         mode: 'PWM',
         digital: duty > 0 ? 1 : 0,
         pwmDuty: duty,
@@ -731,8 +839,8 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       const freq = Number(args[1] ?? 1000)
       const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer')
       if (buzz) ctx.sim.buzzerActive[buzz.id] = { freq, active: true }
-      ctx.sim.gpioStates[gpio] = {
-        ...(ctx.sim.gpioStates[gpio] ?? { gpio, mode: 'PWM', adcValue: 0 }),
+      ctx.localGpio[gpio] = {
+        ...(ctx.localGpio[gpio] ?? { gpio, mode: 'PWM', adcValue: 0 }),
         mode: 'PWM',
         digital: 1,
         pwmDuty: 128,
@@ -742,8 +850,8 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       const gpio = Number(args[0] ?? 0)
       const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer')
       if (buzz) ctx.sim.buzzerActive[buzz.id] = { freq: 0, active: false }
-      if (ctx.sim.gpioStates[gpio]) {
-        ctx.sim.gpioStates[gpio] = { ...ctx.sim.gpioStates[gpio], digital: 0, pwmDuty: 0, voltage: 0 }
+      if (ctx.localGpio[gpio]) {
+        ctx.localGpio[gpio] = { ...ctx.localGpio[gpio], digital: 0, pwmDuty: 0, voltage: 0 }
       }
     } else if (fn.endsWith('.attach')) {
       const obj = fn.split('.')[0]
@@ -754,11 +862,11 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       const gpio = ctx.servoPinMap[obj] ?? 2
       const servo = findConnectedComponent(ctx, components, gpio, 'servo') ?? components.find((c) => c.kind === 'servo')
       if (servo) ctx.sim.servoAngles[servo.id] = angle
-      if (ctx.sim.gpioStates[gpio]) {
-        ctx.sim.gpioStates[gpio] = { ...ctx.sim.gpioStates[gpio], mode: 'PWM', digital: 1, pwmDuty: Math.round((angle / 180) * 255) }
+      if (ctx.localGpio[gpio]) {
+        ctx.localGpio[gpio] = { ...ctx.localGpio[gpio], mode: 'PWM', digital: 1, pwmDuty: Math.round((angle / 180) * 255) }
       }
     } else if (fn === 'Serial.println' || fn === 'Serial.print') {
-      pushSerial(ctx, String(args[0] ?? ''))
+      pushSerial(ctx, String(args[0] ?? ''), components)
     } else if (fn === 'oled.begin') {
       ctx.oledStarted = true
     } else if (fn === 'oled.clear') {
@@ -819,8 +927,9 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
       const bp = getBoardPin(rb, r.pinId)
       if (!bp) continue
       if (bp.kind === 'power') duty = Math.max(duty, 1)
-      else if (bp.gpio !== undefined && r.nodeId === 'board') {
-        const gs = ctx.sim.gpioStates[bp.gpio]
+      else if (bp.gpio !== undefined) {
+        const owner = ctx.allNodes?.get(r.nodeId)
+        const gs = owner ? owner.localGpio[bp.gpio] : r.nodeId === 'board' ? ctx.sim.gpioStates[bp.gpio] : undefined
         if (gs && gs.mode === 'OUTPUT') duty = Math.max(duty, gs.digital)
         else if (gs && gs.mode === 'PWM') duty = Math.max(duty, gs.pwmDuty / 255)
       }
@@ -923,45 +1032,57 @@ export function stepSetup(ctx: VmContext, components: PlacedComponent[], wires: 
   ctx.graph = buildNetGraph(wires, components)
   emitBootBanner(ctx)
   runStatements(ctx.sketch.setupStmts, ctx, components)
+  for (const peer of ctx.peers) {
+    peer.graph = ctx.graph
+    emitBootBanner(peer)
+    if (!peer.sketch.compileError) {
+      runStatements(peer.sketch.setupStmts, peer, components)
+    }
+  }
   syncCircuitActuators(ctx, components, wires)
 }
 
-export function stepLoop(ctx: VmContext, components: PlacedComponent[], wires: Wire[]): number {
-  ctx.graph = buildNetGraph(wires, components)
-  const stmts = ctx.sketch.loopStmts
-  if (stmts.length === 0) {
-    ctx.loopIterations += 1
-    ctx.sim.elapsedMs += 300
-    syncCircuitActuators(ctx, components, wires)
+function advanceMcuSlice(mcu: VmContext, components: PlacedComponent[]): number {
+  const stmts = mcu.sketch.loopStmts
+  if (stmts.length === 0 || mcu.sketch.compileError) {
+    mcu.loopIterations += 1
     return 300
   }
-
   let delayMs = 250
   let safetySteps = 0
   while (safetySteps < stmts.length + 1) {
-    const idx = ctx.loopCursor % stmts.length
+    const idx = mcu.loopCursor % stmts.length
     const st = stmts[idx]
-    ctx.loopCursor += 1
+    mcu.loopCursor += 1
     safetySteps += 1
-    if (ctx.loopCursor >= stmts.length) {
-      ctx.loopCursor = 0
-      ctx.loopIterations += 1
+    if (mcu.loopCursor >= stmts.length) {
+      mcu.loopCursor = 0
+      mcu.loopIterations += 1
     }
 
     if (st.kind === 'delay') {
-      delayMs = Math.max(80, Math.min(1800, Number(evalExpr(st.expr ?? '250', ctx, components))))
+      delayMs = Math.max(80, Math.min(1800, Number(evalExpr(st.expr ?? '250', mcu, components))))
       break
     }
-    const innerDelay = runStatements([st], ctx, components)
+    const innerDelay = runStatements([st], mcu, components)
     if (innerDelay > 0) {
       delayMs = Math.max(80, Math.min(1800, innerDelay))
       break
     }
-    if (ctx.loopCursor === 0) break
+    if (mcu.loopCursor === 0) break
   }
+  if (mcu.loopIterations === 0 && safetySteps >= stmts.length) {
+    mcu.loopIterations += 1
+  }
+  return delayMs
+}
 
-  if (ctx.loopIterations === 0 && safetySteps >= stmts.length) {
-    ctx.loopIterations += 1
+export function stepLoop(ctx: VmContext, components: PlacedComponent[], wires: Wire[]): number {
+  ctx.graph = buildNetGraph(wires, components)
+  const delayMs = advanceMcuSlice(ctx, components)
+  for (const peer of ctx.peers) {
+    peer.graph = ctx.graph
+    advanceMcuSlice(peer, components)
   }
   ctx.sim.elapsedMs += delayMs
   syncCircuitActuators(ctx, components, wires)
@@ -976,6 +1097,7 @@ export function verifyCircuitAndCode(
 ): CircuitDiagnosticItem[] {
   const items: CircuitDiagnosticItem[] = []
   const compiled = compileArduinoSketch(code)
+  const extraMcus = components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
 
   if (compiled.compileError) {
     items.push({
@@ -990,6 +1112,29 @@ export function verifyCircuitAndCode(
       status: 'ok',
       textId: `Kompilasi Arduino C++ valid (${compiled.setupStmts.length} setup · ${compiled.loopStmts.length} loop).`,
       textEn: `Arduino C++ sketch compiled cleanly (${compiled.setupStmts.length} setup · ${compiled.loopStmts.length} loop).`,
+    })
+  }
+
+  for (const mcu of extraMcus) {
+    const peerBoard = mcu.boardId ?? 'arduino-uno'
+    const peerCode = mcu.props.sketchCode ?? defaultMcuSketch(peerBoard, mcu.label)
+    const peerComp = compileArduinoSketch(peerCode)
+    if (peerComp.compileError) {
+      items.push({
+        id: `diag-compile-${mcu.id}`,
+        status: 'error',
+        textId: `${mcu.label}: ${peerComp.compileError}`,
+        textEn: `${mcu.label}: ${peerComp.compileError}`,
+      })
+    }
+  }
+  if (extraMcus.length > 0 && extraMcus.every((m) => !compileArduinoSketch(m.props.sketchCode ?? defaultMcuSketch(m.boardId ?? 'arduino-uno', m.label)).compileError)) {
+    const totalMcus = 1 + extraMcus.length
+    items.push({
+      id: 'diag-multi-mcu',
+      status: 'ok',
+      textId: `Multi-MCU aktif: ${totalMcus} mikrokontroler terpasang dan siap berjalan bersamaan.`,
+      textEn: `Multi-MCU active: ${totalMcus} microcontrollers compiled and ready to run in parallel.`,
     })
   }
 
