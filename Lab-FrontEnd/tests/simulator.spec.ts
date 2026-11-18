@@ -920,6 +920,11 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.keyboard.press('Enter')
   await page.keyboard.type('delay(100);')
   await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
+  // Undo & Redo via keyboard di editor kode
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect(codeEditor).toHaveValue('void loop() {\n  delay()\n  digitalWrite(2, HIGH);\n}')
+  await page.keyboard.press('ControlOrMeta+y')
+  await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
   await codeEditor.fill(originalCode)
 
   // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive & 3 ukuran Breadboard
@@ -951,6 +956,24 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
     await page.mouse.up()
   }
   await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+  // Uji Undo & Redo kabel via tombol toolbar maupun keyboard (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
+  await page.getByRole('button', { name: 'Undo (Ctrl+Z)' }).click()
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore)
+  await page.getByRole('button', { name: 'Redo (Ctrl+Y)' }).click()
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore)
+  await page.keyboard.press('ControlOrMeta+Shift+z')
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+
+  // Uji batalkan tarikan pin/kabel yang belum selesai menggunakan keyboard Ctrl+Z
+  await pinFrom.dispatchEvent('pointerdown', { clientX: boxFrom ? boxFrom.x + boxFrom.width / 2 : 0, clientY: boxFrom ? boxFrom.y + boxFrom.height / 2 : 0 })
+  await pinFrom.dispatchEvent('pointerup')
+  await expect(page.getByText(/Menarik kabel dari board:GPIO5/)).toBeVisible()
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect(page.getByText(/Menarik kabel dari board:GPIO5/)).toHaveCount(0)
+  await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
+
   await page.locator('.iot-wire-group').last().dispatchEvent('click')
   await expect(page.locator('.iot-wire-group')).toHaveCount(wireCountBefore + 1)
   // Kabel terpilih menampilkan pegangan colokan cabut-pindah & multi titik belok

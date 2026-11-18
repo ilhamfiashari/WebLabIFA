@@ -89,6 +89,25 @@ function nextUid(prefix: string): string {
   return `${prefix}-${uidCounter}`
 }
 
+interface CircuitSnapshot {
+  boardId: BoardId
+  components: PlacedComponent[]
+  wires: Wire[]
+}
+
+function cloneCircuitSnapshot(snap: CircuitSnapshot): CircuitSnapshot {
+  return {
+    boardId: snap.boardId,
+    components: snap.components.map((c) => ({ ...c, props: { ...c.props } })),
+    wires: snap.wires.map((w) => ({
+      ...w,
+      from: { ...w.from },
+      to: { ...w.to },
+      waypoints: w.waypoints?.map((wp) => ({ ...wp })),
+    })),
+  }
+}
+
 function useResolvedDarkTheme(): boolean {
   const [dark, setDark] = useState(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark',
@@ -158,6 +177,105 @@ export function IotSimulatorStudio({
 
   const studioRef = useRef<HTMLDivElement | null>(null)
   const vmRef = useRef<VmContext | null>(null)
+  const liveCircuitRef = useRef<CircuitSnapshot>({
+    boardId: initialPreset.board,
+    components: initialPreset.components,
+    wires: initialPreset.wires,
+  })
+  const circuitHistoryRef = useRef<{ past: CircuitSnapshot[]; future: CircuitSnapshot[] }>({ past: [], future: [] })
+  const [historyCounts, setHistoryCounts] = useState<{ past: number; future: number }>({ past: 0, future: 0 })
+  const gestureActiveRef = useRef(false)
+  const gestureSnapshotRef = useRef<CircuitSnapshot | null>(null)
+  const lastPropUndoRef = useRef<{ nodeId: string; at: number } | null>(null)
+  const codeHistoryRef = useRef<
+    Record<
+      string,
+      {
+        past: Array<{ code: string; cursor: number }>
+        future: Array<{ code: string; cursor: number }>
+        lastTypedAt: number
+      }
+    >
+  >({})
+
+  useEffect(() => {
+    liveCircuitRef.current = { boardId, components, wires }
+  }, [boardId, components, wires])
+
+  const syncHistoryCounts = () => {
+    setHistoryCounts({
+      past: circuitHistoryRef.current.past.length,
+      future: circuitHistoryRef.current.future.length,
+    })
+  }
+
+  const clearCircuitHistory = (nextSnap?: CircuitSnapshot) => {
+    circuitHistoryRef.current = { past: [], future: [] }
+    gestureActiveRef.current = false
+    gestureSnapshotRef.current = null
+    if (nextSnap) liveCircuitRef.current = nextSnap
+    syncHistoryCounts()
+  }
+
+  const pushCircuitUndo = () => {
+    if (gestureActiveRef.current) return
+    const snap = cloneCircuitSnapshot(liveCircuitRef.current)
+    circuitHistoryRef.current.past = [...circuitHistoryRef.current.past.slice(-79), snap]
+    circuitHistoryRef.current.future = []
+    syncHistoryCounts()
+  }
+
+  const beginCircuitGesture = () => {
+    if (gestureActiveRef.current) return
+    gestureActiveRef.current = true
+    gestureSnapshotRef.current = cloneCircuitSnapshot(liveCircuitRef.current)
+  }
+
+  const endCircuitGesture = () => {
+    if (!gestureActiveRef.current) return
+    const before = gestureSnapshotRef.current
+    gestureActiveRef.current = false
+    gestureSnapshotRef.current = null
+    if (!before) return
+    if (JSON.stringify(before) !== JSON.stringify(liveCircuitRef.current)) {
+      circuitHistoryRef.current.past = [...circuitHistoryRef.current.past.slice(-79), before]
+      circuitHistoryRef.current.future = []
+      syncHistoryCounts()
+    }
+  }
+
+  const applyCircuitSnapshot = (target: CircuitSnapshot) => {
+    const snap = cloneCircuitSnapshot(target)
+    vmRef.current = null
+    liveCircuitRef.current = snap
+    setBoardId(snap.boardId)
+    setComponents(snap.components)
+    setWires(snap.wires)
+    setDiagnostics(null)
+    setSimState(createInitialSimulation(snap.boardId, snap.components, snap.wires))
+  }
+
+  const undoCircuit = () => {
+    const h = circuitHistoryRef.current
+    if (h.past.length === 0) return
+    const prev = h.past[h.past.length - 1]
+    h.past = h.past.slice(0, -1)
+    h.future = [...h.future.slice(-79), cloneCircuitSnapshot(liveCircuitRef.current)]
+    applyCircuitSnapshot(prev)
+    syncHistoryCounts()
+    setStatusNotice(en ? 'Undid circuit change (Ctrl+Z).' : 'Perubahan rangkaian dibatalkan (Undo).')
+  }
+
+  const redoCircuit = () => {
+    const h = circuitHistoryRef.current
+    if (h.future.length === 0) return
+    const next = h.future[h.future.length - 1]
+    h.future = h.future.slice(0, -1)
+    h.past = [...h.past.slice(-79), cloneCircuitSnapshot(liveCircuitRef.current)]
+    applyCircuitSnapshot(next)
+    syncHistoryCounts()
+    setStatusNotice(en ? 'Restored circuit change (Redo).' : 'Perubahan rangkaian dikembalikan (Redo).')
+  }
 
   useEffect(() => {
     const onFsChange = () => {
@@ -281,6 +399,56 @@ export function IotSimulatorStudio({
   }
 
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+  const codeHistoryKey = activeExtraFileObj ? `file:${activeExtraFileObj.name}` : `mcu:${activeEditingNodeId}`
+
+  const recordCodeHistory = (prevCode: string, prevCursor: number, coalesceTyping = false) => {
+    const bucket = (codeHistoryRef.current[codeHistoryKey] ??= { past: [], future: [], lastTypedAt: 0 })
+    const now = Date.now()
+    if (coalesceTyping && bucket.past.length > 0 && now - bucket.lastTypedAt < 550) {
+      bucket.lastTypedAt = now
+      bucket.future = []
+      return
+    }
+    bucket.past = [...bucket.past.slice(-99), { code: prevCode, cursor: prevCursor }]
+    bucket.future = []
+    bucket.lastTypedAt = coalesceTyping ? now : 0
+  }
+
+  const undoActiveCode = () => {
+    const bucket = codeHistoryRef.current[codeHistoryKey]
+    if (!bucket || bucket.past.length === 0) return
+    const prev = bucket.past[bucket.past.length - 1]
+    bucket.past = bucket.past.slice(0, -1)
+    const curCursor = codeTextareaRef.current?.selectionStart ?? displayedCode.length
+    bucket.future = [...bucket.future.slice(-99), { code: displayedCode, cursor: curCursor }]
+    bucket.lastTypedAt = 0
+    pendingSelectionRef.current = { start: prev.cursor, end: prev.cursor }
+    setCursorPos(getLineCol(prev.code, prev.cursor))
+    setAcState(null)
+    if (codeTextareaRef.current) {
+      codeTextareaRef.current.value = prev.code
+      codeTextareaRef.current.setSelectionRange(prev.cursor, prev.cursor)
+    }
+    setDisplayedCode(prev.code)
+  }
+
+  const redoActiveCode = () => {
+    const bucket = codeHistoryRef.current[codeHistoryKey]
+    if (!bucket || bucket.future.length === 0) return
+    const next = bucket.future[bucket.future.length - 1]
+    bucket.future = bucket.future.slice(0, -1)
+    const curCursor = codeTextareaRef.current?.selectionStart ?? displayedCode.length
+    bucket.past = [...bucket.past.slice(-99), { code: displayedCode, cursor: curCursor }]
+    bucket.lastTypedAt = 0
+    pendingSelectionRef.current = { start: next.cursor, end: next.cursor }
+    setCursorPos(getLineCol(next.code, next.cursor))
+    setAcState(null)
+    if (codeTextareaRef.current) {
+      codeTextareaRef.current.value = next.code
+      codeTextareaRef.current.setSelectionRange(next.cursor, next.cursor)
+    }
+    setDisplayedCode(next.code)
+  }
 
   useLayoutEffect(() => {
     const pending = pendingSelectionRef.current
@@ -303,6 +471,7 @@ export function IotSimulatorStudio({
       }
       return
     }
+    recordCodeHistory(displayedCode, ta?.selectionStart ?? selStart, false)
     pendingSelectionRef.current = { start: selStart, end: selEnd }
     if (ta) {
       ta.value = nextCode
@@ -559,6 +728,8 @@ export function IotSimulatorStudio({
     const preset = IOT_PRESETS.find((p) => p.id === presetId)
     if (!preset) return
     vmRef.current = null
+    clearCircuitHistory({ boardId: preset.board, components: preset.components, wires: preset.wires })
+    codeHistoryRef.current = {}
     setBoardId(preset.board)
     setEditingNodeId('board')
     setExtraFiles([])
@@ -579,21 +750,24 @@ export function IotSimulatorStudio({
   }
 
   const switchBoard = (nextBoard: BoardId) => {
-    setBoardId(nextBoard)
-    setComponents((prev) =>
-      prev.map((c) =>
-        c.kind === 'mcu' && c.id === 'board'
-          ? { ...c, boardId: nextBoard, label: BOARDS[nextBoard].shortName }
-          : c,
-      ),
+    pushCircuitUndo()
+    const nextComps = liveCircuitRef.current.components.map((c) =>
+      c.kind === 'mcu' && c.id === 'board'
+        ? { ...c, boardId: nextBoard, label: BOARDS[nextBoard].shortName }
+        : c,
     )
+    liveCircuitRef.current = { ...liveCircuitRef.current, boardId: nextBoard, components: nextComps }
+    setBoardId(nextBoard)
+    setComponents(nextComps)
     vmRef.current = null
     setDiagnostics(null)
-    setSimState(createInitialSimulation(nextBoard, components, wires))
+    setSimState(createInitialSimulation(nextBoard, nextComps, liveCircuitRef.current.wires))
   }
 
   const addExtraBoard = (extraBoard: BoardId) => {
-    const existingExtras = components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
+    pushCircuitUndo()
+    const cur = liveCircuitRef.current
+    const existingExtras = cur.components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
     const idx = existingExtras.length + 2
     const slot = existingExtras.length
     const spec = BOARDS[extraBoard]
@@ -609,10 +783,11 @@ export function IotSimulatorStudio({
         sketchCode: defaultMcuSketch(extraBoard, label),
       },
     }
-    const nextComps = [...components, newMcu]
+    const nextComps = [...cur.components, newMcu]
+    liveCircuitRef.current = { ...cur, components: nextComps }
     setComponents(nextComps)
     setEditingNodeId(newMcu.id)
-    setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+    setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, cur.wires), running: prev.running }))
     setStatusNotice(
       en
         ? `${label} added (${1 + existingExtras.length + 1} MCUs on canvas).`
@@ -621,23 +796,27 @@ export function IotSimulatorStudio({
   }
 
   const moveBoardOrComponent = (nodeId: string, x: number, y: number) => {
-    setComponents((prev) => {
-      if (nodeId === 'board') {
-        const hasPrimary = prev.some((c) => c.kind === 'mcu' && c.id === 'board')
-        if (hasPrimary) {
-          return prev.map((c) => (c.kind === 'mcu' && c.id === 'board' ? { ...c, x, y } : c))
-        }
-        return [
-          ...prev,
-          { id: 'board', kind: 'mcu', boardId, x, y, label: BOARDS[boardId].shortName, props: {} },
-        ]
-      }
-      return prev.map((c) => (c.id === nodeId ? { ...c, x, y } : c))
-    })
+    const cur = liveCircuitRef.current
+    let nextComps: PlacedComponent[]
+    if (nodeId === 'board') {
+      const hasPrimary = cur.components.some((c) => c.kind === 'mcu' && c.id === 'board')
+      nextComps = hasPrimary
+        ? cur.components.map((c) => (c.kind === 'mcu' && c.id === 'board' ? { ...c, x, y } : c))
+        : [
+            ...cur.components,
+            { id: 'board', kind: 'mcu', boardId: cur.boardId, x, y, label: BOARDS[cur.boardId].shortName, props: {} },
+          ]
+    } else {
+      nextComps = cur.components.map((c) => (c.id === nodeId ? { ...c, x, y } : c))
+    }
+    liveCircuitRef.current = { ...cur, components: nextComps }
+    setComponents(nextComps)
   }
 
   const loadSavedProject = (p: SavedIotProject) => {
     vmRef.current = null
+    clearCircuitHistory({ boardId: p.board, components: p.components, wires: p.wires })
+    codeHistoryRef.current = {}
     setBoardId(p.board)
     setActivePresetId('custom')
     setActiveMissionId(p.mission_id ?? null)
@@ -735,14 +914,19 @@ export function IotSimulatorStudio({
         matrixLayout: kind === 'max7219-matrix' ? 'parola' : undefined,
       },
     }
-    const nextComps = [...components, newComp]
+    const cur = liveCircuitRef.current
+    pushCircuitUndo()
+    const nextComps = [...cur.components, newComp]
+    liveCircuitRef.current = { ...cur, components: nextComps }
     setComponents(nextComps)
-    setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+    setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, cur.wires), running: prev.running }))
   }
 
   const duplicateNode = (nodeId: string) => {
-    const src = components.find((c) => c.id === nodeId)
+    const cur = liveCircuitRef.current
+    const src = cur.components.find((c) => c.id === nodeId)
     if (!src) return
+    pushCircuitUndo()
     const copy: PlacedComponent = {
       ...src,
       id: nextUid(src.kind === 'mcu' ? 'mcu' : src.kind),
@@ -750,9 +934,10 @@ export function IotSimulatorStudio({
       y: Math.min(410, src.y + 28),
       props: { ...src.props },
     }
-    const nextComps = [...components, copy]
+    const nextComps = [...cur.components, copy]
+    liveCircuitRef.current = { ...cur, components: nextComps }
     setComponents(nextComps)
-    setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, wires), running: prev.running }))
+    setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, cur.wires), running: prev.running }))
   }
 
   const openDiagramTab = () => {
@@ -768,6 +953,8 @@ export function IotSimulatorStudio({
       setDiagramError(parsed.error)
       return
     }
+    pushCircuitUndo()
+    liveCircuitRef.current = { boardId: parsed.boardId, components: parsed.components, wires: parsed.wires }
     setDiagramError(null)
     setBoardId(parsed.boardId)
     setComponents(parsed.components)
@@ -1370,6 +1557,9 @@ export function IotSimulatorStudio({
                     onChange={(e) => {
                       const val = e.target.value
                       const cursor = e.target.selectionStart
+                      const prevCursor = Math.min(displayedCode.length, cursor ?? displayedCode.length)
+                      const singleChar = Math.abs(val.length - displayedCode.length) === 1 && !/\s/.test(val[(cursor ?? 1) - 1] ?? '')
+                      recordCodeHistory(displayedCode, prevCursor, singleChar)
                       setDisplayedCode(val)
                       setCursorPos(getLineCol(val, cursor ?? 0))
                       refreshAutocomplete(val, cursor, false)
@@ -1377,6 +1567,20 @@ export function IotSimulatorStudio({
                     onClick={(e) => setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
                     onSelect={(e) => setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart ?? 0))}
                     onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                        const k = e.key.toLowerCase()
+                        if (k === 'z') {
+                          e.preventDefault()
+                          if (e.shiftKey) redoActiveCode()
+                          else undoActiveCode()
+                          return
+                        }
+                        if (k === 'y' && !e.shiftKey) {
+                          e.preventDefault()
+                          redoActiveCode()
+                          return
+                        }
+                      }
                       if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
                         e.preventDefault()
                         refreshAutocomplete(e.currentTarget.value, e.currentTarget.selectionStart, true)
@@ -1770,35 +1974,69 @@ export function IotSimulatorStudio({
             onStartStop={toggleStartStop}
             onReset={resetSimulation}
             onCheckCircuit={runCheckCircuit}
+            canUndo={historyCounts.past > 0}
+            canRedo={historyCounts.future > 0}
+            onUndo={undoCircuit}
+            onRedo={redoCircuit}
+            onGestureStart={beginCircuitGesture}
+            onGestureEnd={endCircuitGesture}
             onMoveBoardOrComponent={moveBoardOrComponent}
             onUpdateComponent={(id, patch) => {
-              const nextComps = components.map((c) => (c.id === id ? { ...c, ...patch } : c))
+              if (!gestureActiveRef.current) pushCircuitUndo()
+              const cur = liveCircuitRef.current
+              const nextComps = cur.components.map((c) => (c.id === id ? { ...c, ...patch } : c))
+              liveCircuitRef.current = { ...cur, components: nextComps }
               setComponents(nextComps)
             }}
             onUpdateProps={(id, patch) => {
-              setComponents((prev) => prev.map((c) => (c.id === id ? { ...c, props: { ...c.props, ...patch } } : c)))
+              const isTransientRuntimeInput = simState.running && (patch.pressed !== undefined || patch.motion !== undefined)
+              if (!gestureActiveRef.current && !isTransientRuntimeInput) {
+                const now = Date.now()
+                const last = lastPropUndoRef.current
+                if (!last || last.nodeId !== id || now - last.at > 400) {
+                  pushCircuitUndo()
+                }
+                lastPropUndoRef.current = { nodeId: id, at: now }
+              }
+              const cur = liveCircuitRef.current
+              const nextComps = cur.components.map((c) => (c.id === id ? { ...c, props: { ...c.props, ...patch } } : c))
+              liveCircuitRef.current = { ...cur, components: nextComps }
+              setComponents(nextComps)
             }}
             onAddWire={(from: WireEndpoint, to: WireEndpoint) => {
+              pushCircuitUndo()
+              const cur = liveCircuitRef.current
               const nw: Wire = { id: nextUid('wire'), from, to, color: wireColor }
-              const nextWires = [...wires, nw]
+              const nextWires = [...cur.wires, nw]
+              liveCircuitRef.current = { ...cur, wires: nextWires }
               setWires(nextWires)
-              setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, components, nextWires), running: prev.running }))
+              setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, cur.components, nextWires), running: prev.running }))
             }}
             onUpdateWire={(wireId, patch) => {
-              setWires((prev) => prev.map((w) => (w.id === wireId ? { ...w, ...patch } : w)))
+              if (!gestureActiveRef.current) pushCircuitUndo()
+              const cur = liveCircuitRef.current
+              const nextWires = cur.wires.map((w) => (w.id === wireId ? { ...w, ...patch } : w))
+              liveCircuitRef.current = { ...cur, wires: nextWires }
+              setWires(nextWires)
             }}
             onDeleteWire={(wireId) => {
-              const nextWires = wires.filter((w) => w.id !== wireId)
+              pushCircuitUndo()
+              const cur = liveCircuitRef.current
+              const nextWires = cur.wires.filter((w) => w.id !== wireId)
+              liveCircuitRef.current = { ...cur, wires: nextWires }
               setWires(nextWires)
-              setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, components, nextWires), running: prev.running }))
+              setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, cur.components, nextWires), running: prev.running }))
             }}
             onDeleteNode={(nodeId) => {
               if (nodeId === 'board') return
-              const nextComps = components.filter((c) => c.id !== nodeId)
-              const nextWires = wires.filter((w) => w.from.nodeId !== nodeId && w.to.nodeId !== nodeId)
+              pushCircuitUndo()
+              const cur = liveCircuitRef.current
+              const nextComps = cur.components.filter((c) => c.id !== nodeId)
+              const nextWires = cur.wires.filter((w) => w.from.nodeId !== nodeId && w.to.nodeId !== nodeId)
+              liveCircuitRef.current = { ...cur, components: nextComps, wires: nextWires }
               setComponents(nextComps)
               setWires(nextWires)
-              setSimState((prev) => ({ ...prev, ...createInitialSimulation(boardId, nextComps, nextWires), running: prev.running }))
+              setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, nextWires), running: prev.running }))
             }}
             onDuplicateNode={duplicateNode}
             onSelectPrimaryBoard={switchBoard}
