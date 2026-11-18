@@ -251,6 +251,29 @@ function buildNetGraph(wires: Wire[], components: PlacedComponent[]): NetGraph {
     if (c.kind === 'resistor') {
       addEdge({ nodeId: c.id, pinId: 'P1' }, { nodeId: c.id, pinId: 'P2' })
     } else if (c.kind === 'breadboard') {
+      // Top & bottom power rails
+      addEdge({ nodeId: c.id, pinId: 'VCC_L' }, { nodeId: c.id, pinId: 'VCC_M' })
+      addEdge({ nodeId: c.id, pinId: 'VCC_M' }, { nodeId: c.id, pinId: 'VCC_R' })
+      addEdge({ nodeId: c.id, pinId: 'GND_L' }, { nodeId: c.id, pinId: 'GND_M' })
+      addEdge({ nodeId: c.id, pinId: 'GND_M' }, { nodeId: c.id, pinId: 'GND_R' })
+      addEdge({ nodeId: c.id, pinId: 'VCC_BL' }, { nodeId: c.id, pinId: 'VCC_BR' })
+      addEdge({ nodeId: c.id, pinId: 'GND_BL' }, { nodeId: c.id, pinId: 'GND_BR' })
+      // Vertical 5-hole terminal columns (a-e & f-j)
+      for (const pair of [
+        ['A1', 'A1_E'],
+        ['A2', 'A2_E'],
+        ['A3', 'A3_E'],
+        ['A4', 'A4_E'],
+        ['A5', 'A5_E'],
+        ['B1', 'B1_J'],
+        ['B2', 'B2_J'],
+        ['B3', 'B3_J'],
+        ['B4', 'B4_J'],
+        ['B5', 'B5_J'],
+      ] as const) {
+        addEdge({ nodeId: c.id, pinId: pair[0] }, { nodeId: c.id, pinId: pair[1] })
+      }
+      // Legacy cross-strip shortcuts for older saved diagrams
       addEdge({ nodeId: c.id, pinId: 'A1' }, { nodeId: c.id, pinId: 'A2' })
       addEdge({ nodeId: c.id, pinId: 'B1' }, { nodeId: c.id, pinId: 'B2' })
     }
