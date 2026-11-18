@@ -348,9 +348,20 @@ export function WokwiExtendedPartSvg({
       return (
         <g>
           <rect x={4} y={6} width={88} height={64} rx={6} fill="#991b1b" stroke="#f87171" strokeWidth={1.3} />
-          <circle cx={48} cy={36} r={21} fill="#94a3b8" stroke="#475569" strokeWidth={2} />
-          <circle cx={48} cy={36} r={14} fill="#64748b" strokeDasharray="2 2" stroke="#cbd5e1" />
-          <text x={48} y={39} textAnchor="middle" fontSize="7.5" fontWeight={700} fill="#f8fafc">{ppm}ppm</text>
+          <circle cx={48} cy={29} r={17} fill="#94a3b8" stroke="#475569" strokeWidth={2} />
+          <circle cx={48} cy={29} r={11} fill="#64748b" strokeDasharray="2 2" stroke="#cbd5e1" />
+          <text x={48} y={32} textAnchor="middle" fontSize="7" fontWeight={700} fill="#f8fafc">{ppm}ppm</text>
+          <foreignObject className="iot-interactive-control" x={12} y={49} width={72} height={18}>
+            <input
+              type="range"
+              min={50}
+              max={2500}
+              value={ppm}
+              onChange={(e) => onUpdateProps(comp.id, { gasPpm: Number(e.target.value) })}
+              style={{ width: 70 }}
+              title="Gas MQ2 (ppm)"
+            />
+          </foreignObject>
         </g>
       )
     }
@@ -368,17 +379,38 @@ export function WokwiExtendedPartSvg({
       return (
         <g>
           <rect x={6} y={8} width={66} height={52} rx={6} fill="#b91c1c" stroke="#fca5a5" />
-          <circle cx={39} cy={28} r={10} fill="#0f172a" stroke="#f8fafc" />
-          <text x={39} y={50} textAnchor="middle" fontSize="8" fill="#fff" fontWeight={700}>NTC {comp.props.tempC ?? 25}°C</text>
+          <circle cx={39} cy={23} r={8} fill="#0f172a" stroke="#f8fafc" />
+          <text x={39} y={40} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700}>NTC {comp.props.tempC ?? 25}°C</text>
+          <foreignObject className="iot-interactive-control" x={11} y={43} width={56} height={16}>
+            <input
+              type="range"
+              min={-10}
+              max={85}
+              value={comp.props.tempC ?? 25}
+              onChange={(e) => onUpdateProps(comp.id, { tempC: Number(e.target.value) })}
+              style={{ width: 54 }}
+              title="Suhu NTC °C"
+            />
+          </foreignObject>
         </g>
       )
     case 'mpu6050':
       return (
         <g>
           <rect x={4} y={6} width={94} height={60} rx={5} fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.4} />
-          <rect x={39} y={24} width={22} height={22} rx={2} fill="#0f172a" stroke="#cbd5e1" />
-          <text x={50} y={18} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700}>MPU-6050</text>
-          <text x={50} y={58} textAnchor="middle" fontSize="7" fill="#bfdbfe">Tilt {comp.props.tiltDeg ?? 0}°</text>
+          <rect x={39} y={19} width={20} height={18} rx={2} fill="#0f172a" stroke="#cbd5e1" />
+          <text x={50} y={15} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700}>MPU-6050 · {comp.props.tiltDeg ?? 0}°</text>
+          <foreignObject className="iot-interactive-control" x={12} y={43} width={78} height={18}>
+            <input
+              type="range"
+              min={-90}
+              max={90}
+              value={comp.props.tiltDeg ?? 0}
+              onChange={(e) => onUpdateProps(comp.id, { tiltDeg: Number(e.target.value) })}
+              style={{ width: 76 }}
+              title="Sudut kemiringan MPU-6050"
+            />
+          </foreignObject>
         </g>
       )
     case 'bmp180':
@@ -494,7 +526,7 @@ export function WokwiExtendedPartSvg({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onUpdateProps(comp.id, { lastKey: k })
+                    onUpdateProps(comp.id, { lastKey: k, encoderStep: (comp.props.encoderStep ?? 0) + 1 })
                   }}
                   style={{
                     height: 20,
@@ -571,15 +603,16 @@ export function WokwiExtendedPartSvg({
         </g>
       )
     case 'seven-seg': {
+      const custom = sim.sevenSegText[comp.id]
       const val = sim.running ? (sim.elapsedMs / 500) % 10 : 8
-      const digit = Math.floor(val)
+      const shown = custom ? custom.slice(0, 1) : String(Math.floor(val))
       const segColor =
         comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'yellow' ? '#facc15' : comp.color === 'white' ? '#f8fafc' : '#ef4444'
       return (
         <g>
           <rect x={6} y={6} width={56} height={66} rx={5} fill="#09090b" stroke="#52525b" strokeWidth={1.6} />
           <text x={34} y={54} textAnchor="middle" fontSize="38" fontFamily="monospace" fontWeight={800} fill={segColor}>
-            {digit}
+            {shown}
           </text>
           <text x={34} y={16} textAnchor="middle" fontSize="5.5" fill="#94a3b8">
             {comp.props.common === 'cathode' ? 'CC' : 'CA'}
@@ -588,16 +621,18 @@ export function WokwiExtendedPartSvg({
       )
     }
     case 'seven-seg-4': {
+      const custom = sim.sevenSegText[comp.id]
       const secs = Math.floor((sim.elapsedMs || 0) / 1000) % 10000
-      const str = String(secs).padStart(4, '0')
+      const str = custom ? custom.padStart(4, ' ').slice(0, 5) : String(secs).padStart(4, '0')
       const segColor =
         comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'yellow' ? '#facc15' : comp.color === 'white' ? '#f8fafc' : '#ef4444'
       const sep = comp.props.tmType === 'dp' ? '.' : ':'
+      const displayStr = custom ? custom : `${str.slice(0, 2)}${sep}${str.slice(2)}`
       return (
         <g>
           <rect x={4} y={8} width={116} height={54} rx={5} fill="#09090b" stroke="#475569" strokeWidth={1.5} />
-          <text x={62} y={45} textAnchor="middle" fontSize="24" fontFamily="monospace" fontWeight={800} fill={segColor} letterSpacing="3">
-            {str.slice(0, 2)}{sep}{str.slice(2)}
+          <text x={62} y={45} textAnchor="middle" fontSize="24" fontFamily="monospace" fontWeight={800} fill={segColor} letterSpacing="2">
+            {displayStr}
           </text>
         </g>
       )
@@ -664,13 +699,21 @@ export function WokwiExtendedPartSvg({
       const bgFill = isBlue ? '#1d4ed8' : '#84cc16'
       const fgFill = comp.props.lcdTextColor === 'white' || isBlue ? '#f8fafc' : '#1a2e05'
       const addr = comp.props.i2cAddress ?? '0x27'
+      const rows = sim.lcdRows[comp.id] ?? [
+        `LCD 20x4 ${comp.props.lcdPins === 'full' ? 'PAR' : 'I2C'} (${addr})`,
+        'Menunggu output...',
+        '',
+        '',
+      ]
       return (
         <g>
           <rect x={4} y={4} width={142} height={76} rx={5} fill="#0f766e" stroke="#115e59" strokeWidth={1.5} />
           <rect x={10} y={12} width={130} height={58} rx={3} fill={bgFill} stroke="#1e293b" strokeWidth={2} />
-          <text x={15} y={26} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>LCD 20x4 {comp.props.lcdPins === 'full' ? 'PAR' : 'I2C'}</text>
-          <text x={15} y={38} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>Line 2: OK</text>
-          <text x={15} y={50} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>Addr: {addr}</text>
+          {rows.slice(0, 4).map((line, r) => (
+            <text key={r} x={15} y={24 + r * 12} fontSize="7.5" fontFamily="monospace" fontWeight={700} fill={fgFill}>
+              {line}
+            </text>
+          ))}
         </g>
       )
     }
@@ -764,6 +807,7 @@ export function WokwiExtendedPartSvg({
       )
     case 'max7219-matrix': {
       const tick = Math.floor((sim.elapsedMs || 0) / 300)
+      const customRows = sim.matrixRows[comp.id]
       const litClr = comp.color === 'green' ? '#22c55e' : comp.color === 'blue' ? '#38bdf8' : comp.color === 'orange' ? '#f97316' : '#ef4444'
       const offClr = comp.color === 'green' ? '#14532d' : comp.color === 'blue' ? '#0c4a6e' : '#3f1d1d'
       return (
@@ -771,7 +815,11 @@ export function WokwiExtendedPartSvg({
           <rect x={6} y={6} width={86} height={76} rx={5} fill="#18181b" stroke="#52525b" strokeWidth={1.5} />
           {Array.from({ length: 8 }, (_, r) =>
             Array.from({ length: 8 }, (__, c) => {
-              const on = sim.running ? (r + c + tick) % 3 === 0 : r === c || r + c === 7
+              const on = customRows
+                ? Boolean((customRows[r] ?? 0) & (1 << (7 - c)))
+                : sim.running
+                  ? (r + c + tick) % 3 === 0
+                  : r === c || r + c === 7
               return <circle key={`${r}-${c}`} cx={16 + c * 9.2} cy={14 + r * 8.2} r={2.8} fill={on ? litClr : offClr} />
             }),
           )}

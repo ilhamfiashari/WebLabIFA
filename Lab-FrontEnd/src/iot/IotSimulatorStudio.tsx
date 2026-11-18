@@ -173,7 +173,7 @@ export function IotSimulatorStudio({
   const [libSearch, setLibSearch] = useState('')
   const [wireColor, setWireColor] = useState(WIRE_COLORS[0].id)
   const [speed, setSpeed] = useState<0.5 | 1 | 2>(1)
-  const [audioOn, setAudioOn] = useState(false)
+  const [audioOn, setAudioOn] = useState(true)
   const [partSearch, setPartSearch] = useState('')
   const [partCategory, setPartCategory] = useState<'all' | ComponentCategory>('all')
   const [pinnedKinds, setPinnedKinds] = useState<ComponentKind[]>(['led', 'pushbutton'])
@@ -715,34 +715,83 @@ export function IotSimulatorStudio({
     },
   })
 
-  useEffect(() => {
-    if (!audioOn || !simState.running) return
-    const active = Object.values(simState.buzzerActive).find((b) => b.active)
-    if (!active) return
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const buzzerSoundRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null)
+
+  const unlockAudio = (): AudioContext | null => {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      if (!AudioCtx) return
-      const ctx = new AudioCtx()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = 'square'
-      osc.frequency.value = Math.max(200, Math.min(2400, active.freq || 1000))
-      gain.gain.value = 0.03
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.start()
-      const t = window.setTimeout(() => {
-        osc.stop()
-        void ctx.close()
-      }, 110)
-      return () => {
-        window.clearTimeout(t)
-        void ctx.close()
+      if (!AudioCtx) return null
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioCtx()
       }
+      if (audioCtxRef.current.state === 'suspended') {
+        void audioCtxRef.current.resume().catch(() => {})
+      }
+      return audioCtxRef.current
     } catch {
+      return null
+    }
+  }
+
+  const stopBuzzerSound = () => {
+    const node = buzzerSoundRef.current
+    if (!node) return
+    try {
+      node.gain.gain.setTargetAtTime(0, node.gain.context.currentTime, 0.01)
+      node.osc.stop(node.gain.context.currentTime + 0.03)
+    } catch {
+      // ignore already-stopped oscillator
+    }
+    buzzerSoundRef.current = null
+  }
+
+  useEffect(() => {
+    const entry = Object.entries(simState.buzzerActive).find(([, b]) => b.active)
+    if (!audioOn || !simState.running || !entry) {
+      stopBuzzerSound()
       return
     }
-  }, [audioOn, simState.running, simState.elapsedMs, simState.buzzerActive])
+    const [buzzId, active] = entry
+    const comp = componentsRef.current.find((c) => c.id === buzzId)
+    const freq = Math.max(80, Math.min(4000, active.freq || 1000))
+    const vol = Math.max(0.01, Math.min(1, comp?.props.buzzerVolume ?? 1))
+    const wave: OscillatorType = comp?.props.buzzerMode === 'accurate' ? 'square' : 'triangle'
+
+    const ctx = unlockAudio()
+    if (!ctx) return
+    try {
+      if (!buzzerSoundRef.current) {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = wave
+        osc.frequency.value = freq
+        gain.gain.value = 0.08 * vol
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start()
+        buzzerSoundRef.current = { osc, gain }
+      } else {
+        const { osc, gain } = buzzerSoundRef.current
+        if (osc.type !== wave) osc.type = wave
+        osc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.008)
+        gain.gain.setTargetAtTime(0.08 * vol, ctx.currentTime, 0.008)
+      }
+    } catch {
+      stopBuzzerSound()
+    }
+  }, [audioOn, simState.running, simState.buzzerActive])
+
+  useEffect(() => {
+    return () => {
+      stopBuzzerSound()
+      try {
+        void audioCtxRef.current?.close()
+      } catch {
+        // ignore close error
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!simState.running) return
@@ -764,8 +813,15 @@ export function IotSimulatorStudio({
     }
   }, [simState.running, speed])
 
+  const availablePresets = useMemo(
+    () => IOT_PRESETS.filter((p) => !p.dosenOnly || mode === 'dosen'),
+    [mode],
+  )
+  const corePresets = useMemo(() => availablePresets.filter((p) => !p.dosenOnly), [availablePresets])
+  const dosenShowcasePresets = useMemo(() => availablePresets.filter((p) => Boolean(p.dosenOnly)), [availablePresets])
+
   const loadPreset = (presetId: string) => {
-    const preset = IOT_PRESETS.find((p) => p.id === presetId)
+    const preset = availablePresets.find((p) => p.id === presetId)
     if (!preset) return
     vmRef.current = null
     clearCircuitHistory({ boardId: preset.board, components: preset.components, wires: preset.wires })
@@ -878,6 +934,7 @@ export function IotSimulatorStudio({
   }
 
   const startSimulation = () => {
+    if (audioOn) unlockAudio()
     const report = verifyCircuitAndCode(boardId, code, components, wires, extraFiles)
     setDiagnostics(report)
     const compiled = compileArduinoSketch(code, extraFiles)
@@ -1197,11 +1254,20 @@ export function IotSimulatorStudio({
               value={activePresetId}
               onChange={(e) => loadPreset(e.target.value)}
             >
-              {IOT_PRESETS.map((p) => (
+              {corePresets.map((p) => (
                 <option key={p.id} value={p.id}>
                   {en ? p.titleEn : p.titleId}
                 </option>
               ))}
+              {mode === 'dosen' && dosenShowcasePresets.length > 0 ? (
+                <optgroup label={en ? 'Instructor · Wokwi Interactive Projects' : 'Dosen · Contoh Proyek Belajar Wokwi'}>
+                  {dosenShowcasePresets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {en ? p.titleEn : p.titleId}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </label>
 
@@ -1238,7 +1304,12 @@ export function IotSimulatorStudio({
           <button
             type="button"
             className="btn-outline iot-mini-btn"
-            onClick={() => setAudioOn((v) => !v)}
+            onClick={() => {
+              const next = !audioOn
+              setAudioOn(next)
+              if (next) unlockAudio()
+            }}
+            aria-label={audioOn ? (en ? 'Mute buzzer sound' : 'Bisukan suara buzzer') : (en ? 'Unmute buzzer sound' : 'Aktifkan suara buzzer')}
             title={en ? 'Toggle buzzer sound' : 'Aktifkan/bisukan suara buzzer'}
           >
             {audioOn ? <Volume2 size={14} /> : <VolumeX size={14} />}

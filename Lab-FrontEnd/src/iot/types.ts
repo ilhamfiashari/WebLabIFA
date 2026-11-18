@@ -263,7 +263,9 @@ export interface SimulationState {
   buzzerActive: Record<string, { freq: number; active: boolean }>
   relayClosed: Record<string, boolean>
   oledLines: Record<string, string[]>
-  lcdRows: Record<string, [string, string]>
+  lcdRows: Record<string, string[]>
+  sevenSegText: Record<string, string>
+  matrixRows: Record<string, number[]>
   serialLog: SerialEntry[]
   plotHistory: PlotPoint[]
   logicHistory: LogicSample[]
@@ -277,6 +279,7 @@ export interface IotPresetTemplate {
   id: string
   missionId?: string
   board: BoardId
+  dosenOnly?: boolean
   titleId: string
   titleEn: string
   badge: string

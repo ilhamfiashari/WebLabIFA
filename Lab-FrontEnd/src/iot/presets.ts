@@ -439,6 +439,587 @@ void loop() {
       { id: 'w-led2-gnd', from: { nodeId: 'led-m2', pinId: 'K' }, to: { nodeId: 'mcu-2', pinId: 'GND2' }, color: '#1e293b' },
     ],
   },
+  // === 9 Wokwi Showcase Learning Projects (Dosen-Only) ===
+  {
+    id: 'dosen-wokwi-simon-says',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Simon Says Game + Skor 7-Seg & Buzzer (Wokwi)',
+    titleEn: 'Instructor · Simon Says Game + 7-Seg & Buzzer (Wokwi)',
+    badge: 'Dosen · Wokwi Game',
+    summaryId: 'Tekan tombol warna [1-4] di kanvas untuk memainkan nada buzzer, menyalakan LED, dan menaikkan skor 7-Segment.',
+    summaryEn: 'Click colored buttons [1-4] on canvas to sound buzzer notes, light LEDs, and advance the 7-segment score.',
+    code: `// Simon Says Interactive (Wokwi #328451800839488084)
+int score = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
+  pinMode(6, INPUT_PULLUP);
+  pinMode(9, OUTPUT);
+  pinMode(10, OUTPUT);
+  pinMode(11, OUTPUT);
+  pinMode(13, OUTPUT);
+  sevenSeg.print(0);
+  Serial.println("Simon Says siap! Tekan tombol 1-4 di kanvas.");
+}
+
+void loop() {
+  int b1 = digitalRead(2);
+  int b2 = digitalRead(4);
+  int b3 = digitalRead(5);
+  int b4 = digitalRead(6);
+
+  if (b1 == LOW) {
+    digitalWrite(9, HIGH);
+    tone(13, 262);
+    score = score + 1;
+    sevenSeg.print(score);
+    Serial.println("MERAH (C4 262Hz) | Skor:" + String(score));
+  } else if (b2 == LOW) {
+    digitalWrite(10, HIGH);
+    tone(13, 330);
+    score = score + 1;
+    sevenSeg.print(score);
+    Serial.println("HIJAU (E4 330Hz) | Skor:" + String(score));
+  } else if (b3 == LOW) {
+    digitalWrite(11, HIGH);
+    tone(13, 392);
+    score = score + 1;
+    sevenSeg.print(score);
+    Serial.println("BIRU (G4 392Hz) | Skor:" + String(score));
+  } else if (b4 == LOW) {
+    digitalWrite(9, HIGH);
+    digitalWrite(10, HIGH);
+    tone(13, 523);
+    score = score + 1;
+    sevenSeg.print(score);
+    Serial.println("KUNING (C5 523Hz) | Skor:" + String(score));
+  } else {
+    digitalWrite(9, LOW);
+    digitalWrite(10, LOW);
+    digitalWrite(11, LOW);
+    noTone(13);
+  }
+  delay(220);
+}`,
+    components: [
+      { id: 'btn-r', kind: 'pushbutton', x: 380, y: 30, label: 'Merah [1]', color: 'red', props: { shortcutKey: '1' } },
+      { id: 'btn-g', kind: 'pushbutton', x: 470, y: 30, label: 'Hijau [2]', color: 'green', props: { shortcutKey: '2' } },
+      { id: 'btn-b', kind: 'pushbutton', x: 560, y: 30, label: 'Biru [3]', color: 'blue', props: { shortcutKey: '3' } },
+      { id: 'btn-y', kind: 'pushbutton', x: 650, y: 30, label: 'Kuning [4]', color: 'yellow', props: { shortcutKey: '4' } },
+      { id: 'res-s1', kind: 'resistor', x: 380, y: 125, label: 'R1 (220Ω)', ohms: 220, props: {} },
+      { id: 'led-r', kind: 'led', x: 490, y: 120, label: 'LED Merah', color: 'red', props: {} },
+      { id: 'led-g', kind: 'led', x: 565, y: 120, label: 'LED Hijau', color: 'green', props: {} },
+      { id: 'led-b', kind: 'led', x: 640, y: 120, label: 'LED Biru', color: 'blue', props: {} },
+      { id: 'seg-score', kind: 'seven-seg', x: 400, y: 245, label: 'Skor Simon', color: 'red', props: {} },
+      { id: 'buzz-simon', kind: 'buzzer', x: 535, y: 250, label: 'Piezo Speaker', props: {} },
+    ],
+    wires: [
+      { id: 'ws1', from: { nodeId: 'board', pinId: 'D2' }, to: { nodeId: 'btn-r', pinId: 'OUT' }, color: '#ef4444' },
+      { id: 'ws2', from: { nodeId: 'btn-r', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'ws3', from: { nodeId: 'board', pinId: 'D4' }, to: { nodeId: 'btn-g', pinId: 'OUT' }, color: '#22c55e' },
+      { id: 'ws4', from: { nodeId: 'btn-g', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'ws5', from: { nodeId: 'board', pinId: 'D5' }, to: { nodeId: 'btn-b', pinId: 'OUT' }, color: '#3b82f6' },
+      { id: 'ws6', from: { nodeId: 'btn-b', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'ws7', from: { nodeId: 'board', pinId: 'D6' }, to: { nodeId: 'btn-y', pinId: 'OUT' }, color: '#eab308' },
+      { id: 'ws8', from: { nodeId: 'btn-y', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'ws9', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'res-s1', pinId: 'P1' }, color: '#ef4444' },
+      { id: 'ws10', from: { nodeId: 'res-s1', pinId: 'P2' }, to: { nodeId: 'led-r', pinId: 'A' }, color: '#ef4444' },
+      { id: 'ws11', from: { nodeId: 'led-r', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'ws12', from: { nodeId: 'board', pinId: 'D10' }, to: { nodeId: 'led-g', pinId: 'A' }, color: '#22c55e' },
+      { id: 'ws13', from: { nodeId: 'led-g', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'ws14', from: { nodeId: 'board', pinId: 'D11' }, to: { nodeId: 'led-b', pinId: 'A' }, color: '#3b82f6' },
+      { id: 'ws15', from: { nodeId: 'led-b', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'ws16', from: { nodeId: 'board', pinId: 'D13' }, to: { nodeId: 'buzz-simon', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'ws17', from: { nodeId: 'buzz-simon', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'ws18', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'seg-score', pinId: 'IN' }, color: '#06b6d4' },
+      { id: 'ws19', from: { nodeId: 'seg-score', pinId: 'COM' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-pong',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Pong Game OLED SSD1306 + Slider Paddle (Wokwi)',
+    titleEn: 'Instructor · Pong Game on OLED SSD1306 + Slide Pot (Wokwi)',
+    badge: 'Dosen · Wokwi OLED Game',
+    summaryId: 'Geser Slide Potentiometer untuk menggerakkan paddle Pong pada layar OLED SSD1306 dan membunyikan buzzer saat pantulan.',
+    summaryEn: 'Slide the potentiometer fader to steer the Pong paddle on OLED SSD1306 with buzzer bounce feedback.',
+    code: `// Pong Simulation (Wokwi #348849468083274322)
+int score = 0;
+int ballX = 1;
+
+void setup() {
+  Serial.begin(115200);
+  oled.begin();
+  pinMode(9, OUTPUT);
+  Serial.println("Pong OLED Siap! Geser Slide Potentiometer.");
+}
+
+void loop() {
+  int adc = analogRead(14);
+  int paddle = map(adc, 0, 1023, 0, 100);
+  ballX = ballX + 1;
+
+  oled.clear();
+  oled.println("PONG ARENA  P:" + String(score));
+  oled.println("Ball Pos  : " + String(ballX));
+  oled.println("Paddle Y  : " + String(paddle) + "%");
+  if (paddle > 65) {
+    tone(9, 880);
+    score = score + 1;
+    oled.println("HIT! +1 Buzzer 880Hz");
+    Serial.println("PONG HIT! Score=" + String(score));
+  } else if (paddle < 25) {
+    tone(9, 440);
+    oled.println("BOTTOM BOUNCE 440Hz");
+  } else {
+    noTone(9);
+    oled.println("STATUS: PLAYING...");
+  }
+  oled.display();
+  delay(280);
+}`,
+    components: [
+      { id: 'oled-pong', kind: 'oled-ssd1306', x: 390, y: 70, label: 'OLED Arena', props: {} },
+      { id: 'spot-pong', kind: 'slide-pot', x: 390, y: 215, label: 'Paddle Control', props: { potPct: 50 } },
+      { id: 'buzz-pong', kind: 'buzzer', x: 560, y: 120, label: 'Buzzer Efek', props: {} },
+    ],
+    wires: [
+      { id: 'wp1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'oled-pong', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wp2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'oled-pong', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wp3', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'oled-pong', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wp4', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'oled-pong', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wp5', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'spot-pong', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wp6', from: { nodeId: 'board', pinId: 'A0' }, to: { nodeId: 'spot-pong', pinId: 'SIG' }, color: '#10b981' },
+      { id: 'wp7', from: { nodeId: 'spot-pong', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wp8', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-pong', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'wp9', from: { nodeId: 'buzz-pong', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-mega-tunnel',
+    dosenOnly: true,
+    board: 'arduino-mega',
+    titleId: 'Dosen · Arduino Mega MAX7219 Matrix Tunnel (Wokwi)',
+    titleEn: 'Instructor · Arduino Mega MAX7219 Tunnel (Wokwi)',
+    badge: 'Dosen · Mega Matrix',
+    summaryId: 'Animasi terowongan LED Dot Matrix 8×8 pada Arduino Mega dengan potensiometer pengatur efek & bunyi buzzer.',
+    summaryEn: 'MAX7219 8×8 tunnel animation on Arduino Mega with potentiometer control and buzzer tick.',
+    code: `// Arduino Mega MAX7219 Tunnel (Wokwi #318864638990090834)
+int frame = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(9, OUTPUT);
+  Serial.println("MAX7219 Tunnel Animation Active!");
+}
+
+void loop() {
+  int pot = analogRead(54);
+  int speedPct = map(pot, 0, 1023, 0, 100);
+  frame = frame + 1;
+  matrix.setPattern("tunnel", frame);
+  if (speedPct > 70) {
+    tone(9, 660);
+    Serial.println("Tunnel Turbo Mode! Speed=" + String(speedPct) + "%");
+  } else {
+    noTone(9);
+  }
+  delay(220);
+}`,
+    components: [
+      { id: 'mat-tun', kind: 'max7219-matrix', x: 430, y: 70, label: 'MAX7219 8×8', color: 'red', props: {} },
+      { id: 'pot-tun', kind: 'potentiometer', x: 435, y: 205, label: 'Kecepatan Tunnel', props: { potPct: 45 } },
+      { id: 'buzz-tun', kind: 'buzzer', x: 565, y: 115, label: 'Buzzer Turbo', props: {} },
+    ],
+    wires: [
+      { id: 'wt1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'mat-tun', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wt2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'mat-tun', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wt3', from: { nodeId: 'board', pinId: 'D11' }, to: { nodeId: 'mat-tun', pinId: 'DIN' }, color: '#10b981' },
+      { id: 'wt5', from: { nodeId: 'board', pinId: 'D13' }, to: { nodeId: 'mat-tun', pinId: 'CLK' }, color: '#f59e0b' },
+      { id: 'wt6', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'pot-tun', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wt7', from: { nodeId: 'board', pinId: 'A0' }, to: { nodeId: 'pot-tun', pinId: 'SIG' }, color: '#8b5cf6' },
+      { id: 'wt8', from: { nodeId: 'pot-tun', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wt9', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-tun', pinId: 'POS' }, color: '#ec4899' },
+      { id: 'wt10', from: { nodeId: 'buzz-tun', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-alarm-clock',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Jam Alarm 7-Segment + RTC DS1307 & Buzzer (Wokwi)',
+    titleEn: 'Instructor · Arduino Alarm Clock + RTC DS1307 & Buzzer (Wokwi)',
+    badge: 'Dosen · Alarm Clock',
+    summaryId: 'Jam digital 4-digit 7-Segment dari RTC DS1307 dengan sakelar Slide Switch untuk mengaktifkan alarm buzzer.',
+    summaryEn: '4-digit 7-segment digital clock with DS1307 RTC and slide switch to sound the buzzer alarm.',
+    code: `// Arduino Alarm Clock (Wokwi #297787059514376717)
+void setup() {
+  Serial.begin(115200);
+  pinMode(4, INPUT_PULLUP);
+  pinMode(9, OUTPUT);
+  Serial.println("Jam Alarm DS1307 aktif! Geser Switch untuk test Alarm.");
+}
+
+void loop() {
+  String t = rtc.readTime();
+  int alarmSwitch = digitalRead(4);
+  if (alarmSwitch == LOW) {
+    tm1637.showNumber("ALRM");
+    tone(9, 1480);
+    Serial.println("ALARM BUNYI! Waktu RTC: " + t);
+  } else {
+    tm1637.showNumber(t);
+    noTone(9);
+    Serial.println("Waktu RTC: " + t);
+  }
+  delay(450);
+}`,
+    components: [
+      { id: 'seg4-clk', kind: 'seven-seg-4', x: 390, y: 45, label: 'Jam 4-Digit', color: 'green', props: {} },
+      { id: 'rtc-clk', kind: 'rtc-ds1307', x: 395, y: 155, label: 'RTC DS1307', props: {} },
+      { id: 'sw-alarm', kind: 'slide-switch', x: 545, y: 80, label: 'Sakelar Alarm', props: { latched: false } },
+      { id: 'buzz-clk', kind: 'buzzer', x: 550, y: 185, label: 'Buzzer Alarm', props: {} },
+    ],
+    wires: [
+      { id: 'wc1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'seg4-clk', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wc2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'seg4-clk', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wc3', from: { nodeId: 'board', pinId: 'D2' }, to: { nodeId: 'seg4-clk', pinId: 'CLK' }, color: '#10b981' },
+      { id: 'wc4', from: { nodeId: 'board', pinId: 'D5' }, to: { nodeId: 'seg4-clk', pinId: 'DIO' }, color: '#3b82f6' },
+      { id: 'wc5', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'rtc-clk', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wc6', from: { nodeId: 'board', pinId: 'GND1' }, to: { nodeId: 'rtc-clk', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wc7', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'rtc-clk', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wc8', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'rtc-clk', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wc9', from: { nodeId: 'board', pinId: 'D4' }, to: { nodeId: 'sw-alarm', pinId: '2' }, color: '#8b5cf6' },
+      { id: 'wc10', from: { nodeId: 'sw-alarm', pinId: '3' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wc11', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-clk', pinId: 'POS' }, color: '#f97316' },
+      { id: 'wc12', from: { nodeId: 'buzz-clk', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-calculator',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Kalkulator Keypad 4×4 + LCD 20×4 I2C (Wokwi)',
+    titleEn: 'Instructor · Arduino Keypad 4×4 + LCD 20×4 Calculator (Wokwi)',
+    badge: 'Dosen · Kalkulator LCD',
+    summaryId: 'Klik tombol angka pada Keypad 4×4 untuk mengetik angka ke layar LCD 20×4 disertai bunyi beep buzzer.',
+    summaryEn: 'Click keys on the 4×4 Keypad to display live numbers on the 20×4 LCD with buzzer key clicks.',
+    code: `// Arduino Keypad Calculator (Wokwi #276825819240727048)
+String expr = "";
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(9, OUTPUT);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("KALKULATOR ARDUINO");
+  lcd.setCursor(0, 1);
+  lcd.print("Klik Keypad 4x4:");
+  Serial.println("Kalkulator siap! Klik Keypad di kanvas.");
+}
+
+void loop() {
+  String k = keypad.getKey();
+  if (k != "") {
+    tone(9, 1320);
+    if (k == "*") {
+      expr = "";
+      lcd.setCursor(0, 2);
+      lcd.print("Input: [Cleared]    ");
+    } else {
+      expr = expr + k;
+      lcd.setCursor(0, 2);
+      lcd.print("Input: " + expr);
+      lcd.setCursor(0, 3);
+      lcd.print("Last Key: " + k);
+    }
+    Serial.println("Keypad Press: " + k + " | Buffer=" + expr);
+    delay(160);
+    noTone(9);
+  }
+  delay(120);
+}`,
+    components: [
+      { id: 'lcd-calc', kind: 'lcd-20x4', x: 385, y: 40, label: 'LCD 20×4 I2C', props: { lcdBackground: 'blue', lcdTextColor: 'white' } },
+      { id: 'kp-calc', kind: 'keypad-4x4', x: 390, y: 170, label: 'Keypad 4×4', props: {} },
+      { id: 'buzz-calc', kind: 'buzzer', x: 560, y: 120, label: 'Beep Tombol', props: {} },
+    ],
+    wires: [
+      { id: 'wkc1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'lcd-calc', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wkc2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'lcd-calc', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wkc3', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'lcd-calc', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wkc4', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'lcd-calc', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wkc5', from: { nodeId: 'board', pinId: 'D2' }, to: { nodeId: 'kp-calc', pinId: 'R1' }, color: '#10b981' },
+      { id: 'wkc6', from: { nodeId: 'board', pinId: 'D4' }, to: { nodeId: 'kp-calc', pinId: 'R2' }, color: '#22c55e' },
+      { id: 'wkc7', from: { nodeId: 'board', pinId: 'D5' }, to: { nodeId: 'kp-calc', pinId: 'C1' }, color: '#3b82f6' },
+      { id: 'wkc8', from: { nodeId: 'board', pinId: 'D6' }, to: { nodeId: 'kp-calc', pinId: 'C2' }, color: '#8b5cf6' },
+      { id: 'wkc9', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-calc', pinId: 'POS' }, color: '#ec4899' },
+      { id: 'wkc10', from: { nodeId: 'buzz-calc', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-compass',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Kompas 3D OLED + MPU6050 & Potensiometer (Wokwi)',
+    titleEn: 'Instructor · 3D Compass OLED + MPU6050 & Potentiometer (Wokwi)',
+    badge: 'Dosen · 3D Compass OLED',
+    summaryId: 'Atur heading potensiometer (0..359°) & slider kemiringan MPU-6050 untuk menampilkan arah kompas di OLED SSD1306.',
+    summaryEn: 'Tune heading knob (0..359°) and MPU-6050 tilt slider to display compass HUD on SSD1306 OLED.',
+    code: `// 3D Compass OLED + MPU6050 (Wokwi #385987811439126529)
+void setup() {
+  Serial.begin(115200);
+  oled.begin();
+  pinMode(9, OUTPUT);
+  Serial.println("Kompas OLED aktif! Putar potensiometer & atur MPU6050.");
+}
+
+void loop() {
+  int adc = analogRead(14);
+  int deg = map(adc, 0, 1023, 0, 359);
+  int tilt = mpu.readTilt();
+
+  oled.clear();
+  oled.println("COMPASS 3D HUD");
+  oled.println("Heading: " + String(deg) + " deg");
+  oled.println("Tilt X : " + String(tilt) + " deg");
+  if (deg < 25) {
+    tone(9, 988);
+    oled.println("ARAH   : [UTARA N]");
+  } else if (deg < 135) {
+    noTone(9);
+    oled.println("ARAH   : [TIMUR E]");
+  } else if (deg < 235) {
+    noTone(9);
+    oled.println("ARAH   : [SELATAN S]");
+  } else {
+    noTone(9);
+    oled.println("ARAH   : [BARAT W]");
+  }
+  oled.display();
+  Serial.println("deg:" + String(deg) + ",tilt:" + String(tilt));
+  delay(260);
+}`,
+    components: [
+      { id: 'oled-cmp', kind: 'oled-ssd1306', x: 385, y: 40, label: 'OLED Kompas', props: {} },
+      { id: 'mpu-cmp', kind: 'mpu6050', x: 545, y: 45, label: 'MPU-6050', props: { tiltDeg: 12 } },
+      { id: 'pot-cmp', kind: 'potentiometer', x: 390, y: 180, label: 'Azimuth Knob', props: { potPct: 4 } },
+      { id: 'buzz-cmp', kind: 'buzzer', x: 560, y: 190, label: 'Buzzer Utara', props: {} },
+    ],
+    wires: [
+      { id: 'wcp1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'oled-cmp', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wcp2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'oled-cmp', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wcp3', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'oled-cmp', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wcp4', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'oled-cmp', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wcp5', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'mpu-cmp', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wcp6', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'mpu-cmp', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wcp7', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'mpu-cmp', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wcp8', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'mpu-cmp', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wcp9', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'pot-cmp', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wcp10', from: { nodeId: 'board', pinId: 'A0' }, to: { nodeId: 'pot-cmp', pinId: 'SIG' }, color: '#10b981' },
+      { id: 'wcp11', from: { nodeId: 'pot-cmp', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wcp12', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-cmp', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'wcp13', from: { nodeId: 'buzz-cmp', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-matrix-dht',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Matrix Clock + DHT22 & Alarm Suhu (Wokwi)',
+    titleEn: 'Instructor · MAX7219 Matrix + DHT22 & Temp Alert (Wokwi)',
+    badge: 'Dosen · Matrix + DHT22',
+    summaryId: 'Geser suhu DHT22 pada kanvas (> 32°C) untuk mengubah tampilan MAX7219 menjadi ikon peringatan dan membunyikan buzzer.',
+    summaryEn: 'Slide DHT22 temperature (> 32°C) on canvas to switch MAX7219 matrix pattern and trigger buzzer alert.',
+    code: `// MAX7219 Clock & DHT Sensor (Wokwi #289186888566178317)
+void setup() {
+  Serial.begin(115200);
+  pinMode(9, OUTPUT);
+  Serial.println("Monitor Suhu & Matrix aktif!");
+}
+
+void loop() {
+  float temp = dht.readTemperature(4);
+  float hum = dht.readHumidity(4);
+  String t = rtc.readTime();
+  lcd.setCursor(0, 0);
+  lcd.print("Jam " + t + " T:" + String(temp));
+  lcd.setCursor(0, 1);
+  if (temp > 32) {
+    matrix.setPattern("alert", 0);
+    tone(9, 1560);
+    lcd.print("ALERT SUHU TINGGI");
+  } else {
+    matrix.setPattern("smile", 0);
+    noTone(9);
+    lcd.print("Hum: " + String(hum) + "% OK");
+  }
+  Serial.println("temp:" + String(temp) + ",hum:" + String(hum));
+  delay(350);
+}`,
+    components: [
+      { id: 'mat-dht', kind: 'max7219-matrix', x: 385, y: 45, label: 'Matrix 8×8', color: 'green', props: {} },
+      { id: 'dht-mat', kind: 'dht22', x: 510, y: 45, label: 'DHT22 Suhu', props: { tempC: 29, humidity: 58 } },
+      { id: 'lcd-mat', kind: 'lcd-1602', x: 385, y: 175, label: 'Info RTC+DHT', props: {} },
+      { id: 'buzz-dht', kind: 'buzzer', x: 555, y: 185, label: 'Alarm Suhu', props: {} },
+    ],
+    wires: [
+      { id: 'wmd1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'mat-dht', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wmd2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'mat-dht', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wmd3', from: { nodeId: 'board', pinId: 'D11' }, to: { nodeId: 'mat-dht', pinId: 'DIN' }, color: '#10b981' },
+      { id: 'wmd5', from: { nodeId: 'board', pinId: 'D13' }, to: { nodeId: 'mat-dht', pinId: 'CLK' }, color: '#f59e0b' },
+      { id: 'wmd6', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'dht-mat', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wmd7', from: { nodeId: 'board', pinId: 'D4' }, to: { nodeId: 'dht-mat', pinId: 'DATA' }, color: '#22c55e' },
+      { id: 'wmd8', from: { nodeId: 'dht-mat', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wmd9', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'lcd-mat', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wmd10', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'lcd-mat', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wmd11', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-dht', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'wmd12', from: { nodeId: 'buzz-dht', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-progressbar',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · U8glib OLED Progress Bar + Potensiometer (Wokwi)',
+    titleEn: 'Instructor · U8glib OLED Progress Bar + Potentiometer (Wokwi)',
+    badge: 'Dosen · OLED Progress',
+    summaryId: 'Putar potensiometer untuk mengisi Progress Bar 0..100% di layar OLED SSD1306 dan bunyikan nada selesai pada 100%.',
+    summaryEn: 'Turn potentiometer to drive OLED SSD1306 Progress Bar (0..100%) and trigger completion tone at 100%.',
+    code: `// U8glib Progress Bar (Wokwi #333991258811794002)
+void setup() {
+  Serial.begin(115200);
+  oled.begin();
+  pinMode(9, OUTPUT);
+  Serial.println("Putar Potentiometer untuk atur Progress Bar.");
+}
+
+void loop() {
+  int adc = analogRead(14);
+  int pct = map(adc, 0, 1023, 0, 100);
+  oled.clear();
+  oled.println("LOADING SYSTEM");
+  oled.progressBar(pct);
+  if (pct >= 95) {
+    tone(9, 1047);
+    oled.println("STATUS: COMPLETE!");
+  } else {
+    noTone(9);
+    oled.println("ADC Raw: " + String(adc));
+  }
+  oled.display();
+  Serial.println("progress:" + String(pct));
+  delay(220);
+}`,
+    components: [
+      { id: 'oled-prg', kind: 'oled-ssd1306', x: 390, y: 60, label: 'OLED Progress', props: {} },
+      { id: 'pot-prg', kind: 'potentiometer', x: 395, y: 195, label: 'Level 0-100%', props: { potPct: 60 } },
+      { id: 'buzz-prg', kind: 'buzzer', x: 555, y: 120, label: 'Buzzer Selesai', props: {} },
+    ],
+    wires: [
+      { id: 'wpg1', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'oled-prg', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wpg2', from: { nodeId: 'board', pinId: 'GND2' }, to: { nodeId: 'oled-prg', pinId: 'GND' }, color: '#1e293b' },
+      { id: 'wpg3', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'oled-prg', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wpg4', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'oled-prg', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'wpg5', from: { nodeId: 'board', pinId: '5V' }, to: { nodeId: 'pot-prg', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wpg6', from: { nodeId: 'board', pinId: 'A0' }, to: { nodeId: 'pot-prg', pinId: 'SIG' }, color: '#10b981' },
+      { id: 'wpg7', from: { nodeId: 'pot-prg', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wpg8', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-prg', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'wpg9', from: { nodeId: 'buzz-prg', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'dosen-wokwi-mini-piano',
+    dosenOnly: true,
+    board: 'arduino-uno',
+    titleId: 'Dosen · Mini Piano 8 Nada + OLED & Buzzer (Wokwi)',
+    titleEn: 'Instructor · Mini Piano 8 Keys + OLED & Buzzer (Wokwi)',
+    badge: 'Dosen · Mini Piano',
+    summaryId: 'Klik tuts piano atau tekan tombol angka keyboard 1–8 saat simulasi berjalan untuk memainkan tangga nada C4–C5 di buzzer.',
+    summaryEn: 'Click piano keys or press keyboard keys 1–8 while running to play C4–C5 musical notes on the Piezo Buzzer.',
+    code: `// Mini Piano (Wokwi #291958456169005577)
+void setup() {
+  Serial.begin(115200);
+  oled.begin();
+  pinMode(2, INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
+  pinMode(6, INPUT_PULLUP);
+  pinMode(10, INPUT_PULLUP);
+  pinMode(11, INPUT_PULLUP);
+  pinMode(13, INPUT_PULLUP);
+  pinMode(9, OUTPUT);
+  Serial.println("Mini Piano siap! Klik tombol nada atau tekan keyboard 1-7.");
+}
+
+void loop() {
+  oled.clear();
+  oled.println("MINI PIANO 7-NOTE");
+  if (digitalRead(2) == LOW) {
+    tone(9, 262);
+    oled.println("Nada: C4 (Do) 262Hz");
+  } else if (digitalRead(4) == LOW) {
+    tone(9, 294);
+    oled.println("Nada: D4 (Re) 294Hz");
+  } else if (digitalRead(5) == LOW) {
+    tone(9, 330);
+    oled.println("Nada: E4 (Mi) 330Hz");
+  } else if (digitalRead(6) == LOW) {
+    tone(9, 349);
+    oled.println("Nada: F4 (Fa) 349Hz");
+  } else if (digitalRead(10) == LOW) {
+    tone(9, 392);
+    oled.println("Nada: G4 (Sol) 392Hz");
+  } else if (digitalRead(11) == LOW) {
+    tone(9, 440);
+    oled.println("Nada: A4 (La) 440Hz");
+  } else if (digitalRead(13) == LOW) {
+    tone(9, 494);
+    oled.println("Nada: B4 (Si) 494Hz");
+  } else {
+    noTone(9);
+    oled.println("Tekan tuts [1..7]");
+  }
+  oled.display();
+  delay(140);
+}`,
+    components: [
+      { id: 'p-c4', kind: 'pushbutton', x: 360, y: 20, label: 'Do C4 [1]', color: 'red', props: { shortcutKey: '1' } },
+      { id: 'p-d4', kind: 'pushbutton', x: 445, y: 20, label: 'Re D4 [2]', color: 'yellow', props: { shortcutKey: '2' } },
+      { id: 'p-e4', kind: 'pushbutton', x: 530, y: 20, label: 'Mi E4 [3]', color: 'green', props: { shortcutKey: '3' } },
+      { id: 'p-f4', kind: 'pushbutton', x: 615, y: 20, label: 'Fa F4 [4]', color: 'blue', props: { shortcutKey: '4' } },
+      { id: 'p-g4', kind: 'pushbutton', x: 360, y: 110, label: 'Sol G4 [5]', color: 'white', props: { shortcutKey: '5' } },
+      { id: 'p-a4', kind: 'pushbutton', x: 445, y: 110, label: 'La A4 [6]', color: 'grey', props: { shortcutKey: '6' } },
+      { id: 'p-b4', kind: 'pushbutton', x: 530, y: 110, label: 'Si B4 [7]', color: 'black', props: { shortcutKey: '7' } },
+      { id: 'oled-pn', kind: 'oled-ssd1306', x: 380, y: 215, label: 'Layar Nada', props: {} },
+      { id: 'buzz-pn', kind: 'buzzer', x: 555, y: 225, label: 'Speaker Piano', props: {} },
+    ],
+    wires: [
+      { id: 'wpn1', from: { nodeId: 'board', pinId: 'D2' }, to: { nodeId: 'p-c4', pinId: 'OUT' }, color: '#ef4444' },
+      { id: 'wpn2', from: { nodeId: 'p-c4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wpn3', from: { nodeId: 'board', pinId: 'D4' }, to: { nodeId: 'p-d4', pinId: 'OUT' }, color: '#eab308' },
+      { id: 'wpn4', from: { nodeId: 'p-d4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wpn5', from: { nodeId: 'board', pinId: 'D5' }, to: { nodeId: 'p-e4', pinId: 'OUT' }, color: '#22c55e' },
+      { id: 'wpn6', from: { nodeId: 'p-e4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wpn7', from: { nodeId: 'board', pinId: 'D6' }, to: { nodeId: 'p-f4', pinId: 'OUT' }, color: '#3b82f6' },
+      { id: 'wpn8', from: { nodeId: 'p-f4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wpn9', from: { nodeId: 'board', pinId: 'D10' }, to: { nodeId: 'p-g4', pinId: 'OUT' }, color: '#06b6d4' },
+      { id: 'wpn10', from: { nodeId: 'p-g4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wpn11', from: { nodeId: 'board', pinId: 'D11' }, to: { nodeId: 'p-a4', pinId: 'OUT' }, color: '#8b5cf6' },
+      { id: 'wpn12', from: { nodeId: 'p-a4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wpn13', from: { nodeId: 'board', pinId: 'D13' }, to: { nodeId: 'p-b4', pinId: 'OUT' }, color: '#ec4899' },
+      { id: 'wpn14', from: { nodeId: 'p-b4', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wpn15', from: { nodeId: 'board', pinId: 'D9' }, to: { nodeId: 'buzz-pn', pinId: 'POS' }, color: '#f97316' },
+      { id: 'wpn16', from: { nodeId: 'buzz-pn', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'wpn17', from: { nodeId: 'board', pinId: 'A4' }, to: { nodeId: 'oled-pn', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'wpn18', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'oled-pn', pinId: 'SCL' }, color: '#3b82f6' },
+    ],
+  },
 ]
 
 export const IOT_MISSIONS: IotMissionSpec[] = [
