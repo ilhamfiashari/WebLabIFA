@@ -857,9 +857,21 @@ export function ComponentHardwareView({
                 <circle cx={42} cy={32} r={4} fill="#0f172a" />
                 <title>Putar / geser kenop potensiometer ({pct}%)</title>
               </g>
-              <text x={42} y={64} textAnchor="middle" fontSize="8.5" fontWeight={700} fill="#e0f2fe" style={{ pointerEvents: 'none' }}>
+              <text x={42} y={58} textAnchor="middle" fontSize="8" fontWeight={700} fill="#e0f2fe" style={{ pointerEvents: 'none' }}>
                 {pct}%
               </text>
+              <foreignObject className="iot-interactive-control" x={12} y={59} width={60} height={16}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={pct}
+                  onChange={(e) => onUpdateProps(comp.id, { potPct: Number(e.target.value) })}
+                  title={`${comp.label}: ${pct}%`}
+                  aria-label={comp.label}
+                  style={{ width: 58, height: 14 }}
+                />
+              </foreignObject>
             </g>
           )
         })()

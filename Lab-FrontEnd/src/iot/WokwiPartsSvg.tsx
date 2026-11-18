@@ -459,8 +459,8 @@ export function WokwiExtendedPartSvg({
         <g>
           <rect x={6} y={8} width={100} height={36} rx={5} fill="#0284c7" stroke="#7dd3fc" strokeWidth={1.3} />
           <rect x={16} y={22} width={80} height={8} rx={3} fill="#0f172a" />
+          <rect x={18} y={24} width={Math.max(2, (pct / 100) * 76)} height={4} rx={2} fill="#38bdf8" />
           <rect
-            className="iot-interactive-control"
             x={kx - 7}
             y={14}
             width={14}
@@ -469,23 +469,21 @@ export function WokwiExtendedPartSvg({
             fill="#f8fafc"
             stroke="#334155"
             strokeWidth={1.5}
-            style={{ cursor: 'ew-resize' }}
-            onPointerDown={(e) => {
-              e.stopPropagation()
-              const sx = e.clientX
-              const sVal = comp.props.potPct ?? 50
-              const onMove = (ev: PointerEvent) => {
-                onUpdateProps(comp.id, { potPct: Math.max(0, Math.min(100, Math.round(sVal + (ev.clientX - sx) * 1.1))) })
-              }
-              const onUp = () => {
-                window.removeEventListener('pointermove', onMove)
-                window.removeEventListener('pointerup', onUp)
-              }
-              window.addEventListener('pointermove', onMove)
-              window.addEventListener('pointerup', onUp)
-            }}
+            style={{ pointerEvents: 'none' }}
           />
-          <text x={56} y={19} textAnchor="middle" fontSize="6.5" fill="#e0f2fe" fontWeight={700}>{pct}%</text>
+          <foreignObject className="iot-interactive-control" x={12} y={10} width={88} height={32}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={pct}
+              onChange={(e) => onUpdateProps(comp.id, { potPct: Number(e.target.value) })}
+              title={`${comp.label}: ${pct}%`}
+              aria-label={comp.label}
+              style={{ width: 88, height: 28, opacity: 0.02, cursor: 'ew-resize' }}
+            />
+          </foreignObject>
+          <text x={56} y={16} textAnchor="middle" fontSize="6.5" fill="#e0f2fe" fontWeight={700} style={{ pointerEvents: 'none' }}>{pct}%</text>
         </g>
       )
     }

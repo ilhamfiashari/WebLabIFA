@@ -77,10 +77,10 @@ function getEndpointGeometry(
       return { x, y, sx: inst.x - 18, sy: y, side: 'left', boardNode }
     }
     if (p.side === 'top') {
-      return { x, y, sx: x, sy: inst.y - 16, side: 'up', boardNode }
+      return { x, y, sx: x, sy: inst.y - 10, side: 'up', boardNode }
     }
     if (p.side === 'bottom') {
-      return { x, y, sx: x, sy: inst.y + spec.height + 16, side: 'down', boardNode }
+      return { x, y, sx: x, sy: inst.y + spec.height + 10, side: 'down', boardNode }
     }
     return { x, y, sx: inst.x + spec.width + 18, sy: y, side: 'right', boardNode }
   }
@@ -168,11 +168,64 @@ function computeAutoWaypoints(
     }
   }
 
-  // Horizontal header pins (Arduino Uno/Mega top/bottom rows) route vertically first
+  // Horizontal header pins (Arduino Uno/Mega/Nano top/bottom rows) route cleanly without fold-back stubs
   if (a.side === 'up' || a.side === 'down' || b.side === 'up' || b.side === 'down') {
-    const exitA = a.side === 'up' || a.side === 'down' ? { x: a.x, y: a.sy } : { x: a.sx, y: a.y }
-    const exitB = b.side === 'up' || b.side === 'down' ? { x: b.x, y: b.sy } : { x: b.sx, y: b.y }
-    const midY = Math.round((exitA.y + exitB.y) / 2) + ((offsetIdx % 3) - 1) * 7
+    const step = (offsetIdx % 4) * 6
+    const exitA = {
+      x: a.side === 'up' || a.side === 'down' ? a.x : a.sx,
+      y: a.side === 'up' ? a.sy - step : a.side === 'down' ? a.sy + step : a.y,
+    }
+    const exitB = {
+      x: b.side === 'up' || b.side === 'down' ? b.x : b.sx,
+      y: b.side === 'up' ? b.sy - step : b.side === 'down' ? b.sy + step : b.y,
+    }
+
+    const pickClearChannelX = (fromPt: EndpointGeometry, toPt: EndpointGeometry): number => {
+      if (refBoard) {
+        if (toPt.x >= refBoard.x + refBoard.width) {
+          return Math.min(toPt.x - 14, refBoard.x + refBoard.width + 14 + step)
+        }
+        if (toPt.x <= refBoard.x) {
+          return Math.max(toPt.x + 14, refBoard.x - 14 - step)
+        }
+      }
+      return Math.round((fromPt.x + toPt.x) / 2)
+    }
+
+    // Avoid backtracking downward after exiting upward (or upward after exiting downward)
+    const aBacktracksUp = a.side === 'up' && exitB.y > exitA.y
+    const bBacktracksUp = b.side === 'up' && exitA.y > exitB.y
+    const aBacktracksDown = a.side === 'down' && exitB.y < exitA.y
+    const bBacktracksDown = b.side === 'down' && exitA.y < exitB.y
+
+    if (aBacktracksUp || bBacktracksUp || aBacktracksDown || bBacktracksDown) {
+      const aIsPrimary = aBacktracksUp || aBacktracksDown
+      const primPt = aIsPrimary ? a : b
+      const primExit = aIsPrimary ? exitA : exitB
+      const otherExit = aIsPrimary ? exitB : exitA
+      const otherSide = (aIsPrimary ? b : a).side
+      const chanX = pickClearChannelX(primPt, aIsPrimary ? b : a)
+      const pts: WireWaypoint[] = [
+        primExit,
+        { x: chanX, y: primExit.y },
+        { x: chanX, y: otherExit.y },
+      ]
+      if (otherSide === 'up' || otherSide === 'down' || Math.abs(chanX - otherExit.x) > 2) {
+        pts.push(otherExit)
+      }
+      return aIsPrimary ? pts : pts.reverse()
+    }
+
+    if (a.side === 'up' && b.side === 'up') {
+      const topY = Math.min(exitA.y, exitB.y) - step
+      return [{ x: exitA.x, y: topY }, { x: exitB.x, y: topY }]
+    }
+    if (a.side === 'down' && b.side === 'down') {
+      const botY = Math.max(exitA.y, exitB.y) + step
+      return [{ x: exitA.x, y: botY }, { x: exitB.x, y: botY }]
+    }
+
+    const midY = Math.round((exitA.y + exitB.y) / 2) + ((offsetIdx % 3) - 1) * 5
     const pts: WireWaypoint[] = [exitA]
     if (Math.abs(exitA.x - exitB.x) > 4 && Math.abs(exitA.y - exitB.y) > 4) {
       pts.push({ x: exitA.x, y: midY }, { x: exitB.x, y: midY })
