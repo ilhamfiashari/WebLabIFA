@@ -772,6 +772,15 @@
   height: auto;
   min-height: 390px;
   touch-action: none;
+  cursor: grab;
+}
+
+.iot-svg-board.is-pan-mode {
+  cursor: grab;
+}
+
+.iot-svg-board.is-panning {
+  cursor: grabbing;
 }
 
 .iot-wire-group {

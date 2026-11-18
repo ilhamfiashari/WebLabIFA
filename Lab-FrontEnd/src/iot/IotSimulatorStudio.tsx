@@ -930,8 +930,8 @@ export function IotSimulatorStudio({
     const copy: PlacedComponent = {
       ...src,
       id: nextUid(src.kind === 'mcu' ? 'mcu' : src.kind),
-      x: Math.min(760, src.x + 32),
-      y: Math.min(410, src.y + 28),
+      x: Math.min(2200, src.x + 32),
+      y: Math.min(1600, src.y + 28),
       props: { ...src.props },
     }
     const nextComps = [...cur.components, copy]

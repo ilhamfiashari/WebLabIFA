@@ -4,6 +4,7 @@ import {
   Copy,
   Expand,
   Focus,
+  Hand,
   Maximize2,
   Minimize2,
   PanelLeftClose,
@@ -296,6 +297,9 @@ export function CircuitCanvas({
   const en = lang === 'en'
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [panMode, setPanMode] = useState(false)
   const [showLabels, setShowLabels] = useState(true)
   const [selectedPin, setSelectedPin] = useState<WireEndpoint | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -338,7 +342,58 @@ export function CircuitCanvas({
     origRotate: number
     moved: boolean
   } | null>(null)
+  const panDragRef = useRef<{
+    startClientX: number
+    startClientY: number
+    origPanX: number
+    origPanY: number
+    moved: boolean
+  } | null>(null)
   const suppressNextClickRef = useRef(false)
+
+  const clampPan = (x: number, y: number) => ({
+    x: Math.max(-1400, Math.min(2000, Math.round(x))),
+    y: Math.max(-1000, Math.min(1600, Math.round(y))),
+  })
+
+  const applyZoom = (nextZoomRaw: number) => {
+    const nextZ = Math.max(0.45, Math.min(2.2, +nextZoomRaw.toFixed(2)))
+    if (nextZ === zoom) return
+    const oldW = SVG_W / zoom
+    const oldH = SVG_H / zoom
+    const newW = SVG_W / nextZ
+    const newH = SVG_H / nextZ
+    setPan((p) => clampPan(p.x + (oldW - newW) / 2, p.y + (oldH - newH) / 2))
+    setZoom(nextZ)
+  }
+
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const nextZ = Math.max(0.45, Math.min(2.2, +(zoom * (1 - e.deltaY * 0.0022)).toFixed(2)))
+        if (nextZ !== zoom) {
+          const oldW = SVG_W / zoom
+          const oldH = SVG_H / zoom
+          const newW = SVG_W / nextZ
+          const newH = SVG_H / nextZ
+          setPan((p) => clampPan(p.x + (oldW - newW) / 2, p.y + (oldH - newH) / 2))
+          setZoom(nextZ)
+        }
+        return
+      }
+      if (Math.abs(e.deltaX) > 0 || e.shiftKey || isFullscreen || focusMode !== 'normal') {
+        e.preventDefault()
+        const dx = (e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX) / zoom
+        const dy = (e.shiftKey ? 0 : e.deltaY) / zoom
+        setPan((p) => clampPan(p.x + dx, p.y + dy))
+      }
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    return () => svg.removeEventListener('wheel', onWheel)
+  }, [zoom, isFullscreen, focusMode])
 
   const boardInstances = getBoardInstances(boardId, components)
 
@@ -357,8 +412,8 @@ export function CircuitCanvas({
     const vbW = Math.round(SVG_W / zoom)
     const vbH = Math.round(SVG_H / zoom)
     return {
-      x: ((clientX - rect.left) / Math.max(1, rect.width)) * vbW,
-      y: ((clientY - rect.top) / Math.max(1, rect.height)) * vbH,
+      x: pan.x + ((clientX - rect.left) / Math.max(1, rect.width)) * vbW,
+      y: pan.y + ((clientY - rect.top) / Math.max(1, rect.height)) * vbH,
     }
   }
 
@@ -574,6 +629,17 @@ export function CircuitCanvas({
   }
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (panDragRef.current) {
+      const pd = panDragRef.current
+      const dist = Math.hypot(e.clientX - pd.startClientX, e.clientY - pd.startClientY)
+      if (dist > 3) pd.moved = true
+      if (!pd.moved) return
+      const dx = (e.clientX - pd.startClientX) / zoom
+      const dy = (e.clientY - pd.startClientY) / zoom
+      setPan(clampPan(pd.origPanX - dx, pd.origPanY - dy))
+      return
+    }
+
     const pt = clientToSvg(e.clientX, e.clientY)
     if (drawingPreview) {
       const moved =
@@ -598,8 +664,8 @@ export function CircuitCanvas({
       onGestureStart?.()
       const dx = (e.clientX - d.startClientX) / zoom
       const dy = (e.clientY - d.startClientY) / zoom
-      const nx = Math.max(12, Math.min(SVG_W - 70, Math.round((d.origX + dx) / 6) * 6))
-      const ny = Math.max(12, Math.min(SVG_H - 60, Math.round((d.origY + dy) / 6) * 6))
+      const nx = Math.max(-1200, Math.min(2400, Math.round((d.origX + dx) / 6) * 6))
+      const ny = Math.max(-900, Math.min(1800, Math.round((d.origY + dy) / 6) * 6))
       onMoveBoardOrComponent(d.nodeId, nx, ny)
       return
     }
@@ -607,8 +673,8 @@ export function CircuitCanvas({
     if (waypointDragRef.current) {
       const wd = waypointDragRef.current
       onGestureStart?.()
-      const clampedX = Math.max(10, Math.min(SVG_W - 10, Math.round(pt.x / 4) * 4))
-      const clampedY = Math.max(10, Math.min(SVG_H - 10, Math.round(pt.y / 4) * 4))
+      const clampedX = Math.max(-1200, Math.min(2400, Math.round(pt.x / 4) * 4))
+      const clampedY = Math.max(-900, Math.min(1800, Math.round(pt.y / 4) * 4))
       const next = wd.waypoints.map((wp, idx) => (idx === wd.index ? { x: clampedX, y: clampedY } : wp))
       wd.waypoints = next
       onUpdateWire(wd.wireId, { waypoints: next, bendX: undefined, bendY: undefined })
@@ -640,6 +706,12 @@ export function CircuitCanvas({
   const endDrag = (e?: React.PointerEvent<SVGSVGElement>) => {
     setSnapHighlight(null)
     onGestureEnd?.()
+    if (panDragRef.current) {
+      const finished = panDragRef.current
+      panDragRef.current = null
+      setIsPanning(false)
+      if (finished.moved) suppressNextClickRef.current = true
+    }
     if (rotateDragRef.current) {
       const finished = rotateDragRef.current
       rotateDragRef.current = null
@@ -717,10 +789,10 @@ export function CircuitCanvas({
     } else {
       return null
     }
-    const placeRight = targetX + targetW + 270 < viewW
-    const anchorX = placeRight ? targetX + targetW + 14 : Math.max(10, targetX - 260)
-    const leftPct = Math.min(68, Math.max(2, (anchorX / viewW) * 100))
-    const topPct = Math.min(58, Math.max(4, ((targetY + 4) / viewH) * 100))
+    const placeRight = targetX + targetW + 270 < pan.x + viewW
+    const anchorX = placeRight ? targetX + targetW + 14 : Math.max(pan.x + 10, targetX - 260)
+    const leftPct = Math.min(68, Math.max(2, ((anchorX - pan.x) / viewW) * 100))
+    const topPct = Math.min(58, Math.max(4, ((targetY - pan.y + 4) / viewH) * 100))
     return { leftPct, topPct }
   })()
 
@@ -797,13 +869,32 @@ export function CircuitCanvas({
             <Type size={14} />
           </button>
 
-          <button type="button" className="iot-pill-btn" onClick={() => setZoom((z) => Math.max(0.75, +(z - 0.1).toFixed(2)))} aria-label="Zoom out">
+          <button
+            type="button"
+            className={`iot-pill-btn ${panMode ? 'is-on' : ''}`}
+            onClick={() => setPanMode((v) => !v)}
+            title={en ? 'Hand pan tool (or drag empty canvas)' : 'Mode Geser Kanvas (atau seret area kosong kanvas)'}
+            aria-label={en ? 'Pan canvas mode' : 'Geser kanvas'}
+          >
+            <Hand size={14} />
+          </button>
+
+          <button type="button" className="iot-pill-btn" onClick={() => applyZoom(zoom - 0.15)} aria-label="Zoom out">
             <ZoomOut size={14} />
           </button>
-          <button type="button" className="iot-pill-btn" onClick={() => setZoom(1)} aria-label="Reset zoom">
+          <button
+            type="button"
+            className="iot-pill-btn"
+            onClick={() => {
+              setZoom(1)
+              setPan({ x: 0, y: 0 })
+            }}
+            title={en ? 'Reset view & zoom (100%)' : 'Reset posisi & zoom kanvas'}
+            aria-label="Reset zoom"
+          >
             <Maximize2 size={13} />
           </button>
-          <button type="button" className="iot-pill-btn" onClick={() => setZoom((z) => Math.min(1.8, +(z + 0.1).toFixed(2)))} aria-label="Zoom in">
+          <button type="button" className="iot-pill-btn" onClick={() => applyZoom(zoom + 0.15)} aria-label="Zoom in">
             <ZoomIn size={14} />
           </button>
 
@@ -863,8 +954,8 @@ export function CircuitCanvas({
                   ? 'Wire selected: drag plug rings to unplug/move pin, drag white dots to bend, or drag any + segment handle to add bends.'
                   : 'Kabel dipilih: geser ujung colokan untuk cabut/pindah pin, geser titik putih untuk belokkan, atau tarik tanda + untuk tambah belokan.'
                 : en
-                  ? 'Drag from any pin to connect · Drag MCUs & parts freely · Click resistor/sensors to configure inline'
-                  : 'Tarik langsung dari pin ke pin · Geser MCU & komponen bebas · Klik resistor/sensor untuk atur nilai'}
+                  ? 'Drag empty canvas to pan · Drag pin to pin to wire · Drag MCUs & parts freely · Click part to configure'
+                  : 'Geser area kosong kanvas untuk menggeser ruang kerja · Tarik dari pin ke pin · Geser MCU & komponen bebas'}
         </span>
 
         <div className="iot-canvas-btns">
@@ -1687,8 +1778,35 @@ export function CircuitCanvas({
 
       <svg
         ref={svgRef}
-        className="iot-svg-board"
-        viewBox={`0 0 ${Math.round(SVG_W / zoom)} ${Math.round(SVG_H / zoom)}`}
+        className={`iot-svg-board ${isPanning ? 'is-panning' : ''} ${panMode ? 'is-pan-mode' : ''}`}
+        viewBox={`${pan.x} ${pan.y} ${Math.round(SVG_W / zoom)} ${Math.round(SVG_H / zoom)}`}
+        onPointerDownCapture={(e) => {
+          if (e.button === 1 || panMode) {
+            e.preventDefault()
+            e.stopPropagation()
+            panDragRef.current = {
+              startClientX: e.clientX,
+              startClientY: e.clientY,
+              origPanX: pan.x,
+              origPanY: pan.y,
+              moved: false,
+            }
+            setIsPanning(true)
+          }
+        }}
+        onPointerDown={(e) => {
+          const isBgTarget = e.target === e.currentTarget || (e.target as Element)?.getAttribute('data-canvas-bg') === '1'
+          if (e.button === 0 && isBgTarget) {
+            panDragRef.current = {
+              startClientX: e.clientX,
+              startClientY: e.clientY,
+              origPanX: pan.x,
+              origPanY: pan.y,
+              moved: false,
+            }
+            setIsPanning(true)
+          }
+        }}
         onPointerMove={handlePointerMove}
         onPointerUp={(e) => endDrag(e)}
         onPointerLeave={() => endDrag()}
@@ -1707,8 +1825,8 @@ export function CircuitCanvas({
             <circle cx="2" cy="2" r="1.1" fill={gridDot} opacity="0.7" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill={canvasBg} />
-        <rect width="100%" height="100%" fill="url(#iot-grid)" />
+        <rect data-canvas-bg="1" x={-2400} y={-1800} width={6400} height={4600} fill={canvasBg} />
+        <rect data-canvas-bg="1" x={-2400} y={-1800} width={6400} height={4600} fill="url(#iot-grid)" />
 
         {/* Layer 1: All Microcontroller Boards (draggable) & Components */}
         {boardInstances.map((inst) => (
