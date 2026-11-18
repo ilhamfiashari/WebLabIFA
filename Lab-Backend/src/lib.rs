@@ -1,5 +1,6 @@
 pub mod config;
 pub mod latihan;
+pub mod moodle;
 pub mod oidc;
 pub mod portal;
 pub mod security_account;
@@ -72,6 +73,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/latihan/{id}/jawab", post(latihan::submit))
         .route("/api/latihan/{id}/petunjuk", post(latihan::reveal_hint))
         .route("/api/dosen/latihan", get(latihan::lecturer_catalog))
+        .route("/api/dosen/latihan/import", post(latihan::import_questions))
+        .route("/api/dosen/latihan/export", get(latihan::export_questions))
+        .route(
+            "/api/dosen/latihan/{id}",
+            delete(latihan::delete_question),
+        )
         .route("/api/labs/catalog", get(portal::get_labs_catalog))
         .route("/api/labs/{lab_id}", get(portal::get_lab_detail))
         .route("/api/labs/sessions", post(portal::start_or_resume_session))
