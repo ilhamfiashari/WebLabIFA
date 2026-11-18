@@ -239,7 +239,9 @@
 }
 
 .iot-editor-shell.theme-light .iot-code-textarea {
-  color: #0f172a;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: #0f172a;
 }
 
 .iot-editor-shell.theme-dark .iot-code-wrap {
@@ -254,33 +256,102 @@
 }
 
 .iot-editor-shell.theme-dark .iot-code-textarea {
-  color: #f8fafc;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: #f8fafc;
 }
 
 .iot-line-gutter {
   padding: 12px 10px;
   text-align: right;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.55;
   user-select: none;
+  flex-shrink: 0;
+}
+
+.iot-code-stage {
+  position: relative;
+  display: grid;
+  flex: 1 0 auto;
+  min-width: 0;
+}
+
+.iot-code-highlight,
+.iot-code-textarea {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+  box-sizing: border-box;
+}
+
+.iot-code-highlight {
+  pointer-events: none;
+  user-select: none;
+  overflow: visible;
+  background: transparent;
+}
+
+.iot-code-highlight code {
+  display: block;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  color: inherit;
 }
 
 .iot-code-textarea {
-  flex: 1;
-  min-width: 0;
+  position: relative;
+  z-index: 1;
   width: 100%;
+  height: 100%;
+  min-width: 0;
   min-height: 455px;
-  padding: 12px;
-  border: 0;
   outline: none;
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
   background: transparent;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-  line-height: 1.55;
-  tab-size: 2;
 }
+
+.iot-code-textarea::selection {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+/* Arduino / C++ Syntax Highlighting (Wokwi / VS Code palette) */
+.iot-editor-shell.theme-light .tok-plain { color: #1e293b; }
+.iot-editor-shell.theme-light .tok-comment { color: #15803d; font-style: italic; }
+.iot-editor-shell.theme-light .tok-preproc { color: #9333ea; font-weight: 600; }
+.iot-editor-shell.theme-light .tok-string { color: #b91c1c; }
+.iot-editor-shell.theme-light .tok-number { color: #047857; }
+.iot-editor-shell.theme-light .tok-type { color: #0369a1; font-weight: 600; }
+.iot-editor-shell.theme-light .tok-keyword { color: #a21caf; font-weight: 600; }
+.iot-editor-shell.theme-light .tok-builtin { color: #92400e; }
+.iot-editor-shell.theme-light .tok-const { color: #1d4ed8; font-weight: 600; }
+.iot-editor-shell.theme-light .tok-punct { color: #475569; }
+
+.iot-editor-shell.theme-dark .tok-plain { color: #e2e8f0; }
+.iot-editor-shell.theme-dark .tok-comment { color: #6a9955; font-style: italic; }
+.iot-editor-shell.theme-dark .tok-preproc { color: #c586c0; font-weight: 600; }
+.iot-editor-shell.theme-dark .tok-string { color: #ce9178; }
+.iot-editor-shell.theme-dark .tok-number { color: #b5cea8; }
+.iot-editor-shell.theme-dark .tok-type { color: #569cd6; font-weight: 600; }
+.iot-editor-shell.theme-dark .tok-keyword { color: #c586c0; font-weight: 600; }
+.iot-editor-shell.theme-dark .tok-builtin { color: #dcdcaa; }
+.iot-editor-shell.theme-dark .tok-const { color: #4fc1ff; font-weight: 600; }
+.iot-editor-shell.theme-dark .tok-punct { color: #94a3b8; }
 
 /* Components Visual Catalog Browser */
 .iot-components-browser {

@@ -31,6 +31,7 @@ import { simApi } from '../simulator/api'
 import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getComponentSpec } from './boards'
 import { CircuitCanvas } from './CircuitCanvas'
 import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
+import { tokenizeArduinoCpp } from './cppHighlight'
 import {
   compileArduinoSketch,
   createInitialSimulation,
@@ -537,6 +538,7 @@ export function IotSimulatorStudio({
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
   const lineCount = Math.max(18, code.split('\n').length)
+  const highlightedTokens = useMemo(() => tokenizeArduinoCpp(code), [code])
 
   const focusBarControls = (
     <div className="iot-focus-controls">
@@ -865,13 +867,26 @@ export function IotSimulatorStudio({
                     <div key={idx}>{idx + 1}</div>
                   ))}
                 </div>
-                <textarea
-                  aria-label={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
-                  className="iot-code-textarea"
-                  spellCheck={false}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
+                <div className="iot-code-stage">
+                  <pre className="iot-code-highlight" aria-hidden="true">
+                    <code>
+                      {highlightedTokens.map((tok, i) => (
+                        <span key={i} className={`tok-${tok.type}`}>
+                          {tok.text}
+                        </span>
+                      ))}
+                      {'\n '}
+                    </code>
+                  </pre>
+                  <textarea
+                    aria-label={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
+                    className="iot-code-textarea"
+                    spellCheck={false}
+                    wrap="off"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
           ) : leftTab === 'diagram' ? (

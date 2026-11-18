@@ -878,9 +878,18 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByRole('heading', { level: 1, name: 'Simulator Hardware IoT & ESP32' })).toBeVisible()
   await expect(page.getByText('ESP32-C3', { exact: true }).first()).toBeVisible()
 
-  // Background kode putih pada mode terang
+  // Background kode putih pada mode terang + syntax highlighting C++ (.ino)
   const codeBg = await page.locator('.iot-code-wrap').evaluate((el) => getComputedStyle(el).backgroundColor)
   expect(codeBg).toBe('rgb(255, 255, 255)')
+  await expect(page.locator('.iot-code-highlight .tok-comment').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-preproc').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-type').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-builtin').first()).toBeVisible()
+  await expect(page.locator('.iot-code-highlight .tok-string').first()).toBeVisible()
+  const preprocColor = await page.locator('.iot-code-highlight .tok-preproc').first().evaluate((el) => getComputedStyle(el).color)
+  const commentColor = await page.locator('.iot-code-highlight .tok-comment').first().evaluate((el) => getComputedStyle(el).color)
+  expect(preprocColor).not.toBe('rgb(30, 41, 59)')
+  expect(commentColor).not.toBe(preprocColor)
 
   // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive
   await page.getByRole('tab', { name: 'Components' }).click()
