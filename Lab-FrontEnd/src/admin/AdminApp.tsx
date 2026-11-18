@@ -254,7 +254,7 @@ function ClassesPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
   const qc = useQueryClient()
   const [clsId, setClsId] = useState('')
   const [clsName, setClsName] = useState('')
-  const [clsCourse, setClsCourse] = useState('Keamanan Web & IoT')
+  const [clsCourse, setClsCourse] = useState('Cyber Security & IoT')
   const clsSemester = 'Ganjil 2026/2027'
   const saveMut = useMutation({
     mutationFn: () => simApi.saveClass(csrf, { id: clsId, name: clsName, course: clsCourse, semester: clsSemester }),
@@ -376,7 +376,7 @@ function CatalogPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
     <section className="card table-card" aria-labelledby="module-title">
       <header className="table-head"><h2 id="module-title">Daftar modul</h2>
         <div className="filters">
-          <Select label="Jalur" icon={Layers} value={track} onChange={(v) => { setTrack(v); setModPage(1) }} options={[{ value: 'all', label: 'Semua jalur' }, { value: 'Web', label: 'Keamanan web' }, { value: 'IoT', label: 'Keamanan IoT' }]} />
+          <Select label="Jalur" icon={Layers} value={track} onChange={(v) => { setTrack(v); setModPage(1) }} options={[{ value: 'all', label: 'Semua jalur' }, { value: 'Web', label: 'Cyber Security' }, { value: 'IoT', label: 'IoT' }]} />
           <Select label="Status publikasi" icon={ShieldCheck} value={status} onChange={(v) => { setStatus(v); setModPage(1) }} options={[{ value: 'all', label: 'Semua status' }, ...(['Draft', 'Review', 'Terbit'] as PubStatus[]).map(s => ({ value: s, label: s }))]} />
         </div>
       </header>

@@ -439,14 +439,14 @@ function InstructorSimulatorView({
           {trackBreak ? (
             <>
               <AnimatedMeterRow
-                label="Web OWASP Track"
+                label="Cyber Security Track"
                 value={trackBreak.web_passed}
                 max={Math.max(1, trackBreak.web_sessions)}
                 tone="brand"
                 note={`${trackBreak.web_passed}/${trackBreak.web_sessions} lulus`}
               />
               <AnimatedMeterRow
-                label="IoT Studio Track"
+                label="IoT Track"
                 value={trackBreak.iot_passed}
                 max={Math.max(1, trackBreak.iot_sessions)}
                 tone="good"
@@ -606,8 +606,8 @@ function InstructorSimulatorView({
               onChange={(v) => { setTrackFilter(v as 'all' | 'web' | 'iot'); setRowsPage(1) }}
               options={[
                 { value: 'all', label: lang === 'en' ? 'All Tracks' : 'Semua Track' },
-                { value: 'web', label: 'Web OWASP' },
-                { value: 'iot', label: 'IoT Studio' },
+                { value: 'web', label: 'Cyber Security' },
+                { value: 'iot', label: 'IoT' },
               ]}
             />
             <Select
