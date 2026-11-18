@@ -207,12 +207,7 @@ pub async fn seed_demo_data(
             "IF3101 Keamanan Web & Jaringan",
             true,
         ),
-        (
-            "IF-4A",
-            "IF-4A · IoT",
-            "IF4204 Sistem IoT & Tertanam",
-            true,
-        ),
+        ("IF-4A", "IF-4A · IoT", "IF4204 Sistem IoT & Tertanam", true),
     ] {
         sqlx::query(
             "INSERT INTO classes (id,name,course,semester,timezone,leaderboard_enabled,active) VALUES($1,$2,$3,'Ganjil 2026/2027','Asia/Jakarta',$4,true) ON CONFLICT (id) DO UPDATE SET leaderboard_enabled=EXCLUDED.leaderboard_enabled,active=true",
@@ -281,7 +276,7 @@ pub async fn seed_demo_data(
             "medium",
             7,
             "Audit kerentanan Broken Access Control pada endpoint profil & pesanan yang mempercayai parameter client tanpa verifikasi kepemilikan sesi.",
-            "1. Jalankan baseline dengan akun pemilik.\n2. Uji eksploitasi IDOR memakai ID akun lain.\n3. Terapkan patch verifikasi ownership sesi.\n4. Jalankan verifikasi penuh dan isi refleksi."
+            "1. Jalankan baseline dengan akun pemilik.\n2. Uji eksploitasi IDOR memakai ID akun lain.\n3. Terapkan patch verifikasi ownership sesi.\n4. Jalankan verifikasi penuh dan isi refleksi.",
         ),
         (
             "asg-if3a-sqli",
@@ -292,7 +287,7 @@ pub async fn seed_demo_data(
             "medium",
             14,
             "Evaluasi form login dan pencarian yang rentan manipulasi string SQL, lalu perbaiki dengan prepared statement.",
-            "1. Rekam respons normal.\n2. Uji payload injeksi autentikasi.\n3. Pilih patch parameterized query.\n4. Lengkapi matriks verifikasi dan refleksi."
+            "1. Rekam respons normal.\n2. Uji payload injeksi autentikasi.\n3. Pilih patch parameterized query.\n4. Lengkapi matriks verifikasi dan refleksi.",
         ),
         (
             "asg-if3a-xss",
@@ -303,7 +298,7 @@ pub async fn seed_demo_data(
             "easy",
             21,
             "Identifikasi eksekusi skrip berbahaya pada kolom komentar/profil dan terapkan sanitasi serta Content Security Policy.",
-            "1. Uji input HTML berbahaya.\n2. Terapkan output encoding & CSP.\n3. Verifikasi kasus positif, negatif, dan regresi."
+            "1. Uji input HTML berbahaya.\n2. Terapkan output encoding & CSP.\n3. Verifikasi kasus positif, negatif, dan regresi.",
         ),
         (
             "asg-if3b-sqli",
@@ -314,7 +309,7 @@ pub async fn seed_demo_data(
             "easy",
             10,
             "Praktikum dasar deteksi dan mitigasi SQL Injection pada halaman autentikasi.",
-            "1. Pahami batas kepercayaan database.\n2. Uji injeksi dasar.\n3. Terapkan patch prepared statement."
+            "1. Pahami batas kepercayaan database.\n2. Uji injeksi dasar.\n3. Terapkan patch prepared statement.",
         ),
         (
             "asg-if3b-auth",
@@ -325,7 +320,7 @@ pub async fn seed_demo_data(
             "easy",
             18,
             "Analisis kebocoran status akun melalui pesan error login yang berbeda dan terapkan pembatasan laju percobaan.",
-            "1. Bandingkan respons email terdaftar vs tidak.\n2. Pilih kontrol pesan generik dan rate limit."
+            "1. Bandingkan respons email terdaftar vs tidak.\n2. Pilih kontrol pesan generik dan rate limit.",
         ),
         (
             "asg-if4a-esp32-gpio",
@@ -336,7 +331,7 @@ pub async fn seed_demo_data(
             "easy",
             12,
             "Rangkai sirkuit LED seri resistor 220 ohm pada pin GPIO ESP32-C3 serta pastikan tidak ada korsleting atau arus berlebih.",
-            "1. Pasang ESP32-C3, LED, dan resistor di kanvas.\n2. Jalankan kode Arduino C++.\n3. Verifikasi log Serial & kelistrikan aman."
+            "1. Pasang ESP32-C3, LED, dan resistor di kanvas.\n2. Jalankan kode Arduino C++.\n3. Verifikasi log Serial & kelistrikan aman.",
         ),
         (
             "asg-if4a-esp32-mqtt",
@@ -347,7 +342,7 @@ pub async fn seed_demo_data(
             "easy",
             20,
             "Konfigurasikan koneksi Wi-Fi ESP32-C3 agar mengirim paket telemetri sensor melalui broker terenkripsi mqtts://.",
-            "1. Hubungkan ESP32-C3 ke Wi-Fi.\n2. Kirim telemetri lewat mqtts:// dengan validasi sertifikat."
+            "1. Hubungkan ESP32-C3 ke Wi-Fi.\n2. Kirim telemetri lewat mqtts:// dengan validasi sertifikat.",
         ),
     ];
     let default_rubric = serde_json::json!([
