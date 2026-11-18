@@ -1158,6 +1158,65 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.locator('.iot-studio')).not.toHaveClass(/is-fullscreen/)
   await page.getByRole('group', { name: 'Pilihan mode fokus' }).getByRole('button', { name: 'Normal' }).click()
   await expect(page.locator('.iot-left-panel')).toBeVisible()
+
+  // Suara buzzer aktif secara default dan proyek Wokwi khusus dosen tidak tampil di mode mahasiswa
+  await expect(page.getByRole('button', { name: 'Bisukan suara buzzer' })).toBeVisible()
+  await expect(page.locator('option[value="dosen-wokwi-calculator"]')).toHaveCount(0)
+  await expect(page.locator('option[value="dosen-wokwi-mini-piano"]')).toHaveCount(0)
+})
+
+test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mode dosen', async ({ page }) => {
+  await page.route('**/api/me', r => r.fulfill({ json: lecturer }))
+  await buildMockSimulatorRoutes(page)()
+  await page.route('**/api/iot/projects', async r => r.fulfill({ json: { projects: [], completed_missions: [] } }))
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab/dosen/iot')
+
+  const presetSelect = page.getByLabel('Pilih template atau misi')
+  await expect(presetSelect).toBeVisible()
+  for (const id of [
+    'dosen-wokwi-simon-says',
+    'dosen-wokwi-pong',
+    'dosen-wokwi-mega-tunnel',
+    'dosen-wokwi-alarm-clock',
+    'dosen-wokwi-calculator',
+    'dosen-wokwi-compass',
+    'dosen-wokwi-matrix-dht',
+    'dosen-wokwi-progressbar',
+    'dosen-wokwi-mini-piano',
+  ]) {
+    await expect(page.locator(`option[value="${id}"]`)).toHaveCount(1)
+  }
+
+  // 1. Kalkulator Keypad 4x4 + LCD 20x4 + Beep Buzzer
+  await presetSelect.selectOption('dosen-wokwi-calculator')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByText('KALKULATOR ARDUINO', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '5', exact: true }).click()
+  await expect(page.getByText(/Input: 5/)).toBeVisible()
+  await expect(page.getByText(/Last Key: 5/)).toBeVisible()
+
+  // 2. Jam Alarm 7-Segment + RTC + Slide Switch -> Buzzer menyala 1480Hz
+  await presetSelect.selectOption('dosen-wokwi-alarm-clock')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await page.locator('.iot-svg-board g.iot-interactive-control').first().dispatchEvent('pointerdown')
+  await expect(page.getByText('ALRM', { exact: true })).toBeVisible()
+  await expect(page.getByText('1480Hz', { exact: true })).toBeVisible()
+
+  // 3. U8glib OLED Progress Bar + Potentiometer tampil langsung di layar OLED
+  await presetSelect.selectOption('dosen-wokwi-progressbar')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByText('[######----] 60%', { exact: true })).toBeVisible()
+
+  // 4. Kompas 3D OLED + MPU6050 Tilt Slider + Buzzer Utara
+  await presetSelect.selectOption('dosen-wokwi-compass')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByText('988Hz', { exact: true })).toBeVisible()
+  const mpuSlider = page.locator('input[title="Sudut kemiringan MPU-6050"]')
+  await expect(mpuSlider).toBeVisible()
+  await mpuSlider.fill('37')
+  await expect(page.getByText('Tilt X : 37 deg', { exact: true })).toBeVisible()
 })
 
 test('halaman simulator web bersih dari label DVWA dan WebGoat', async ({ page }) => {

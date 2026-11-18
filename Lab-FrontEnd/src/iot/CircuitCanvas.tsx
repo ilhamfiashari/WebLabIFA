@@ -1832,198 +1832,226 @@ export function CircuitCanvas({
         <rect data-canvas-bg="1" x={-2400} y={-1800} width={6400} height={4600} fill={canvasBg} />
         <rect data-canvas-bg="1" x={-2400} y={-1800} width={6400} height={4600} fill="url(#iot-grid)" />
 
-        {/* Layer 1: All Microcontroller Boards (draggable) & Components */}
-        {boardInstances.map((inst) => (
-          <BoardHardwareView
-            key={inst.nodeId}
-            nodeId={inst.nodeId}
-            board={BOARDS[inst.boardId]}
-            boardX={inst.x}
-            boardY={inst.y}
-            label={inst.label}
-            isPrimary={inst.isPrimary}
-            selectedBoard={selectedNodeId === inst.nodeId}
-            sim={sim}
-            selectedPin={activeStartPin}
-            showLabels={showLabels}
-            onStartDrag={startNodeDrag}
-            onPinPointerDown={onPinPointerDown}
-            onPinPointerUp={onPinPointerUp}
-          />
-        ))}
+        {/* Layer 1: Microcontroller Boards & Breadboards; Layer 2: Unselected Wires; Layer 3: Interactive Components; Layer 4: Selected Wire Handles */}
+        {(() => {
+          const renderWire = (w: (typeof wires)[number], idx: number) => {
+            const a = getEndpointGeometry(boardId, components, w.from)
+            const b = getEndpointGeometry(boardId, components, w.to)
+            if (!a || !b) return null
+            const waypoints = resolveWireWaypoints(a, b, w, idx)
+            const pts: WireWaypoint[] = [{ x: a.x, y: a.y }, ...waypoints, { x: b.x, y: b.y }]
+            const d = buildPolylinePath(pts)
+            const isSelected = selectedWireId === w.id
+            const disableWirePointer = Boolean(drawingPreview) || (sim.running && !isSelected)
+            const strokeColor = w.color || wireColor
 
-        {components
-          .filter((c) => c.kind !== 'mcu')
-          .map((comp) => (
-            <ComponentHardwareView
-              key={comp.id}
-              comp={comp}
-              sim={sim}
-              selectedPin={activeStartPin}
-              selectedComp={selectedNodeId === comp.id}
-              showLabels={showLabels}
-              isDark={isDark}
-              onStartDrag={startNodeDrag}
-              onStartRotate={startRotateDrag}
-              onPinPointerDown={onPinPointerDown}
-              onPinPointerUp={onPinPointerUp}
-              onUpdateProps={onUpdateProps}
-            />
-          ))}
-
-        {/* Layer 2: Multi-point Flexible Jumper Wires + Segment Add Handles + Re-plug Caps */}
-        {wires.map((w, idx) => {
-          const a = getEndpointGeometry(boardId, components, w.from)
-          const b = getEndpointGeometry(boardId, components, w.to)
-          if (!a || !b) return null
-          const waypoints = resolveWireWaypoints(a, b, w, idx)
-          const pts: WireWaypoint[] = [{ x: a.x, y: a.y }, ...waypoints, { x: b.x, y: b.y }]
-          const d = buildPolylinePath(pts)
-          const isSelected = selectedWireId === w.id
-          const strokeColor = w.color || wireColor
-
-          return (
-            <g
-              key={w.id}
-              className={`iot-wire-group ${isSelected ? 'is-selected' : ''}`}
-              style={{ pointerEvents: drawingPreview ? 'none' : undefined }}
-              onClick={(e) => {
-                e.stopPropagation()
-                suppressNextClickRef.current = false
-                setSelectedNodeId(null)
-                setInspectedNodeId(null)
-                setSelectedPin(null)
-                setSelectedWireId(w.id)
-              }}
-            >
-              {/* Wide hit stroke: dragging directly on a selected wire inserts a bend point under cursor! */}
-              <path
-                d={d}
-                fill="none"
-                stroke="transparent"
-                strokeWidth={18}
-                pointerEvents="stroke"
-                onPointerDown={(e) => {
-                  if (!isSelected) return
+            return (
+              <g
+                key={w.id}
+                className={`iot-wire-group ${isSelected ? 'is-selected' : ''}`}
+                style={{ pointerEvents: disableWirePointer ? 'none' : undefined }}
+                onClick={(e) => {
                   e.stopPropagation()
-                  const pt = clientToSvg(e.clientX, e.clientY)
-                  const segIdx = closestSegmentIndex(pts, pt.x, pt.y)
-                  const updated = [...waypoints]
-                  updated.splice(segIdx, 0, { x: Math.round(pt.x), y: Math.round(pt.y) })
-                  onUpdateWire(w.id, { waypoints: updated, bendX: undefined, bendY: undefined })
-                  waypointDragRef.current = { wireId: w.id, index: segIdx, waypoints: updated }
+                  suppressNextClickRef.current = false
+                  setSelectedNodeId(null)
+                  setInspectedNodeId(null)
+                  setSelectedPin(null)
+                  setSelectedWireId(w.id)
                 }}
-              />
-              {isSelected ? (
-                <path d={d} fill="none" stroke="#f59e0b" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" opacity={0.42} />
-              ) : null}
-              <path
-                d={d}
-                fill="none"
-                stroke={strokeColor}
-                strokeWidth={isSelected ? 3.8 : 3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              >
+                {/* Wide hit stroke: dragging directly on a selected wire inserts a bend point under cursor! */}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={18}
+                  pointerEvents={disableWirePointer ? 'none' : 'stroke'}
+                  onPointerDown={(e) => {
+                    if (!isSelected) return
+                    e.stopPropagation()
+                    const pt = clientToSvg(e.clientX, e.clientY)
+                    const segIdx = closestSegmentIndex(pts, pt.x, pt.y)
+                    const updated = [...waypoints]
+                    updated.splice(segIdx, 0, { x: Math.round(pt.x), y: Math.round(pt.y) })
+                    onUpdateWire(w.id, { waypoints: updated, bendX: undefined, bendY: undefined })
+                    waypointDragRef.current = { wireId: w.id, index: segIdx, waypoints: updated }
+                  }}
+                />
+                {isSelected ? (
+                  <path d={d} fill="none" stroke="#f59e0b" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" opacity={0.42} />
+                ) : null}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={isSelected ? 3.8 : 3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
 
-              {/* Endpoint plugs: draggable when selected to unplug & move to another pin */}
-              {isSelected ? (
-                <>
-                  <g
-                    className="iot-wire-plug-handle"
-                    style={{ cursor: 'grab' }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation()
-                      startUnplugDrag(w, 'from', e.clientX, e.clientY)
-                    }}
-                  >
-                    <circle cx={a.x} cy={a.y} r={8.5} fill="#0f172a" stroke="#f59e0b" strokeWidth={2.5} />
-                    <circle cx={a.x} cy={a.y} r={3.5} fill={strokeColor} />
-                    <title>{en ? 'Drag to unplug & move wire start' : 'Tarik untuk cabut & pindahkan ujung awal kabel'}</title>
-                  </g>
-                  <g
-                    className="iot-wire-plug-handle"
-                    style={{ cursor: 'grab' }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation()
-                      startUnplugDrag(w, 'to', e.clientX, e.clientY)
-                    }}
-                  >
-                    <circle cx={b.x} cy={b.y} r={8.5} fill="#0f172a" stroke="#f59e0b" strokeWidth={2.5} />
-                    <circle cx={b.x} cy={b.y} r={3.5} fill={strokeColor} />
-                    <title>{en ? 'Drag to unplug & move wire end' : 'Tarik untuk cabut & pindahkan ujung akhir kabel'}</title>
-                  </g>
-                </>
-              ) : (
-                <>
-                  <circle cx={a.x} cy={a.y} r={3.5} fill={strokeColor} stroke="#ffffff" strokeWidth={1} style={{ pointerEvents: 'none' }} />
-                  <circle cx={b.x} cy={b.y} r={3.5} fill={strokeColor} stroke="#ffffff" strokeWidth={1} style={{ pointerEvents: 'none' }} />
-                </>
-              )}
-
-              {sim.running ? (
-                <circle r={3} fill="#ffffff" opacity={0.9} style={{ pointerEvents: 'none' }}>
-                  <animateMotion dur="1.3s" repeatCount="indefinite" path={d} />
-                </circle>
-              ) : null}
-
-              {/* Multi-point vertex handles & segment "+" add-bend handles when selected */}
-              {isSelected ? (
-                <>
-                  {pts.slice(0, -1).map((p1, segIdx) => {
-                    const p2 = pts[segIdx + 1]
-                    if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 30) return null
-                    const midX = (p1.x + p2.x) / 2
-                    const midY = (p1.y + p2.y) / 2
-                    return (
-                      <g
-                        key={`add-${segIdx}`}
-                        className="iot-wire-add-handle"
-                        style={{ cursor: 'crosshair' }}
-                        onPointerDown={(e) => {
-                          e.stopPropagation()
-                          const updated = [...waypoints]
-                          updated.splice(segIdx, 0, { x: Math.round(midX), y: Math.round(midY) })
-                          onUpdateWire(w.id, { waypoints: updated, bendX: undefined, bendY: undefined })
-                          waypointDragRef.current = { wireId: w.id, index: segIdx, waypoints: updated }
-                        }}
-                      >
-                        <circle cx={midX} cy={midY} r={5.5} fill="#1e293b" stroke="#f59e0b" strokeWidth={1.4} opacity={0.85} />
-                        <text x={midX} y={midY + 2.8} textAnchor="middle" fontSize="8.5" fontWeight={700} fill="#fef08a" style={{ pointerEvents: 'none' }}>
-                          +
-                        </text>
-                        <title>{en ? 'Drag to insert new bend point' : 'Tarik untuk menambah titik belok baru'}</title>
-                      </g>
-                    )
-                  })}
-
-                  {waypoints.map((wp, wpIdx) => (
+                {/* Endpoint plugs: draggable when selected to unplug & move to another pin */}
+                {isSelected ? (
+                  <>
                     <g
-                      key={`wp-${wpIdx}`}
-                      className="iot-wire-vertex-handle"
-                      style={{ cursor: 'move' }}
+                      className="iot-wire-plug-handle"
+                      style={{ cursor: 'grab' }}
                       onPointerDown={(e) => {
                         e.stopPropagation()
-                        waypointDragRef.current = { wireId: w.id, index: wpIdx, waypoints: [...waypoints] }
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation()
-                        if (waypoints.length > 1) {
-                          const updated = waypoints.filter((_, i) => i !== wpIdx)
-                          onUpdateWire(w.id, { waypoints: updated, bendX: undefined, bendY: undefined })
-                        }
+                        startUnplugDrag(w, 'from', e.clientX, e.clientY)
                       }}
                     >
-                      <circle cx={wp.x} cy={wp.y} r={7.2} fill="#ffffff" stroke="#f59e0b" strokeWidth={2.2} />
-                      <circle cx={wp.x} cy={wp.y} r={2.3} fill="#0f172a" />
-                      <title>{en ? 'Drag bend point (double-click to remove)' : 'Geser mengikuti kursor (klik 2× hapus titik)'}</title>
+                      <circle cx={a.x} cy={a.y} r={8.5} fill="#0f172a" stroke="#f59e0b" strokeWidth={2.5} />
+                      <circle cx={a.x} cy={a.y} r={3.5} fill={strokeColor} />
+                      <title>{en ? 'Drag to unplug & move wire start' : 'Tarik untuk cabut & pindahkan ujung awal kabel'}</title>
                     </g>
-                  ))}
-                </>
-              ) : null}
-            </g>
+                    <g
+                      className="iot-wire-plug-handle"
+                      style={{ cursor: 'grab' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation()
+                        startUnplugDrag(w, 'to', e.clientX, e.clientY)
+                      }}
+                    >
+                      <circle cx={b.x} cy={b.y} r={8.5} fill="#0f172a" stroke="#f59e0b" strokeWidth={2.5} />
+                      <circle cx={b.x} cy={b.y} r={3.5} fill={strokeColor} />
+                      <title>{en ? 'Drag to unplug & move wire end' : 'Tarik untuk cabut & pindahkan ujung akhir kabel'}</title>
+                    </g>
+                  </>
+                ) : (
+                  <>
+                    <circle cx={a.x} cy={a.y} r={3.5} fill={strokeColor} stroke="#ffffff" strokeWidth={1} style={{ pointerEvents: 'none' }} />
+                    <circle cx={b.x} cy={b.y} r={3.5} fill={strokeColor} stroke="#ffffff" strokeWidth={1} style={{ pointerEvents: 'none' }} />
+                  </>
+                )}
+
+                {sim.running ? (
+                  <circle r={3} fill="#ffffff" opacity={0.9} style={{ pointerEvents: 'none' }}>
+                    <animateMotion dur="1.3s" repeatCount="indefinite" path={d} />
+                  </circle>
+                ) : null}
+
+                {/* Multi-point vertex handles & segment "+" add-bend handles when selected */}
+                {isSelected ? (
+                  <>
+                    {pts.slice(0, -1).map((p1, segIdx) => {
+                      const p2 = pts[segIdx + 1]
+                      if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 30) return null
+                      const midX = (p1.x + p2.x) / 2
+                      const midY = (p1.y + p2.y) / 2
+                      return (
+                        <g
+                          key={`add-${segIdx}`}
+                          className="iot-wire-add-handle"
+                          style={{ cursor: 'crosshair' }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation()
+                            const updated = [...waypoints]
+                            updated.splice(segIdx, 0, { x: Math.round(midX), y: Math.round(midY) })
+                            onUpdateWire(w.id, { waypoints: updated, bendX: undefined, bendY: undefined })
+                            waypointDragRef.current = { wireId: w.id, index: segIdx, waypoints: updated }
+                          }}
+                        >
+                          <circle cx={midX} cy={midY} r={5.5} fill="#1e293b" stroke="#f59e0b" strokeWidth={1.4} opacity={0.85} />
+                          <text x={midX} y={midY + 2.8} textAnchor="middle" fontSize="8.5" fontWeight={700} fill="#fef08a" style={{ pointerEvents: 'none' }}>
+                            +
+                          </text>
+                          <title>{en ? 'Drag to insert new bend point' : 'Tarik untuk menambah titik belok baru'}</title>
+                        </g>
+                      )
+                    })}
+
+                    {waypoints.map((wp, wpIdx) => (
+                      <g
+                        key={`wp-${wpIdx}`}
+                        className="iot-wire-vertex-handle"
+                        style={{ cursor: 'move' }}
+                        onPointerDown={(e) => {
+                          e.stopPropagation()
+                          waypointDragRef.current = { wireId: w.id, index: wpIdx, waypoints: [...waypoints] }
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          if (waypoints.length > 1) {
+                            const updated = waypoints.filter((_, i) => i !== wpIdx)
+                            onUpdateWire(w.id, { waypoints: updated, bendX: undefined, bendY: undefined })
+                          }
+                        }}
+                      >
+                        <circle cx={wp.x} cy={wp.y} r={7.2} fill="#ffffff" stroke="#f59e0b" strokeWidth={2.2} />
+                        <circle cx={wp.x} cy={wp.y} r={2.3} fill="#0f172a" />
+                        <title>{en ? 'Drag bend point (double-click to remove)' : 'Geser mengikuti kursor (klik 2× hapus titik)'}</title>
+                      </g>
+                    ))}
+                  </>
+                ) : null}
+              </g>
+            )
+          }
+
+          const breadboards = components.filter((c) => c.kind === 'breadboard')
+          const interactiveComponents = components.filter((c) => c.kind !== 'mcu' && c.kind !== 'breadboard')
+
+          return (
+            <>
+              {boardInstances.map((inst) => (
+                <BoardHardwareView
+                  key={inst.nodeId}
+                  nodeId={inst.nodeId}
+                  board={BOARDS[inst.boardId]}
+                  boardX={inst.x}
+                  boardY={inst.y}
+                  label={inst.label}
+                  isPrimary={inst.isPrimary}
+                  selectedBoard={selectedNodeId === inst.nodeId}
+                  sim={sim}
+                  selectedPin={activeStartPin}
+                  showLabels={showLabels}
+                  onStartDrag={startNodeDrag}
+                  onPinPointerDown={onPinPointerDown}
+                  onPinPointerUp={onPinPointerUp}
+                />
+              ))}
+
+              {breadboards.map((comp) => (
+                <ComponentHardwareView
+                  key={comp.id}
+                  comp={comp}
+                  sim={sim}
+                  selectedPin={activeStartPin}
+                  selectedComp={selectedNodeId === comp.id}
+                  showLabels={showLabels}
+                  isDark={isDark}
+                  onStartDrag={startNodeDrag}
+                  onStartRotate={startRotateDrag}
+                  onPinPointerDown={onPinPointerDown}
+                  onPinPointerUp={onPinPointerUp}
+                  onUpdateProps={onUpdateProps}
+                />
+              ))}
+
+              {wires.map((w, idx) => (w.id === selectedWireId ? null : renderWire(w, idx)))}
+
+              {interactiveComponents.map((comp) => (
+                <ComponentHardwareView
+                  key={comp.id}
+                  comp={comp}
+                  sim={sim}
+                  selectedPin={activeStartPin}
+                  selectedComp={selectedNodeId === comp.id}
+                  showLabels={showLabels}
+                  isDark={isDark}
+                  onStartDrag={startNodeDrag}
+                  onStartRotate={startRotateDrag}
+                  onPinPointerDown={onPinPointerDown}
+                  onPinPointerUp={onPinPointerUp}
+                  onUpdateProps={onUpdateProps}
+                />
+              ))}
+
+              {wires.map((w, idx) => (w.id === selectedWireId ? renderWire(w, idx) : null))}
+            </>
           )
-        })}
+        })()}
 
         {/* Layer 3: Live wire preview when pulling directly from a pin or unplugging an end */}
         {drawingPreview ? (

@@ -29,7 +29,7 @@ export interface SketchFile {
 }
 
 export interface CompiledSketch {
-  defines: Record<string, number>
+  defines: Record<string, number | string>
   setupStmts: ParsedStatement[]
   loopStmts: ParsedStatement[]
   helpers: Record<string, ParsedStatement[]>
@@ -90,6 +90,26 @@ function parseStatements(lines: Array<{ text: string; num: number }>): ParsedSta
       let inElse = false
       while (i < lines.length && depth > 0) {
         const cur = lines[i].text
+        if (/^\}\s*else\s+if\s*\(/.test(cur) && depth === 1) {
+          inElse = true
+          elseLines.push({ text: cur.replace(/^\}\s*else\s+/, ''), num: lines[i].num })
+          i++
+          while (i < lines.length && depth > 0) {
+            const ec = lines[i].text
+            const eo = (ec.match(/\{/g) ?? []).length
+            const ecl = (ec.match(/\}/g) ?? []).length
+            const nextD = depth + eo - ecl
+            if (nextD <= 0) {
+              elseLines.push({ text: '}', num: lines[i].num })
+              i++
+              break
+            }
+            elseLines.push(lines[i])
+            depth = nextD
+            i++
+          }
+          break
+        }
         if (/^\}\s*else\s*\{$/.test(cur) && depth === 1) {
           inElse = true
           i++
@@ -179,7 +199,7 @@ function expandSketchIncludes(
 export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []): CompiledSketch {
   const expanded = expandSketchIncludes(code, extraFiles)
   const rawLines = expanded.split('\n')
-  const defines: Record<string, number> = {
+  const defines: Record<string, number | string> = {
     HIGH: 1,
     LOW: 0,
     INPUT: 0,
@@ -208,9 +228,14 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
       continue
     }
     if (mode === 'top') {
-      const constM = /^(?:const\s+)?int\s+([A-Za-z_]\w*)\s*=\s*([0-9.-]+)\s*;/.exec(clean)
+      const constM = /^(?:const\s+)?(?:int|float|double|long|bool|boolean)\s+([A-Za-z_]\w*)\s*=\s*([0-9.-]+|true|false)\s*;/.exec(clean)
       if (constM) {
-        defines[constM[1]] = Number(constM[2])
+        defines[constM[1]] = constM[2] === 'true' ? 1 : constM[2] === 'false' ? 0 : Number(constM[2])
+        continue
+      }
+      const strConstM = /^String\s+([A-Za-z_]\w*)\s*=\s*"([^"]*)"\s*;/.exec(clean)
+      if (strConstM) {
+        defines[strConstM[1]] = strConstM[2]
         continue
       }
       if (/^void\s+setup\s*\(/.test(clean)) {
@@ -444,6 +469,7 @@ export interface VmContext {
   sim: SimulationState
   localGpio: Record<number, GpioRuntime>
   servoPinMap: Record<string, number>
+  tonePins: Record<number, number>
   serialRxQueue: string[]
   oledBuffer: string[]
   oledStarted: boolean
@@ -504,6 +530,8 @@ export function createInitialSimulation(
     relayClosed: {},
     oledLines: {},
     lcdRows: {},
+    sevenSegText: {},
+    matrixRows: {},
     serialLog: [],
     plotHistory: [],
     logicHistory: [],
@@ -536,6 +564,7 @@ export function createVmContext(
     sim,
     localGpio: sim.gpioStates,
     servoPinMap: {},
+    tonePins: {},
     serialRxQueue: [],
     oledBuffer: [],
     oledStarted: false,
@@ -561,6 +590,7 @@ export function createVmContext(
       sim,
       localGpio: buildBoardGpioMap(peerBoard),
       servoPinMap: {},
+      tonePins: {},
       serialRxQueue: [],
       oledBuffer: [],
       oledStarted: false,
@@ -739,10 +769,53 @@ function evalExpr(
       const [v, lo, hi] = args.map(Number)
       return Math.min(hi, Math.max(lo, v))
     }
+    if (fn === 'keypad.getKey' || fn === 'keypadRead') {
+      const kp = components.find((c) => c.kind === 'keypad-4x4')
+      const seq = kp?.props.encoderStep ?? 0
+      const lastSeq = Number(ctx.vars.__kpSeq ?? -1)
+      if (kp?.props.lastKey && seq !== lastSeq) {
+        ctx.vars.__kpSeq = seq
+        return kp.props.lastKey
+      }
+      return ''
+    }
+    if (fn === 'mpu.readTilt') {
+      const mpu = components.find((c) => c.kind === 'mpu6050')
+      return mpu?.props.tiltDeg ?? 0
+    }
+    if (fn === 'bmp.readPressure') {
+      const bmp = components.find((c) => c.kind === 'bmp180')
+      return bmp?.props.pressureHpa ?? 1013
+    }
+    if (fn === 'hx711.readKg') {
+      const hx = components.find((c) => c.kind === 'hx711')
+      return hx?.props.weightKg ?? 1.2
+    }
+    if (fn === 'rtc.readTime') {
+      const totalSec = Math.floor((ctx.sim.elapsedMs || 0) / 1000)
+      const mm = String((12 + Math.floor(totalSec / 60)) % 24).padStart(2, '0')
+      const ss = String(totalSec % 60).padStart(2, '0')
+      return `${mm}:${ss}`
+    }
   }
 
-  // Simple binary arithmetic (+, -, *, /)
-  for (const op of [' + ', ' - ', ' * ', ' / '] as const) {
+  // Strip balanced outer parentheses cleanly
+  if (s.startsWith('(') && s.endsWith(')')) {
+    let d = 0
+    let wrapped = true
+    for (let i = 0; i < s.length - 1; i++) {
+      if (s[i] === '(') d++
+      else if (s[i] === ')') d--
+      if (d === 0) {
+        wrapped = false
+        break
+      }
+    }
+    if (wrapped) return evalExpr(s.slice(1, -1), ctx, components)
+  }
+
+  // Simple binary arithmetic (+, -, *, /, %)
+  for (const op of [' + ', ' - ', ' * ', ' / ', ' % '] as const) {
     if (s.includes(op)) {
       const idx = s.lastIndexOf(op)
       const a = Number(evalExpr(s.slice(0, idx), ctx, components))
@@ -750,6 +823,7 @@ function evalExpr(
       if (op === ' + ') return a + b
       if (op === ' - ') return a - b
       if (op === ' * ') return a * b
+      if (op === ' % ') return b === 0 ? 0 : a % b
       return b === 0 ? 0 : a / b
     }
   }
@@ -883,8 +957,9 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       }
     } else if (fn === 'tone') {
       const gpio = Number(args[0] ?? 0)
-      const freq = Number(args[1] ?? 1000)
-      const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer')
+      const freq = Math.max(80, Math.min(5000, Number(args[1] ?? 1000)))
+      ctx.tonePins[gpio] = freq
+      const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer') ?? components.find((c) => c.kind === 'buzzer')
       if (buzz) ctx.sim.buzzerActive[buzz.id] = { freq, active: true }
       ctx.localGpio[gpio] = {
         ...(ctx.localGpio[gpio] ?? { gpio, mode: 'PWM', adcValue: 0 }),
@@ -895,7 +970,8 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       }
     } else if (fn === 'noTone') {
       const gpio = Number(args[0] ?? 0)
-      const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer')
+      ctx.tonePins[gpio] = 0
+      const buzz = findConnectedComponent(ctx, components, gpio, 'buzzer') ?? components.find((c) => c.kind === 'buzzer')
       if (buzz) ctx.sim.buzzerActive[buzz.id] = { freq: 0, active: false }
       if (ctx.localGpio[gpio]) {
         ctx.localGpio[gpio] = { ...ctx.localGpio[gpio], digital: 0, pwmDuty: 0, voltage: 0 }
@@ -920,22 +996,69 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       ctx.oledBuffer = []
     } else if (fn === 'oled.println' || fn === 'oled.print') {
       ctx.oledBuffer.push(String(args[0] ?? '').slice(0, 21))
+    } else if (fn === 'oled.progressBar') {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(args[0] ?? 0))))
+      const filled = Math.round(pct / 10)
+      const bar = `[${'#'.repeat(filled)}${'-'.repeat(10 - filled)}] ${pct}%`
+      ctx.oledBuffer.push(bar)
     } else if (fn === 'oled.display') {
       for (const c of components) {
         if (c.kind === 'oled-ssd1306') ctx.sim.oledLines[c.id] = ctx.oledBuffer.slice(0, 5)
       }
+    } else if (fn === 'lcd.clear') {
+      for (const c of components) {
+        if (c.kind === 'lcd-1602') ctx.sim.lcdRows[c.id] = ['                ', '                ']
+        if (c.kind === 'lcd-20x4') ctx.sim.lcdRows[c.id] = ['                    ', '                    ', '                    ', '                    ']
+      }
     } else if (fn === 'lcd.print') {
-      const row = Number(ctx.vars.__lcdRow ?? 0)
+      const row = Math.max(0, Math.round(Number(ctx.vars.__lcdRow ?? 0)))
       for (const c of components) {
         if (c.kind === 'lcd-1602') {
           const cur = ctx.sim.lcdRows[c.id] ?? ['                ', '                ']
-          const next: [string, string] = [...cur] as [string, string]
-          next[row === 1 ? 1 : 0] = String(args[0] ?? '').padEnd(16, ' ').slice(0, 16)
+          const next = [...cur]
+          next[row >= 1 ? 1 : 0] = String(args[0] ?? '').padEnd(16, ' ').slice(0, 16)
+          ctx.sim.lcdRows[c.id] = next
+        } else if (c.kind === 'lcd-20x4') {
+          const cur = ctx.sim.lcdRows[c.id] ?? ['                    ', '                    ', '                    ', '                    ']
+          const next = [...cur]
+          const rIdx = Math.min(3, row)
+          next[rIdx] = String(args[0] ?? '').padEnd(20, ' ').slice(0, 20)
           ctx.sim.lcdRows[c.id] = next
         }
       }
     } else if (fn === 'lcd.setCursor') {
       ctx.vars.__lcdRow = Number(args[1] ?? 0)
+    } else if (fn === 'sevenSeg.print' || fn === 'tm1637.showNumber' || fn === 'tm1637.print') {
+      const txt = String(args[0] ?? '0')
+      for (const c of components) {
+        if (c.kind === 'seven-seg' || c.kind === 'seven-seg-4') {
+          ctx.sim.sevenSegText[c.id] = txt
+        }
+      }
+    } else if (fn === 'matrix.setPattern') {
+      const modeName = String(args[0] ?? 'tunnel')
+      const frame = Math.max(0, Math.round(Number(args[1] ?? 0)))
+      let rows: number[]
+      if (modeName === 'alert') {
+        rows = [0b00011000, 0b00011000, 0b00011000, 0b00011000, 0b00011000, 0b00000000, 0b00011000, 0b00011000]
+      } else if (modeName === 'smile') {
+        rows = [0b00111100, 0b01000010, 0b10100101, 0b10000001, 0b10100101, 0b10011001, 0b01000010, 0b00111100]
+      } else if (modeName === 'heart') {
+        rows = [0b01100110, 0b11111111, 0b11111111, 0b11111111, 0b01111110, 0b00111100, 0b00011000, 0b00000000]
+      } else {
+        const ring = frame % 4
+        rows = Array.from({ length: 8 }, (_, r) => {
+          let mask = 0
+          for (let col = 0; col < 8; col++) {
+            const dist = Math.max(Math.abs(r - 3.5), Math.abs(col - 3.5))
+            if (Math.round(dist - 0.5) === ring) mask |= 1 << (7 - col)
+          }
+          return mask
+        })
+      }
+      for (const c of components) {
+        if (c.kind === 'max7219-matrix') ctx.sim.matrixRows[c.id] = rows
+      }
     } else if (fn === 'WiFi.begin' && BOARDS[ctx.boardId].hasWifi) {
       const ssid = String(args[0] ?? 'Wokwi-GUEST')
       ctx.sim.wifiConnected = true
@@ -1033,10 +1156,31 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
       const sig = readPinDuty({ nodeId: c.id, pinId: 'IN' })
       ctx.sim.relayClosed[c.id] = c.props.relayTransistor === 'pnp' ? sig.duty < 0.5 : sig.duty > 0.5
     } else if (c.kind === 'buzzer') {
-      const sig = readPinDuty({ nodeId: c.id, pinId: 'POS' })
-      if (!ctx.sim.buzzerActive[c.id]) {
-        ctx.sim.buzzerActive[c.id] = { freq: sig.duty > 0 ? 1000 : 0, active: sig.duty > 0 && hitsGround({ nodeId: c.id, pinId: 'GND' }) }
+      const readPinToneFreq = (ep: WireEndpoint): number => {
+        const reach = traceReachable(ctx.graph, ep, components)
+        let f = 0
+        for (const r of reach.endpoints) {
+          const rb = resolveNodeBoardId(ctx.boardId, components, r.nodeId)
+          if (!rb) continue
+          const bp = getBoardPin(rb, r.pinId)
+          if (!bp || bp.gpio === undefined) continue
+          const owner = ctx.allNodes?.get(r.nodeId) ?? ctx
+          const tf = owner.tonePins[bp.gpio] ?? 0
+          if (tf > 0) f = tf
+        }
+        return f
       }
+      const posSig = readPinDuty({ nodeId: c.id, pinId: 'POS' })
+      const posTone = readPinToneFreq({ nodeId: c.id, pinId: 'POS' })
+      const gndOk = hitsGround({ nodeId: c.id, pinId: 'GND' })
+      const swapSig = readPinDuty({ nodeId: c.id, pinId: 'GND' })
+      const swapTone = readPinToneFreq({ nodeId: c.id, pinId: 'GND' })
+      const swapGndOk = hitsGround({ nodeId: c.id, pinId: 'POS' })
+      const forwardActive = gndOk && (posTone > 0 || posSig.duty > 0)
+      const reverseActive = swapGndOk && (swapTone > 0 || swapSig.duty > 0)
+      const active = forwardActive || reverseActive
+      const freq = forwardActive ? (posTone > 0 ? posTone : 1000) : reverseActive ? (swapTone > 0 ? swapTone : 1000) : 0
+      ctx.sim.buzzerActive[c.id] = { freq, active }
     }
   }
 
