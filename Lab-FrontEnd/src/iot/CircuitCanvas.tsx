@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CheckSquare,
   Copy,
+  Expand,
+  Focus,
   Maximize2,
+  Minimize2,
+  PanelLeftClose,
   Pause,
   Play,
   RotateCcw,
   RotateCw,
+  Shrink,
   Sparkles,
   Trash2,
   Type,
@@ -240,6 +245,10 @@ export function CircuitCanvas({
   onDeleteNode,
   onDuplicateNode,
   onSelectPrimaryBoard,
+  focusMode = 'normal',
+  onChangeFocusMode,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: {
   boardId: BoardId
   components: PlacedComponent[]
@@ -260,6 +269,10 @@ export function CircuitCanvas({
   onDeleteNode: (nodeId: string) => void
   onDuplicateNode?: (nodeId: string) => void
   onSelectPrimaryBoard?: (boardId: BoardId) => void
+  focusMode?: 'normal' | 'focus' | 'canvas'
+  onChangeFocusMode?: (mode: 'normal' | 'focus' | 'canvas') => void
+  isFullscreen?: boolean
+  onToggleFullscreen?: () => void
 }) {
   const en = lang === 'en'
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -587,7 +600,7 @@ export function CircuitCanvas({
     const placeRight = targetX + targetW + 270 < viewW
     const anchorX = placeRight ? targetX + targetW + 14 : Math.max(10, targetX - 260)
     const leftPct = Math.min(68, Math.max(2, (anchorX / viewW) * 100))
-    const topPct = Math.min(58, Math.max(16, ((targetY + 4) / viewH) * 100))
+    const topPct = Math.min(58, Math.max(4, ((targetY + 4) / viewH) * 100))
     return { leftPct, topPct }
   })()
 
@@ -638,9 +651,48 @@ export function CircuitCanvas({
           <button type="button" className="iot-pill-btn" onClick={() => setZoom(1)} aria-label="Reset zoom">
             <Maximize2 size={13} />
           </button>
-          <button type="button" className="iot-pill-btn" onClick={() => setZoom((z) => Math.min(1.4, +(z + 0.1).toFixed(2)))} aria-label="Zoom in">
+          <button type="button" className="iot-pill-btn" onClick={() => setZoom((z) => Math.min(1.8, +(z + 0.1).toFixed(2)))} aria-label="Zoom in">
             <ZoomIn size={14} />
           </button>
+
+          {onChangeFocusMode ? (
+            <>
+              <span className="iot-pill-divider" aria-hidden="true" />
+              <button
+                type="button"
+                className={`iot-pill-btn ${focusMode === 'focus' ? 'is-on' : ''}`}
+                onClick={() => onChangeFocusMode(focusMode === 'focus' ? 'normal' : 'focus')}
+                title={en ? 'Studio Focus Mode (hide top panels)' : 'Mode Fokus Studio (sembunyikan panel atas)'}
+                aria-label={en ? 'Studio Focus' : 'Fokus Studio'}
+              >
+                <Focus size={14} />
+                <span>{en ? 'Focus' : 'Fokus'}</span>
+              </button>
+              <button
+                type="button"
+                className={`iot-pill-btn ${focusMode === 'canvas' ? 'is-on' : ''}`}
+                onClick={() => onChangeFocusMode(focusMode === 'canvas' ? 'normal' : 'canvas')}
+                title={en ? 'Canvas-only Focus (expand circuit)' : 'Fokus Kanvas Penuh (perbesar rangkaian)'}
+                aria-label={en ? 'Canvas Focus' : 'Fokus Kanvas'}
+              >
+                {focusMode === 'canvas' ? <Shrink size={14} /> : <PanelLeftClose size={14} />}
+                <span>{en ? 'Canvas' : 'Kanvas'}</span>
+              </button>
+            </>
+          ) : null}
+
+          {onToggleFullscreen ? (
+            <button
+              type="button"
+              className={`iot-pill-btn ${isFullscreen ? 'is-on' : ''}`}
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? (en ? 'Exit Fullscreen (Esc)' : 'Keluar Layar Penuh (Esc)') : en ? 'Fullscreen Simulator' : 'Tampilan Layar Penuh'}
+              aria-label={isFullscreen ? (en ? 'Exit Fullscreen' : 'Keluar Layar Penuh') : en ? 'Fullscreen' : 'Layar Penuh'}
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Expand size={14} />}
+              <span>{isFullscreen ? (en ? 'Exit' : 'Keluar') : en ? 'Fullscreen' : 'Layar Penuh'}</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -744,6 +796,7 @@ export function CircuitCanvas({
         </div>
       </div>
 
+      <div className="iot-svg-stage" style={{ position: 'relative' }}>
       {/* Inline Component/MCU Popover Card anchored over SVG body */}
       {popupPos && (inspectedComp || inspectedBoard) ? (
         <div
@@ -1705,6 +1758,7 @@ export function CircuitCanvas({
           />
         ) : null}
       </svg>
+      </div>
     </div>
   )
 }

@@ -8,8 +8,13 @@ import {
   Code2,
   Cpu,
   Download,
+  Expand,
   FileJson,
+  Focus,
   FolderOpen,
+  LayoutGrid,
+  Minimize2,
+  PanelLeftClose,
   Pin,
   Plus,
   Save,
@@ -118,6 +123,8 @@ export function IotSimulatorStudio({
   const [partCategory, setPartCategory] = useState<'all' | ComponentCategory>('all')
   const [pinnedKinds, setPinnedKinds] = useState<ComponentKind[]>(['led', 'pushbutton'])
   const [showSavedDrawer, setShowSavedDrawer] = useState(false)
+  const [focusMode, setFocusMode] = useState<'normal' | 'focus' | 'canvas'>('normal')
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [statusNotice, setStatusNotice] = useState<string | null>(null)
   const [diagnostics, setDiagnostics] = useState<CircuitDiagnosticItem[] | null>(null)
   const [quickSerialInput, setQuickSerialInput] = useState('')
@@ -127,7 +134,42 @@ export function IotSimulatorStudio({
   )
   const [loopIterations, setLoopIterations] = useState(0)
 
+  const studioRef = useRef<HTMLDivElement | null>(null)
   const vmRef = useRef<VmContext | null>(null)
+
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false)
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen && !document.fullscreenElement) {
+        setIsFullscreen(false)
+      }
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isFullscreen])
+
+  const toggleFullscreen = () => {
+    if (isFullscreen) {
+      setIsFullscreen(false)
+      if (document.fullscreenElement) {
+        void document.exitFullscreen?.().catch(() => {})
+      }
+      return
+    }
+    setIsFullscreen(true)
+    if (focusMode === 'normal') {
+      setFocusMode('focus')
+    }
+    void studioRef.current?.requestFullscreen?.().catch(() => {})
+  }
   const componentsRef = useRef(components)
   const wiresRef = useRef(wires)
   useEffect(() => {
@@ -384,8 +426,8 @@ export function IotSimulatorStudio({
     const newComp: PlacedComponent = {
       id: nextUid(kind),
       kind,
-      x: 330 + offset,
-      y: 80 + (components.length % 4) * 58,
+      x: kind === 'breadboard' ? 290 : 330 + offset,
+      y: kind === 'breadboard' ? 275 : 80 + (components.length % 4) * 58,
       label: en ? spec.nameEn : spec.nameId,
       color:
         kind === 'led' || kind === 'pushbutton' || kind === 'seven-seg' || kind === 'seven-seg-4' || kind === 'max7219-matrix'
@@ -496,29 +538,88 @@ export function IotSimulatorStudio({
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
   const lineCount = Math.max(18, code.split('\n').length)
 
+  const focusBarControls = (
+    <div className="iot-focus-controls">
+      <div className="iot-focus-segmented" role="group" aria-label={en ? 'Focus mode options' : 'Pilihan mode fokus'}>
+        <button
+          type="button"
+          className={`iot-focus-seg-btn ${focusMode === 'normal' ? 'is-active' : ''}`}
+          onClick={() => setFocusMode('normal')}
+        >
+          <LayoutGrid size={13} />
+          <span>{en ? 'Normal' : 'Normal'}</span>
+        </button>
+        <button
+          type="button"
+          className={`iot-focus-seg-btn ${focusMode === 'focus' ? 'is-active' : ''}`}
+          onClick={() => setFocusMode('focus')}
+        >
+          <Focus size={13} />
+          <span>{en ? 'Studio Focus' : 'Fokus Studio'}</span>
+        </button>
+        <button
+          type="button"
+          className={`iot-focus-seg-btn ${focusMode === 'canvas' ? 'is-active' : ''}`}
+          onClick={() => setFocusMode('canvas')}
+        >
+          <PanelLeftClose size={13} />
+          <span>{en ? 'Canvas Focus' : 'Fokus Kanvas'}</span>
+        </button>
+      </div>
+      <button
+        type="button"
+        className={`btn-outline iot-fs-btn ${isFullscreen ? 'is-active' : ''}`}
+        onClick={toggleFullscreen}
+        aria-label={isFullscreen ? (en ? 'Exit Fullscreen' : 'Keluar Layar Penuh') : en ? 'Fullscreen' : 'Layar Penuh'}
+      >
+        {isFullscreen ? <Minimize2 size={14} /> : <Expand size={14} />}
+        <span>{isFullscreen ? (en ? 'Exit Fullscreen (Esc)' : 'Keluar Layar Penuh') : en ? 'Fullscreen' : 'Layar Penuh'}</span>
+      </button>
+    </div>
+  )
+
   return (
-    <div className="iot-studio">
-      <PageHead
-        title={en ? 'IoT Hardware & ESP32 Simulator' : 'Simulator Hardware IoT & ESP32'}
-        description={
-          en
-            ? 'Design virtual ESP32-C3, Arduino, and Pico W circuits, inspect components, write Arduino C++ sketches, verify wiring, and monitor Serial output.'
-            : 'Rangkai sirkuit virtual ESP32-C3, Arduino, dan Pico W, pilih komponen lengkap, tulis kode Arduino C++, cek rangkaian, dan pantau Serial Monitor.'
-        }
-        actions={
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div
+      ref={studioRef}
+      className={`iot-studio ${isFullscreen ? 'is-fullscreen' : ''} ${focusMode !== 'normal' ? `is-focus-${focusMode}` : ''}`}
+    >
+      {focusMode === 'normal' && !isFullscreen ? (
+        <PageHead
+          title={en ? 'IoT Hardware & ESP32 Simulator' : 'Simulator Hardware IoT & ESP32'}
+          description={
+            en
+              ? 'Design virtual ESP32-C3, Arduino, and Pico W circuits, inspect components, write Arduino C++ sketches, verify wiring, and monitor Serial output.'
+              : 'Rangkai sirkuit virtual ESP32-C3, Arduino, dan Pico W, pilih komponen lengkap, tulis kode Arduino C++, cek rangkaian, dan pantau Serial Monitor.'
+          }
+          actions={
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Badge tone="info">
+                <Cpu size={13} /> {BOARDS[boardId].shortName} · {BOARDS[boardId].logicVoltage}V
+              </Badge>
+              {focusBarControls}
+              <button type="button" className="btn-outline" onClick={() => setShowSavedDrawer((v) => !v)}>
+                <FolderOpen size={15} /> {en ? 'Saved' : 'Tersimpan'} ({projectsQ.data?.projects.length ?? 0})
+              </button>
+              <button type="button" className="btn-primary" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
+                <Save size={15} /> {saveMut.isPending ? (en ? 'Saving...' : 'Menyimpan...') : en ? 'Save Project' : 'Simpan Proyek'}
+              </button>
+            </div>
+          }
+        />
+      ) : (
+        <header className="card iot-focus-bar" aria-label={en ? 'Focus toolbar' : 'Bar Mode Fokus'}>
+          <div className="iot-focus-brand">
             <Badge tone="info">
-              <Cpu size={13} /> {BOARDS[boardId].shortName} · {BOARDS[boardId].logicVoltage}V
+              <Cpu size={13} /> {BOARDS[boardId].shortName}
             </Badge>
-            <button type="button" className="btn-outline" onClick={() => setShowSavedDrawer((v) => !v)}>
-              <FolderOpen size={15} /> {en ? 'Saved' : 'Tersimpan'} ({projectsQ.data?.projects.length ?? 0})
-            </button>
-            <button type="button" className="btn-primary" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-              <Save size={15} /> {saveMut.isPending ? (en ? 'Saving...' : 'Menyimpan...') : en ? 'Save Project' : 'Simpan Proyek'}
-            </button>
+            <strong>{projectTitle}</strong>
+            <Badge tone={simState.running ? 'good' : 'muted'}>
+              {simState.running ? 'LIVE' : 'IDLE'}
+            </Badge>
           </div>
-        }
-      />
+          {focusBarControls}
+        </header>
+      )}
 
       {statusNotice ? (
         <div className="iot-notice-banner">
@@ -565,7 +666,8 @@ export function IotSimulatorStudio({
       ) : null}
 
       {/* Top Project / Preset / Speed Controls */}
-      <section className="card iot-controls-bar" aria-label={en ? 'Workspace Header' : 'Pengaturan Proyek'}>
+      {focusMode === 'normal' && !isFullscreen ? (
+        <section className="card iot-controls-bar" aria-label={en ? 'Workspace Header' : 'Pengaturan Proyek'}>
         <div className="iot-ctrl-group">
           <label className="iot-inline-label">
             <span>{en ? 'Board' : 'Mikrokontroler'}</span>
@@ -637,8 +739,10 @@ export function IotSimulatorStudio({
           </button>
         </div>
       </section>
+      ) : null}
 
       {/* Guided Practicum Missions Strip */}
+      {focusMode === 'normal' && !isFullscreen ? (
       <section className="card iot-missions-strip">
         <div className="iot-mission-tabs">
           {IOT_MISSIONS.map((m) => {
@@ -687,10 +791,12 @@ export function IotSimulatorStudio({
           </div>
         ) : null}
       </section>
+      ) : null}
 
       {/* Split Workbench matching iotsimulator.net: Left Tabbed Panel | Right Circuit Canvas */}
       <div className="iot-workbench-grid">
         {/* LEFT PANE: Main.ino | Components | Terminal */}
+        {focusMode !== 'canvas' ? (
         <section className="card iot-left-panel">
           <header className="iot-left-tabs" role="tablist">
             <button
@@ -989,6 +1095,7 @@ export function IotSimulatorStudio({
                             type="button"
                             className="iot-card-add-btn"
                             title={en ? 'Add to circuit' : 'Tambah ke kanvas'}
+                            aria-label={en ? `Add ${c.nameEn} to canvas` : `Tambah ${c.nameId} ke kanvas`}
                             onClick={() => addComponent(c.kind)}
                           >
                             <Plus size={12} />
@@ -1023,6 +1130,7 @@ export function IotSimulatorStudio({
             </div>
           )}
         </section>
+        ) : null}
 
         {/* RIGHT PANE: Floating Pill Toolbar + Circuit Canvas + Live Check/Serial Strip */}
         <div className="iot-canvas-column">
@@ -1069,6 +1177,10 @@ export function IotSimulatorStudio({
             }}
             onDuplicateNode={duplicateNode}
             onSelectPrimaryBoard={switchBoard}
+            focusMode={focusMode}
+            onChangeFocusMode={setFocusMode}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
           />
 
           {/* Compact Diagnostics & Live Serial Bar beneath Canvas */}

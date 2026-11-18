@@ -1088,3 +1088,122 @@
   font-weight: 700;
   color: #cbd5e1;
 }
+
+/* Fullscreen & Focus Modes */
+.iot-focus-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.iot-focus-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  gap: 2px;
+}
+
+.iot-focus-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.iot-focus-seg-btn:hover {
+  color: var(--ink);
+}
+
+.iot-focus-seg-btn.is-active {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.iot-fs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.iot-fs-btn.is-active {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.iot-focus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.iot-focus-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.iot-studio.is-focus-canvas .iot-workbench-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.iot-studio.is-focus-canvas .iot-svg-board {
+  min-height: 500px;
+}
+
+.iot-studio.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  padding: 12px 16px;
+  background: var(--bg);
+  overflow-y: auto;
+  align-content: start;
+  box-sizing: border-box;
+}
+
+.iot-studio.is-fullscreen .iot-left-panel {
+  max-height: calc(100vh - 96px);
+}
+
+.iot-studio.is-fullscreen .iot-svg-board {
+  min-height: calc(100vh - 280px);
+}
+
+.iot-studio.is-fullscreen.is-focus-canvas .iot-svg-board {
+  min-height: calc(100vh - 260px);
+}
+
+/* Realistic Breadboard socket hover highlight */
+.iot-bb-pin .iot-bb-socket-ring {
+  transition: stroke 120ms ease, stroke-width 120ms ease, opacity 120ms ease;
+}
+
+.iot-bb-pin:hover .iot-bb-socket-ring {
+  stroke: #f59e0b;
+  stroke-width: 1.8;
+  opacity: 1;
+}
