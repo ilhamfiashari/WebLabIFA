@@ -9,6 +9,7 @@ import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { simApi, type AdminDashboardResponse } from '../simulator/api'
 import { AdminSecurityMonitorPanel } from './SecurityMonitorPanel'
+import { PlatformPolicySettings } from './PlatformPolicySettings'
 import {
   AUDIT, AUDIT_DAILY, CLASSES, HEAT, HEAT_DAYS, HEAT_SLOTS, MODULES, NOTIFICATIONS, OWASP, RANGES, ROLE_TOTALS, STATUS_TOTALS, USERS,
   activitySeries, kpis, owaspCoverage, type AccessStatus, type AuditKind, type PubStatus, type RangeKey, type Role, type Track, type User,
@@ -443,12 +444,13 @@ function AuditPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
   </>
 }
 
-function SettingsPage({ theme, setTheme, user }: { theme: Theme; setTheme: (t: Theme) => void; user: Identity }) {
+function SettingsPage({ theme, setTheme, user, live }: { theme: Theme; setTheme: (t: Theme) => void; user: Identity; live?: AdminDashboardResponse }) {
   const { lang } = useI18n()
   const en = lang === 'en'
   return <>
     <PageHead page="pengaturan" />
     <SecuritySettingsPage user={user} />
+    <PlatformPolicySettings csrf={user.csrf_token} initialSettings={live?.settings} />
     <div className="grid-2" style={{ marginTop: 18 }}>
       <section className="card" aria-labelledby="session-policy">
         <header className="card-head"><div><h2 id="session-policy">{en ? 'Session Policy' : 'Kebijakan sesi'}</h2><p>{en ? 'Server configuration · read only' : 'Konfigurasi server · baca saja'}</p></div></header>
@@ -532,6 +534,6 @@ export function AdminApp({ user, onLogout, loggingOut, onSwitchRole, switching, 
     {page.key === 'kelas' && <ClassesPage live={live} csrf={user.csrf_token} />}
     {page.key === 'katalog' && <CatalogPage live={live} csrf={user.csrf_token} />}
     {page.key === 'audit' && <AuditPage live={live} csrf={user.csrf_token} />}
-    {page.key === 'pengaturan' && <SettingsPage theme={theme} setTheme={setTheme} user={user} />}
+    {page.key === 'pengaturan' && <SettingsPage theme={theme} setTheme={setTheme} user={user} live={live} />}
   </Shell>
 }

@@ -26,6 +26,7 @@ import type { Identity } from '../api'
 import { BarChart, ChartCard, HBarList, SegmentBar } from '../admin/charts'
 import { getLecturerCatalog, type Catalog } from '../latihan/api'
 import { ExercisePlayer, LevelMap } from '../latihan/components'
+import { MoodleBankPanel } from '../latihan/MoodleBankPanel'
 import { Shell, type NavPage } from '../portal/Shell'
 import { Pagination } from '../portal/Pagination'
 import { store, usePath, useTheme } from '../portal/hooks'
@@ -211,6 +212,7 @@ export function LecturerApp(props: Props) {
                 exercise={detail.exercise}
                 mode="dosen"
                 go={go}
+                csrf={props.user.csrf_token}
                 hideAnswers={hide}
               />
             </>
@@ -225,7 +227,7 @@ export function LecturerApp(props: Props) {
             />
           )
         ) : (
-          <Bank catalog={data} go={go} actions={presentation} />
+          <Bank catalog={data} go={go} actions={presentation} csrf={props.user.csrf_token} />
         )
       ) : dashQ.data ? (
         <>
@@ -1034,27 +1036,106 @@ function LegacyLecturerHome({
   )
 }
 
-function Bank({ catalog, go, actions }: { catalog: Catalog; go: (to: string) => void; actions: React.ReactNode }) {
+function Bank({
+  catalog,
+  go,
+  actions,
+  csrf,
+}: {
+  catalog: Catalog
+  go: (to: string) => void
+  actions: React.ReactNode
+  csrf: string
+}) {
   const [tab, setTab] = useState(() => store.get('ifa-track') ?? catalog.tracks[0].id)
+  const [search, setSearch] = useState('')
+  const [levelFilter, setLevelFilter] = useState<string>('all')
   const track = catalog.tracks.find((t) => t.id === tab) ?? catalog.tracks[0]
   const select = (id: string) => {
     setTab(id)
     store.set('ifa-track', id)
   }
+  const filteredTrack = {
+    ...track,
+    exercises: track.exercises.filter((e) => {
+      const matchLevel = levelFilter === 'all' || e.level === Number(levelFilter)
+      const q = search.trim().toLowerCase()
+      const matchText =
+        !q ||
+        e.title.toLowerCase().includes(q) ||
+        (e.owasp ?? '').toLowerCase().includes(q) ||
+        (e.tags ?? []).some((t) => t.toLowerCase().includes(q))
+      return matchLevel && matchText
+    }),
+  }
   return (
     <>
       <PageHead
         title="Bank latihan"
-        description="Semua level terbuka. Pilih latihan untuk melihat soal, kunci jawaban, dan pembahasan."
+        description="Semua level terbuka untuk jalur Cyber Security dan IoT. Kelola bank soal serta impor/ekspor format Moodle LMS."
         actions={actions}
+      />
+      <MoodleBankPanel
+        catalog={catalog}
+        csrf={csrf}
+        defaultTrack={track.id === 'iot' ? 'iot' : 'web'}
       />
       <TrackTabs
         tracks={catalog.tracks.map((t) => ({ id: t.id, title: t.title, note: `${t.exercises.length} latihan` }))}
         value={track.id}
         onChange={select}
       />
-      <p className="track-desc">{track.description}</p>
-      <LevelMap catalog={catalog} track={track} mode="dosen" go={go} />
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 10,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <p className="track-desc" style={{ margin: 0 }}>
+          {track.description}
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            type="search"
+            aria-label="Cari soal latihan"
+            placeholder="Cari judul, OWASP, atau tag..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              minHeight: 36,
+              borderRadius: 8,
+              border: '1px solid var(--line-strong)',
+              padding: '0 10px',
+              background: 'var(--surface)',
+              color: 'var(--ink)',
+            }}
+          />
+          <select
+            aria-label="Filter level soal"
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+            style={{
+              minHeight: 36,
+              borderRadius: 8,
+              border: '1px solid var(--line-strong)',
+              padding: '0 10px',
+              background: 'var(--surface)',
+              color: 'var(--ink)',
+            }}
+          >
+            <option value="all">Semua Level</option>
+            {catalog.levels.map((l) => (
+              <option key={l.level} value={String(l.level)}>
+                Level {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <LevelMap catalog={catalog} track={filteredTrack} mode="dosen" go={go} />
     </>
   )
 }
