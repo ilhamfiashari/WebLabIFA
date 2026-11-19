@@ -558,6 +558,88 @@ pub async fn seed_demo_data(
         }
     }
 
+    // Proyek IoT multi-file contoh milik mahasiswa IF-4A agar menu Proyek Mahasiswa pada Dosen langsung terisi
+    if let Some((putri_id,)) = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM users WHERE lower(email)='122140011@student.itera.ac.id' LIMIT 1",
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    {
+        let putri_files = serde_json::json!([
+            {
+                "name": "config.h",
+                "content": "#ifndef CONFIG_H\n#define CONFIG_H\n#define DHT_PIN 3\n#define BUZZ_PIN 7\n#define MQTT_BROKER \"mqtts://broker.itera.ac.id:8883\"\n#endif\n"
+            },
+            {
+                "name": "telemetry.cpp",
+                "content": "#include <Arduino.h>\n#include \"config.h\"\n\nvoid publishThermalAlert(int temp) {\n  if (temp >= 30) {\n    tone(BUZZ_PIN, 1320);\n  } else {\n    noTone(BUZZ_PIN);\n  }\n  mqtt.publish(\"if4a/lab/temp\", String(temp));\n}\n"
+            }
+        ]);
+        let putri_components = serde_json::json!([
+            { "id": "dht-1", "kind": "dht22", "x": 325, "y": 110, "label": "DHT22 Sensor", "props": { "tempC": 31, "humidity": 58 } },
+            { "id": "buzz-1", "kind": "buzzer", "x": 470, "y": 150, "label": "Alarm Buzzer", "props": {} }
+        ]);
+        let putri_wires = serde_json::json!([
+            { "id": "w-1", "from": { "nodeId": "board", "pinId": "3V3" }, "to": { "nodeId": "dht-1", "pinId": "VCC" }, "color": "#ef4444" },
+            { "id": "w-2", "from": { "nodeId": "board", "pinId": "GPIO3" }, "to": { "nodeId": "dht-1", "pinId": "DATA" }, "color": "#10b981" },
+            { "id": "w-3", "from": { "nodeId": "dht-1", "pinId": "GND" }, "to": { "nodeId": "board", "pinId": "GND1" }, "color": "#1e293b" },
+            { "id": "w-4", "from": { "nodeId": "board", "pinId": "GPIO7" }, "to": { "nodeId": "buzz-1", "pinId": "POS" }, "color": "#f59e0b" },
+            { "id": "w-5", "from": { "nodeId": "buzz-1", "pinId": "GND" }, "to": { "nodeId": "board", "pinId": "GND2" }, "color": "#1e293b" }
+        ]);
+        let putri_code = "#include \"config.h\"\nvoid publishThermalAlert(int temp);\n\nvoid setup() {\n  Serial.begin(115200);\n  WiFi.begin(\"Wokwi-GUEST\", \"\");\n  mqtt.begin(MQTT_BROKER, true);\n  pinMode(BUZZ_PIN, OUTPUT);\n}\n\nvoid loop() {\n  int temp = dht.readTemperature();\n  publishThermalAlert(temp);\n  delay(500);\n}\n";
+        let _ = sqlx::query(
+            "INSERT INTO iot_projects(id,user_id,title,board,mission_id,code,files_json,components_json,wires_json) VALUES($1,$2,$3,'esp32-c3','iot-esp32-secure-telemetry',$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(deterministic_uuid("iot-proj:122140011:tls"))
+        .bind(putri_id)
+        .bind("Smart Thermal Guard & TLS (Multi-File)")
+        .bind(putri_code)
+        .bind(&putri_files)
+        .bind(&putri_components)
+        .bind(&putri_wires)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    if let Some((hendri_id,)) = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM users WHERE lower(email)='122140012@student.itera.ac.id' LIMIT 1",
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    {
+        let hendri_files = serde_json::json!([
+            {
+                "name": "pins.h",
+                "content": "#define TRIG_PIN 5\n#define ECHO_PIN 6\n#define BUZZ_PIN 7\n"
+            }
+        ]);
+        let hendri_components = serde_json::json!([
+            { "id": "ultra-1", "kind": "hc-sr04", "x": 340, "y": 110, "label": "HC-SR04", "props": { "distanceCm": 35 } },
+            { "id": "buzz-1", "kind": "buzzer", "x": 480, "y": 210, "label": "Buzzer", "props": {} }
+        ]);
+        let hendri_wires = serde_json::json!([
+            { "id": "w-u1", "from": { "nodeId": "board", "pinId": "3V3" }, "to": { "nodeId": "ultra-1", "pinId": "VCC" }, "color": "#ef4444" },
+            { "id": "w-u2", "from": { "nodeId": "board", "pinId": "GPIO5" }, "to": { "nodeId": "ultra-1", "pinId": "TRIG" }, "color": "#10b981" },
+            { "id": "w-u3", "from": { "nodeId": "board", "pinId": "GPIO6" }, "to": { "nodeId": "ultra-1", "pinId": "ECHO" }, "color": "#f59e0b" },
+            { "id": "w-u4", "from": { "nodeId": "ultra-1", "pinId": "GND" }, "to": { "nodeId": "board", "pinId": "GND1" }, "color": "#1e293b" },
+            { "id": "w-u5", "from": { "nodeId": "board", "pinId": "GPIO7" }, "to": { "nodeId": "buzz-1", "pinId": "POS" }, "color": "#8b5cf6" },
+            { "id": "w-u6", "from": { "nodeId": "buzz-1", "pinId": "GND" }, "to": { "nodeId": "board", "pinId": "GND2" }, "color": "#1e293b" }
+        ]);
+        let hendri_code = "#include \"pins.h\"\n\nvoid setup() {\n  Serial.begin(115200);\n  pinMode(BUZZ_PIN, OUTPUT);\n}\n\nvoid loop() {\n  int cm = ultrasonicRead(TRIG_PIN, ECHO_PIN);\n  Serial.println(\"Jarak: \" + String(cm));\n  if (cm < 45) tone(BUZZ_PIN, 980); else noTone(BUZZ_PIN);\n  delay(400);\n}\n";
+        let _ = sqlx::query(
+            "INSERT INTO iot_projects(id,user_id,title,board,mission_id,code,files_json,components_json,wires_json) VALUES($1,$2,$3,'esp32-c3','iot-esp32-ultrasonic',$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(deterministic_uuid("iot-proj:122140012:ultra"))
+        .bind(hendri_id)
+        .bind("Sensor Jarak Parkir + pins.h")
+        .bind(hendri_code)
+        .bind(&hendri_files)
+        .bind(&hendri_components)
+        .bind(&hendri_wires)
+        .execute(&mut *tx)
+        .await?;
+    }
+
     sqlx::query(
         "INSERT INTO platform_audit_logs (id,actor_id,kind,title,target,result) VALUES($1,$2,'Seed','Inisialisasi data seed mahasiswa & sesi lab',$3,'Berhasil')",
     )

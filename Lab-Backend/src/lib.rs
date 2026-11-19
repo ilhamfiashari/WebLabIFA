@@ -137,6 +137,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/dosen/export", get(portal::export_class_csv))
         .route("/api/dosen/labs", get(portal::instructor_labs_bank))
+        .route(
+            "/api/dosen/iot-projects",
+            get(portal::list_student_iot_projects),
+        )
         .route("/api/dosen/seed", post(portal::dosen_trigger_seed))
         .route("/api/dashboard/admin", get(portal::admin_dashboard))
         .route("/api/admin/seed", post(portal::admin_trigger_seed))
