@@ -1261,7 +1261,7 @@ test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mo
   // 4. Mini Piano klik tuts cepat [1] -> Nada 262Hz tampil & berbunyi
   await presetSelect.selectOption('dosen-wokwi-mini-piano')
   await page.getByRole('button', { name: 'Jalankan' }).click()
-  await page.locator('.iot-svg-board circle.iot-interactive-control').first().click()
+  await page.locator('.iot-svg-board circle.iot-interactive-control').first().dispatchEvent('pointerdown')
   await expect(page.getByText('262Hz', { exact: true })).toBeVisible()
 
   // 5. Kompas 3D OLED + MPU6050 Tilt Slider + Buzzer Utara
