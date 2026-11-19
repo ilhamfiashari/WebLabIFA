@@ -322,3 +322,65 @@ test('dosen memiliki seluruh 14 misi Web Dev terbuka, dapat menguji React, FastA
   await page.getByRole('button', { name: /Proyek Mahasiswa/ }).click()
   await expect(page.getByText('Portal Mahasiswa Rani P2')).toBeVisible()
 })
+
+test('editor kode Web Dev selaras tanpa drift CSS, mendukung autocomplete, auto-close HTML, dan auto-indent VS Code', async ({ page }) => {
+  await page.route('**/api/me', (r) => r.fulfill({ json: lecturer }))
+  await attachCommonMocks(page, lecturer.email)
+  await attachWebDevApiMocks(page, 'dosen')()
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab/dosen/web-dev')
+
+  const editor = page.getByLabel('Kode program aplikasi web')
+  await expect(editor).toBeVisible()
+
+  // 1. Verifikasi overlay highlight <pre><code> selaras 1:1 dengan <textarea> (bebas .portal code box & font shrink)
+  const metrics = await page.evaluate(() => {
+    const code = document.querySelector('.wd-code-highlight code')
+    const ta = document.querySelector('.wd-code-textarea')
+    if (!code || !ta) return null
+    const cs = getComputedStyle(code)
+    const ts = getComputedStyle(ta)
+    return {
+      codeBorderTop: cs.borderTopWidth,
+      codePadLeft: cs.paddingLeft,
+      codeBg: cs.backgroundColor,
+      codeFontSize: cs.fontSize,
+      taFontSize: ts.fontSize,
+      codeLineHeight: cs.lineHeight,
+      taLineHeight: ts.lineHeight,
+    }
+  })
+  expect(metrics).not.toBeNull()
+  expect(metrics?.codeBorderTop).toBe('0px')
+  expect(metrics?.codePadLeft).toBe('0px')
+  expect(metrics?.codeFontSize).toBe(metrics?.taFontSize)
+  expect(metrics?.codeLineHeight).toBe(metrics?.taLineHeight)
+
+  // 2. Uji auto-close tag HTML (`<section>` -> `<section></section>`) & smart Enter indent
+  await editor.fill('')
+  await editor.click()
+  await editor.pressSequentially('<section>')
+  await expect(editor).toHaveValue('<section></section>')
+  await editor.press('Enter')
+  await expect(editor).toHaveValue('<section>\n  \n</section>')
+
+  // 3. Uji autocomplete popup muncul saat mengetik `<he` dan sisip snippet dengan Enter
+  await editor.pressSequentially('<he')
+  const acBox = page.getByRole('listbox', { name: 'Saran kode' })
+  await expect(acBox).toBeVisible()
+  await expect(acBox).toContainText('<header>')
+  await editor.press('Enter')
+  await expect(editor).toHaveValue(/<header class="">/)
+
+  // 4. Uji Ctrl+Space trigger manual & tombol Rapikan merapikan HTML
+  await editor.press('Control+Space')
+  await expect(acBox).toBeVisible()
+  await editor.press('Escape')
+  await expect(acBox).toBeHidden()
+
+  await editor.fill('<div><p>Halo</p></div>')
+  await page.getByRole('button', { name: 'Rapikan' }).click()
+  await expect(editor).toHaveValue('<div>\n  <p>Halo</p>\n</div>\n')
+  await expect(page.getByLabel('Status bar editor')).toContainText('Spaces: 2')
+})

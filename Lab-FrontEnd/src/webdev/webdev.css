@@ -257,13 +257,16 @@
 .wd-code-shell {
   position: relative;
   display: flex;
+  align-items: flex-start;
   flex: 1;
-  min-height: 490px;
-  max-height: 660px;
+  min-height: 470px;
+  max-height: 640px;
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 19.5px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 19.375px;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
   background: #ffffff;
   color: #1e293b;
 }
@@ -274,58 +277,138 @@
 }
 
 .wd-line-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  flex-shrink: 0;
+  align-self: stretch;
   user-select: none;
-  padding: 12px 10px;
+  padding: 12px 10px 12px 8px;
   text-align: right;
   font-size: 12px;
-  line-height: 19.5px;
+  line-height: 19.375px;
   color: #94a3b8;
   border-right: 1px solid var(--line);
   background: var(--surface-2);
-  min-width: 38px;
+  min-width: 44px;
+  box-sizing: border-box;
+}
+
+.wd-line-num {
+  height: 19.375px;
+  line-height: 19.375px;
+}
+
+.wd-line-num.is-active-line {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.wd-code-shell.theme-dark .wd-line-num.is-active-line {
+  color: #f8fafc;
 }
 
 .wd-code-stage {
   position: relative;
-  flex: 1;
-  min-width: 0;
+  flex: 1 0 auto;
+  display: grid;
+  grid-template-columns: minmax(100%, max-content);
   min-height: 100%;
+}
+
+.wd-active-line-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 19.375px;
+  background: rgba(14, 165, 233, 0.07);
+  border-top: 1px solid rgba(14, 165, 233, 0.14);
+  border-bottom: 1px solid rgba(14, 165, 233, 0.14);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wd-code-shell.theme-dark .wd-active-line-bg {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.2);
 }
 
 .wd-code-highlight,
 .wd-code-textarea {
+  grid-area: 1 / 1;
   margin: 0;
-  padding: 12px;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: 19.5px;
+  padding: 12px 14px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 19.375px;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
   tab-size: 2;
   white-space: pre;
+  overflow-wrap: normal;
   word-wrap: normal;
+  word-break: normal;
   border: 0;
+  border-radius: 0;
   width: 100%;
+  min-width: 100%;
   min-height: 100%;
   box-sizing: border-box;
 }
 
 .wd-code-highlight {
+  position: relative;
+  z-index: 2;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
+  background: transparent;
+}
+
+/* Override global .portal code & .card code styles so syntax overlay aligns 1:1 */
+.portal .wd-code-highlight code,
+.wd-code-highlight code {
+  display: block;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .wd-code-textarea {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  z-index: 3;
+  height: 100%;
   resize: none;
   outline: none;
   background: transparent;
   color: transparent;
+  -webkit-text-fill-color: transparent;
   caret-color: #0284c7;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.wd-code-textarea::selection {
+  background: rgba(59, 130, 246, 0.26);
+  color: transparent;
 }
 
 .wd-code-shell.theme-dark .wd-code-textarea {
   caret-color: #38bdf8;
+}
+
+.wd-code-shell.theme-dark .wd-code-textarea::selection {
+  background: rgba(56, 189, 248, 0.3);
+  color: transparent;
 }
 
 .wd-tok-comment {
@@ -359,6 +442,10 @@
   color: #ea580c;
 }
 
+.wd-tok-punct {
+  color: #64748b;
+}
+
 .wd-code-shell.theme-dark .wd-tok-keyword {
   color: #c084fc;
 }
@@ -371,30 +458,50 @@
   color: #38bdf8;
 }
 
+.wd-code-shell.theme-dark .wd-tok-builtin {
+  color: #34d399;
+}
+
 .wd-code-shell.theme-dark .wd-tok-string {
   color: #4ade80;
 }
 
-/* Autocomplete Dropdown */
-.wd-ac-box {
+.wd-code-shell.theme-dark .wd-tok-number {
+  color: #fb923c;
+}
+
+.wd-code-shell.theme-dark .wd-tok-punct {
+  color: #94a3b8;
+}
+
+/* Cursor-Anchored VS Code Autocomplete Popup */
+.wd-ac-popup {
   position: absolute;
-  left: 16px;
-  bottom: 12px;
-  z-index: 25;
-  width: min(360px, calc(100% - 32px));
-  max-height: 190px;
-  overflow: auto;
+  z-index: 30;
+  width: min(360px, calc(100vw - 48px));
   border-radius: 9px;
   border: 1px solid var(--line);
   background: var(--surface);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  white-space: normal;
+  font-family: inherit;
+}
+
+.wd-ac-list {
+  max-height: 205px;
+  overflow: auto;
   padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .wd-ac-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 2px;
   width: 100%;
   padding: 6px 8px;
   border: 0;
@@ -406,10 +513,62 @@
   font-size: 12px;
 }
 
+.wd-ac-item-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+}
+
+.wd-ac-kind {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(14, 165, 233, 0.14);
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+.wd-ac-label {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wd-ac-item.is-active,
 .wd-ac-item:hover {
   background: var(--brand-soft);
   color: var(--brand);
+}
+
+.wd-ac-footer {
+  padding: 5px 9px;
+  font-size: 10.5px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wd-editor-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Right Preview Pane */
