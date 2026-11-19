@@ -248,7 +248,9 @@ test('Bank latihan Dosen hanya menampilkan 2 jalur (Cyber Security & IoT) serta 
   await expect(page.getByText('Keamanan IoT')).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Impor Soal Moodle LMS' }).click()
-  const trackOptions = await page.getByLabel('Jalur target soal').locator('option').allInnerTexts()
+  const bankTrackSelect = page.getByLabel('Jalur target soal')
+  await expect(bankTrackSelect).toBeVisible()
+  const trackOptions = await bankTrackSelect.locator('option').allInnerTexts()
   expect(trackOptions).toEqual(['Cyber Security', 'IoT'])
 
   await page.getByRole('button', { name: 'Contoh Moodle XML' }).click()
@@ -490,8 +492,10 @@ test('Penugasan Praktikum Dosen & Mahasiswa terperinci serta mengunci tugas lewa
   await page.goto('/lab/dosen/penugasan')
 
   const trackSelect = page.getByLabel('Jalur Praktikum')
+  await expect(trackSelect).toBeVisible()
   expect(await trackSelect.locator('option').allInnerTexts()).toEqual(['Cyber Security', 'IoT'])
   await trackSelect.selectOption('iot')
+  await expect(page.getByLabel('Modul Lab (IoT)')).toBeVisible()
 
   await page.getByLabel('Judul Penugasan').fill('Audit Telemetry ESP32 & Buzzer Alert')
   await page.getByLabel('Deskripsi Tugas & Skenario').fill('Pastikan payload MQTT tervalidasi sebelum menyalakan aktuator.')
