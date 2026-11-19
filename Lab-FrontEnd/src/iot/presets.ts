@@ -59,9 +59,10 @@ void loop() {
   },
   {
     id: 'esp32-c3-button',
+    missionId: 'iot-esp32-button-pullup',
     board: 'esp32-c3',
-    titleId: 'ESP32-C3 · Pushbutton Input & LED Interaktif',
-    titleEn: 'ESP32-C3 · Interactive Pushbutton & LED',
+    titleId: 'Misi 5 · Pushbutton Pull-Up & LED Interaktif',
+    titleEn: 'Mission 5 · Pushbutton Pull-Up & Interactive LED',
     badge: 'ESP32-C3 · Input',
     summaryId: 'Klik tombol pada kanvas untuk menyalakan LED melalui GPIO4 dan GPIO2.',
     summaryEn: 'Press the tactile pushbutton on canvas to light the LED via GPIO4 and GPIO2.',
@@ -202,9 +203,10 @@ void loop() {
   },
   {
     id: 'esp32-c3-servo-pot',
+    missionId: 'iot-esp32-adc-servo',
     board: 'esp32-c3',
-    titleId: 'ESP32-C3 · Potensiometer ADC 12-bit → Servo PWM',
-    titleEn: 'ESP32-C3 · 12-bit ADC Potentiometer → Servo PWM',
+    titleId: 'Misi 6 · Potensiometer ADC 12-bit → Servo PWM',
+    titleEn: 'Mission 6 · 12-bit ADC Potentiometer → Servo PWM',
     badge: 'ESP32-C3 · ADC/PWM',
     summaryId: 'Putar potensiometer untuk membaca ADC 0..4095 dan menggerakkan sudut Servo 0..180°.',
     summaryEn: 'Rotate the potentiometer to read 0..4095 ADC and sweep the Servo from 0..180°.',
@@ -437,6 +439,203 @@ void loop() {
       { id: 'w-uno-res', from: { nodeId: 'mcu-2', pinId: 'D8' }, to: { nodeId: 'res-m1', pinId: 'P1' }, color: '#3b82f6' },
       { id: 'w-res-led2', from: { nodeId: 'res-m1', pinId: 'P2' }, to: { nodeId: 'led-m2', pinId: 'A' }, color: '#f59e0b' },
       { id: 'w-led2-gnd', from: { nodeId: 'led-m2', pinId: 'K' }, to: { nodeId: 'mcu-2', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'esp32-c3-pir-alarm',
+    missionId: 'iot-esp32-pir-alarm',
+    board: 'esp32-c3',
+    titleId: 'Misi 7 · Deteksi Gerak PIR + Buzzer & Relay Kunci',
+    titleEn: 'Mission 7 · PIR Motion + Buzzer & Lock Relay',
+    badge: 'ESP32-C3 · Keamanan Fisik',
+    summaryId: 'Aktifkan sakelar gerak PIR untuk memicu alarm buzzer 1400Hz dan mengunci relay pengaman.',
+    summaryEn: 'Trigger PIR motion sensor to sound the 1400Hz buzzer alarm and activate the lock relay.',
+    code: `#define PIR_PIN 4
+#define RELAY_PIN 5
+#define BUZZ_PIN 7
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(PIR_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(BUZZ_PIN, OUTPUT);
+  Serial.println("Sistem Keamanan PIR Siap");
+}
+
+void loop() {
+  int motion = digitalRead(PIR_PIN);
+  if (motion == HIGH) {
+    digitalWrite(RELAY_PIN, HIGH);
+    tone(BUZZ_PIN, 1400);
+    Serial.println("INTRUDER_DETECTED: Relay ON + Buzzer 1400Hz");
+  } else {
+    digitalWrite(RELAY_PIN, LOW);
+    noTone(BUZZ_PIN);
+    Serial.println("AREA_AMAN");
+  }
+  delay(350);
+}`,
+    components: [
+      { id: 'pir-1', kind: 'pir', x: 315, y: 105, label: 'Sensor PIR', props: { motion: true } },
+      { id: 'relay-1', kind: 'relay', x: 470, y: 105, label: 'Relay Kunci', props: {} },
+      { id: 'buzz-1', kind: 'buzzer', x: 390, y: 255, label: 'Siren Alarm', props: {} },
+    ],
+    wires: [
+      { id: 'w-pir-vcc', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'pir-1', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'w-pir-out', from: { nodeId: 'board', pinId: 'GPIO4' }, to: { nodeId: 'pir-1', pinId: 'OUT' }, color: '#10b981' },
+      { id: 'w-pir-gnd', from: { nodeId: 'pir-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-rel-vcc', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'relay-1', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'w-rel-in', from: { nodeId: 'board', pinId: 'GPIO5' }, to: { nodeId: 'relay-1', pinId: 'IN' }, color: '#3b82f6' },
+      { id: 'w-rel-gnd', from: { nodeId: 'relay-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-buz-pos', from: { nodeId: 'board', pinId: 'GPIO7' }, to: { nodeId: 'buzz-1', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'w-buz-gnd', from: { nodeId: 'buzz-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'esp32-c3-lcd-access',
+    missionId: 'iot-esp32-lcd-access',
+    board: 'esp32-c3',
+    titleId: 'Misi 8 · Panel Akses LCD 16x2 I2C & Indikator Status',
+    titleEn: 'Mission 8 · I2C 16x2 LCD Access Panel & Indicator',
+    badge: 'ESP32-C3 · LCD I2C',
+    summaryId: 'Tampilkan status otorisasi pintu pada LCD 16x2 (SDA/SCL) dengan tombol verifikasi.',
+    summaryEn: 'Display door access status on I2C 16x2 LCD (SDA/SCL) with tactile button control.',
+    code: `#include <LiquidCrystal_I2C.h>
+#define BTN_PIN 4
+#define LED_PIN 2
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(BTN_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+  lcd.init();
+  lcd.backlight();
+  Serial.println("Panel LCD I2C Aktif");
+}
+
+void loop() {
+  int pressed = digitalRead(BTN_PIN) == LOW;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("IFA LAB ACCESS");
+  lcd.setCursor(0, 1);
+  if (pressed) {
+    digitalWrite(LED_PIN, HIGH);
+    lcd.print("STATUS: TERBUKA");
+  } else {
+    digitalWrite(LED_PIN, LOW);
+    lcd.print("STATUS: TERKUNCI");
+  }
+  delay(350);
+}`,
+    components: [
+      { id: 'lcd-1', kind: 'lcd-1602', x: 430, y: 95, label: 'LCD 16x2 I2C', props: {} },
+      { id: 'btn-1', kind: 'pushbutton', x: 315, y: 245, label: 'Tombol Akses', props: { pressed: false } },
+      { id: 'res-1', kind: 'resistor', x: 440, y: 245, label: 'R1 (220Ω)', ohms: 220, props: {} },
+      { id: 'led-1', kind: 'led', x: 585, y: 215, label: 'LED Akses', color: 'green', props: {} },
+    ],
+    wires: [
+      { id: 'w-lcd-vcc', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'lcd-1', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'w-lcd-gnd', from: { nodeId: 'lcd-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+      { id: 'w-lcd-sda', from: { nodeId: 'board', pinId: 'GPIO8' }, to: { nodeId: 'lcd-1', pinId: 'SDA' }, color: '#f59e0b' },
+      { id: 'w-lcd-scl', from: { nodeId: 'board', pinId: 'GPIO9' }, to: { nodeId: 'lcd-1', pinId: 'SCL' }, color: '#3b82f6' },
+      { id: 'w-btn-out', from: { nodeId: 'board', pinId: 'GPIO4' }, to: { nodeId: 'btn-1', pinId: 'OUT' }, color: '#10b981' },
+      { id: 'w-btn-gnd', from: { nodeId: 'btn-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-r1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'res-1', pinId: 'P1' }, color: '#10b981' },
+      { id: 'w-r2', from: { nodeId: 'res-1', pinId: 'P2' }, to: { nodeId: 'led-1', pinId: 'A' }, color: '#f59e0b' },
+      { id: 'w-lk', from: { nodeId: 'led-1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'esp32-c3-gas-safety',
+    missionId: 'iot-esp32-gas-safety',
+    board: 'esp32-c3',
+    titleId: 'Misi 9 · Sensor Gas MQ-2, Relay Ventilasi & Buzzer',
+    titleEn: 'Mission 9 · MQ-2 Gas Sensor, Fan Relay & Buzzer',
+    badge: 'ESP32-C3 · Safety IoT',
+    summaryId: 'Baca kadar gas MQ-2 via ADC GPIO0 dan aktifkan Relay kipas serta Buzzer saat melewati ambang.',
+    summaryEn: 'Read MQ-2 gas ADC via GPIO0 and trigger exhaust Relay and Buzzer above safe threshold.',
+    code: `#define MQ2_PIN 0
+#define RELAY_PIN 5
+#define BUZZ_PIN 7
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(BUZZ_PIN, OUTPUT);
+  Serial.println("MQ-2 Gas Monitor Ready");
+}
+
+void loop() {
+  int gas = analogRead(MQ2_PIN);
+  Serial.println("gas_adc:" + String(gas));
+  if (gas > 1200) {
+    digitalWrite(RELAY_PIN, HIGH);
+    tone(BUZZ_PIN, 1800);
+  } else {
+    digitalWrite(RELAY_PIN, LOW);
+    noTone(BUZZ_PIN);
+  }
+  delay(350);
+}`,
+    components: [
+      { id: 'mq2-1', kind: 'mq2', x: 315, y: 105, label: 'MQ-2 Gas', props: { gasPpm: 900 } },
+      { id: 'relay-1', kind: 'relay', x: 485, y: 115, label: 'Relay Exhaust', props: {} },
+      { id: 'buzz-1', kind: 'buzzer', x: 410, y: 255, label: 'Buzzer Gas', props: {} },
+    ],
+    wires: [
+      { id: 'w-m-vcc', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'mq2-1', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'w-m-gnd', from: { nodeId: 'mq2-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-m-ao', from: { nodeId: 'board', pinId: 'GPIO0' }, to: { nodeId: 'mq2-1', pinId: 'AO' }, color: '#8b5cf6' },
+      { id: 'w-r-vcc', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'relay-1', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'w-r-in', from: { nodeId: 'board', pinId: 'GPIO5' }, to: { nodeId: 'relay-1', pinId: 'IN' }, color: '#10b981' },
+      { id: 'w-r-gnd', from: { nodeId: 'relay-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-b-p', from: { nodeId: 'board', pinId: 'GPIO7' }, to: { nodeId: 'buzz-1', pinId: 'POS' }, color: '#f59e0b' },
+      { id: 'w-b-g', from: { nodeId: 'buzz-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
+  {
+    id: 'esp32-c3-secure-telemetry',
+    missionId: 'iot-esp32-secure-telemetry',
+    board: 'esp32-c3',
+    titleId: 'Misi 10 · Guard Suhu DHT22, Alarm & Telemetri TLS',
+    titleEn: 'Mission 10 · DHT22 Thermal Guard, Alarm & TLS Telemetry',
+    badge: 'ESP32-C3 · Secure Edge',
+    summaryId: 'Gabungkan proteksi termal DHT22 + Buzzer dengan publikasi MQTT TLS tervalidasi.',
+    summaryEn: 'Combine DHT22 thermal alert + Buzzer with validated MQTT TLS telemetry.',
+    code: `#include <WiFi.h>
+#include <DHT.h>
+#define DHT_PIN 3
+#define BUZZ_PIN 7
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(BUZZ_PIN, OUTPUT);
+  WiFi.begin("WebLab-IoT", "itera-lab-2026");
+  mqtt.begin("mqtts://broker.weblab.local:8883", true);
+}
+
+void loop() {
+  float t = dht.readTemperature(DHT_PIN);
+  if (t > 35) {
+    tone(BUZZ_PIN, 1000);
+  } else {
+    noTone(BUZZ_PIN);
+  }
+  Serial.println("temp:" + String(t));
+  mqtt.publish("ifalab/esp32/thermal", "{\\"temp\\":" + String(t) + "}");
+  delay(500);
+}`,
+    components: [
+      { id: 'dht-1', kind: 'dht22', x: 325, y: 110, label: 'DHT22 Thermal', props: { tempC: 37, humidity: 58 } },
+      { id: 'buzz-1', kind: 'buzzer', x: 485, y: 125, label: 'Alarm Suhu', props: {} },
+    ],
+    wires: [
+      { id: 'w-dv', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'dht-1', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'w-dd', from: { nodeId: 'board', pinId: 'GPIO3' }, to: { nodeId: 'dht-1', pinId: 'DATA' }, color: '#10b981' },
+      { id: 'w-dg', from: { nodeId: 'dht-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'w-bp', from: { nodeId: 'board', pinId: 'GPIO7' }, to: { nodeId: 'buzz-1', pinId: 'POS' }, color: '#8b5cf6' },
+      { id: 'w-bg', from: { nodeId: 'buzz-1', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
     ],
   },
   // === 9 Wokwi Showcase Learning Projects (Dosen-Only) ===
@@ -1098,6 +1297,98 @@ export const IOT_MISSIONS: IotMissionSpec[] = [
         { id: 'wifi', labelId: 'Wi-Fi ESP32-C3 terhubung', labelEn: 'ESP32-C3 Wi-Fi connected', passed: sim.wifiConnected },
         { id: 'pub', labelId: 'Paket telemetri MQTT terkirim', labelEn: 'MQTT telemetry published', passed: hasMqtt },
         { id: 'tls', labelId: 'Semua paket memakai enkripsi TLS (mqtts://)', labelEn: 'All packets use TLS (mqtts://)', passed: allTls && sim.alerts.length === 0 },
+      ]
+    },
+  },
+  {
+    id: 'iot-esp32-button-pullup',
+    presetId: 'esp32-c3-button',
+    titleId: 'Misi 5 · Input Pull-Up Pushbutton & Kendali LED',
+    titleEn: 'Mission 5 · Pull-Up Pushbutton & LED Control',
+    xp: 50,
+    objectiveId: 'Gunakan konfigurasi INPUT_PULLUP untuk Pushbutton serta nyalakan LED dengan resistor 220Ω tanpa alert.',
+    objectiveEn: 'Use INPUT_PULLUP for Pushbutton and safely drive LED via 220Ω resistor.',
+    evaluate: ({ code, components, wires, sim, loopIterations }) => [
+      { id: 'parts', labelId: 'Pushbutton & LED terpasang', labelEn: 'Pushbutton & LED mounted', passed: components.some((c) => c.kind === 'pushbutton') && components.some((c) => c.kind === 'led') },
+      { id: 'pullup', labelId: 'Mode INPUT_PULLUP & 4+ kabel aman', labelEn: 'INPUT_PULLUP mode & 4+ safe wires', passed: code.includes('INPUT_PULLUP') && wires.length >= 4 && sim.alerts.length === 0 },
+      { id: 'run', labelId: 'Simulasi berjalan bersih', labelEn: 'Clean simulation loop ran', passed: loopIterations >= 1 },
+    ],
+  },
+  {
+    id: 'iot-esp32-adc-servo',
+    presetId: 'esp32-c3-servo-pot',
+    titleId: 'Misi 6 · Kalibrasi ADC Potensiometer & Sudut Servo PWM',
+    titleEn: 'Mission 6 · ADC Potentiometer Calibration & Servo PWM',
+    xp: 50,
+    objectiveId: 'Baca ADC 12-bit Potensiometer via analogRead() lalu konversi sudut Servo via map().',
+    objectiveEn: 'Read 12-bit Potentiometer ADC via analogRead() and map angle to Servo PWM.',
+    evaluate: ({ code, components, wires, sim, loopIterations }) => [
+      { id: 'parts', labelId: 'Potensiometer & Servo terpasang', labelEn: 'Potentiometer & Servo mounted', passed: components.some((c) => c.kind === 'potentiometer') && components.some((c) => c.kind === 'servo') },
+      { id: 'adc', labelId: 'Kode analogRead() + map() & kabel lengkap', labelEn: 'analogRead() + map() & complete wiring', passed: code.includes('analogRead') && code.includes('map(') && wires.length >= 4 && sim.alerts.length === 0 },
+      { id: 'plot', labelId: 'Data ADC tampil di Serial Plotter', labelEn: 'ADC plotted in Serial Plotter', passed: loopIterations >= 1 && sim.plotHistory.length >= 1 },
+    ],
+  },
+  {
+    id: 'iot-esp32-pir-alarm',
+    presetId: 'esp32-c3-pir-alarm',
+    titleId: 'Misi 7 · Deteksi Gerak PIR + Buzzer & Relay Kunci',
+    titleEn: 'Mission 7 · PIR Motion + Buzzer & Lock Relay',
+    xp: 60,
+    objectiveId: 'Hubungkan sensor PIR dengan aktuator Relay dan alarm Buzzer tanpa pelanggaran tegangan.',
+    objectiveEn: 'Wire PIR sensor to Lock Relay and Buzzer alarm with clean voltage levels.',
+    evaluate: ({ code, components, wires, sim, loopIterations }) => [
+      { id: 'parts', labelId: 'Sensor PIR + Buzzer/Relay terpasang', labelEn: 'PIR sensor + Buzzer/Relay mounted', passed: components.some((c) => c.kind === 'pir') && (components.some((c) => c.kind === 'buzzer') || components.some((c) => c.kind === 'relay')) },
+      { id: 'wire', labelId: 'Minimal 5 kabel terpasang aman', labelEn: 'At least 5 safe wires connected', passed: wires.length >= 5 && sim.alerts.length === 0 },
+      { id: 'alarm', labelId: 'Log deteksi & tone() berjalan', labelEn: 'Detection log & tone() active', passed: loopIterations >= 1 && code.includes('tone(') && sim.serialLog.length >= 1 },
+    ],
+  },
+  {
+    id: 'iot-esp32-lcd-access',
+    presetId: 'esp32-c3-lcd-access',
+    titleId: 'Misi 8 · Panel Akses LCD 16x2 I2C & Status Pintu',
+    titleEn: 'Mission 8 · I2C 16x2 LCD Access Panel & Door Status',
+    xp: 60,
+    objectiveId: 'Rangkai LCD 16x2 I2C bersama tombol akses serta tampilkan status pintu langsung pada layar LCD.',
+    objectiveEn: 'Wire I2C 16x2 LCD with access button and render status text onto LCD.',
+    evaluate: ({ components, wires, sim, loopIterations }) => {
+      const lcd = components.find((c) => c.kind === 'lcd-1602')
+      const rendered = lcd ? (sim.lcdRows[lcd.id]?.length ?? 0) > 0 : false
+      return [
+        { id: 'parts', labelId: 'LCD 16x2 & Pushbutton/LED terpasang', labelEn: '16x2 LCD & Pushbutton/LED mounted', passed: Boolean(lcd) && (components.some((c) => c.kind === 'pushbutton') || components.some((c) => c.kind === 'led')) },
+        { id: 'safe', labelId: 'Wiring I2C bersih (4+ kabel, 0 alert)', labelEn: 'Clean I2C wiring (4+ wires, 0 alerts)', passed: wires.length >= 4 && sim.alerts.length === 0 },
+        { id: 'lcd', labelId: 'Layar LCD aktif merender teks status', labelEn: 'LCD screen rendered status lines', passed: rendered && loopIterations >= 1 },
+      ]
+    },
+  },
+  {
+    id: 'iot-esp32-gas-safety',
+    presetId: 'esp32-c3-gas-safety',
+    titleId: 'Misi 9 · Sensor Gas MQ-2, Relay Ventilasi & Buzzer',
+    titleEn: 'Mission 9 · MQ-2 Gas Sensor, Ventilation Relay & Buzzer',
+    xp: 70,
+    objectiveId: 'Pantau kadar gas MQ-2 lalu kontrol otomatis Relay kipas dan alarm Buzzer tanpa alert.',
+    objectiveEn: 'Monitor MQ-2 gas level to drive ventilation Relay and Buzzer safely.',
+    evaluate: ({ code, components, wires, sim, loopIterations }) => [
+      { id: 'parts', labelId: 'MQ-2, Relay & Buzzer lengkap di kanvas', labelEn: 'MQ-2, Relay & Buzzer all placed', passed: components.some((c) => c.kind === 'mq2') && components.some((c) => c.kind === 'relay') && components.some((c) => c.kind === 'buzzer') },
+      { id: 'wire', labelId: 'Minimal 6 kabel & 0 alert', labelEn: '6+ wires & 0 hardware alerts', passed: wires.length >= 6 && sim.alerts.length === 0 },
+      { id: 'run', labelId: 'Firmware analogRead() + telemetri berjalan', labelEn: 'analogRead() & telemetry loop running', passed: loopIterations >= 1 && code.includes('analogRead') && sim.serialLog.length >= 1 },
+    ],
+  },
+  {
+    id: 'iot-esp32-secure-telemetry',
+    presetId: 'esp32-c3-secure-telemetry',
+    titleId: 'Misi 10 · Guard Sensor Suhu, Alarm & Telemetri TLS',
+    titleEn: 'Mission 10 · Thermal Guard, Alarm & TLS Telemetry',
+    xp: 80,
+    objectiveId: 'Integrasikan DHT22, alarm Buzzer, dan komunikasi broker mqtts:// TLS tanpa plaintext mqtt://.',
+    objectiveEn: 'Combine DHT22, Buzzer alarm, and encrypted mqtts:// broker without plaintext mqtt://.',
+    evaluate: ({ code, components, wires, sim, loopIterations }) => {
+      const hasMqtt = sim.mqttMessages.length > 0
+      const allTls = hasMqtt && sim.mqttMessages.every((m) => m.tls)
+      return [
+        { id: 'parts', labelId: 'DHT22 & Buzzer terpasang aman (4+ kabel)', labelEn: 'DHT22 & Buzzer safely wired (4+ wires)', passed: components.some((c) => c.kind === 'dht22') && components.some((c) => c.kind === 'buzzer') && wires.length >= 4 && sim.alerts.length === 0 },
+        { id: 'tls', labelId: 'Firmware & paket memakai mqtts:// TLS', labelEn: 'Firmware & packets use mqtts:// TLS', passed: allTls && code.includes('mqtts://') && !code.includes('"mqtt://') },
+        { id: 'run', labelId: 'Peringatan suhu & telemetri berjalan', labelEn: 'Thermal alert & telemetry running', passed: loopIterations >= 1 && code.includes('tone(') },
       ]
     },
   },

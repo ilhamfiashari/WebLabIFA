@@ -691,22 +691,37 @@ export function IotSimulatorStudio({
   const submitMissionMut = useMutation({
     mutationFn: () => {
       if (!activeMission) throw new Error('No mission selected')
+      const hasOledOutput = Object.values(simState.oledLines).some((lines) => lines.length > 0)
+      const mqttTlsVerified =
+        simState.mqttMessages.length > 0 && simState.mqttMessages.every((m) => m.tls)
       return simApi.submitIotMission(csrf, {
         mission_id: activeMission.id,
         board: boardId,
         code,
+        components: components.map((c) => ({ id: c.id, kind: c.kind })),
+        wires: wires.map((w) => ({ from: w.from, to: w.to })),
         component_count: components.length,
         wire_count: wires.length,
         checks_passed: missionChecks.filter((c) => c.passed).length,
         checks_total: missionChecks.length,
         has_hardware_alerts: simState.alerts.length > 0,
+        loop_iterations: loopIterations,
+        has_serial_output: simState.serialLog.length > 0,
+        has_oled_output: hasOledOutput,
+        mqtt_tls_verified: mqttTlsVerified,
       })
     },
     onSuccess: async (res) => {
+      const unlockedText =
+        res.newly_unlocked && res.newly_unlocked.length > 0
+          ? en
+            ? ` · Achievement unlocked: ${res.newly_unlocked.join(', ')}`
+            : ` · Lencana terbuka: ${res.newly_unlocked.join(', ')}`
+          : ''
       setStatusNotice(
         en
-          ? `Mission verified! Score ${res.score}/100 recorded (+${res.xp_awarded} XP).`
-          : `Misi berhasil diverifikasi! Skor ${res.score}/100 tercatat (+${res.xp_awarded} XP).`,
+          ? `Mission verified! Score ${res.score}/100 recorded (+${res.xp_awarded} XP)${unlockedText}.`
+          : `Misi berhasil diverifikasi! Skor ${res.score}/100 tercatat (+${res.xp_awarded} XP)${unlockedText}.`,
       )
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['iot-projects'] }),
@@ -1138,6 +1153,8 @@ export function IotSimulatorStudio({
   const acActiveSig = acActiveItem ? formatSuggestionSignature(acActiveItem) : null
 
   const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
+  const iotAchievements = projectsQ.data?.achievements ?? []
+  const earnedAchCount = iotAchievements.filter((a) => a.earned).length
   const lineCount = Math.max(18, displayedCode.split('\n').length)
   const highlightedTokens = useMemo(() => tokenizeArduinoCpp(displayedCode), [displayedCode])
   const activeMcuCompileError = useMemo(() => {
@@ -1374,7 +1391,42 @@ export function IotSimulatorStudio({
 
       {/* Guided Practicum Missions Strip */}
       {focusMode === 'normal' && !isFullscreen ? (
-      <section className="card iot-missions-strip">
+      <section className="card iot-missions-strip" aria-label={en ? 'IoT Missions & Achievements' : 'Misi & Pencapaian IoT'}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            marginBottom: 8,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: 13 }}>
+              {en
+                ? `IoT Missions (${completedSet.size}/${IOT_MISSIONS.length} Completed)`
+                : `Misi Praktikum IoT (${completedSet.size}/${IOT_MISSIONS.length} Tuntas)`}
+            </strong>
+            {iotAchievements.length > 0 && (
+              <Badge tone={earnedAchCount > 0 ? 'good' : 'muted'}>
+                <Award size={12} /> {earnedAchCount}/{iotAchievements.length} Achievement IoT
+              </Badge>
+            )}
+          </div>
+          {iotAchievements.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} aria-label="Achievement IoT">
+              {iotAchievements.map((ach) => (
+                <span key={ach.id} title={`${ach.detail} (+${ach.xp} XP)`}>
+                  <Badge tone={ach.earned ? 'good' : 'muted'}>
+                    {ach.earned ? '★ ' : '○ '}
+                    {ach.title}
+                  </Badge>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="iot-mission-tabs">
           {IOT_MISSIONS.map((m) => {
             const isSelected = activeMissionId === m.id
@@ -1392,6 +1444,15 @@ export function IotSimulatorStudio({
             )
           })}
         </div>
+        {submitMissionMut.isError && (
+          <p className="feedback wrong" role="alert" style={{ marginTop: 8 }}>
+            {submitMissionMut.error instanceof Error
+              ? submitMissionMut.error.message
+              : en
+                ? 'Server rejected mission verification. Check circuit, wiring, and simulation output.'
+                : 'Verifikasi misi ditolak server. Periksa rangkaian, kabel, dan jalankan simulasi terlebih dahulu.'}
+          </p>
+        )}
         {activeMission ? (
           <div className="iot-mission-status">
             <div>
@@ -1417,7 +1478,9 @@ export function IotSimulatorStudio({
                 ? en ? 'Verify Demo Run' : 'Verifikasi Demo'
                 : submitMissionMut.isPending
                   ? en ? 'Submitting...' : 'Mengirim...'
-                  : en ? 'Submit Mission (+50 XP)' : 'Kumpulkan Misi (+50 XP)'}
+                  : en
+                    ? `Submit Mission (+${activeMission.xp} XP)`
+                    : `Kumpulkan Misi (+${activeMission.xp} XP)`}
             </button>
           </div>
         ) : null}

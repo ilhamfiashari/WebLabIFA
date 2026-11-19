@@ -229,11 +229,19 @@ pub async fn student_dashboard(
         })
         .collect();
 
-    let badges = vec![
+    let mut badges = vec![
         json!({ "id": "bukti-pertama", "title": "Bukti Pertama", "detail": "Lulus verifikasi & refleksi lab pertama.", "earned": achievements.iter().any(|a| a.achievement_key == "badge:bukti-pertama") }),
         json!({ "id": "perbaikan-teruji", "title": "Perbaikan Teruji", "detail": "Menerapkan kontrol patch server yang lolos regresi.", "earned": achievements.iter().any(|a| a.achievement_key == "badge:perbaikan-teruji") }),
         json!({ "id": "auditor-kontrol", "title": "Auditor Kontrol", "detail": "Menuntaskan level Impossible dengan audit penuh.", "earned": achievements.iter().any(|a| a.achievement_key == "badge:auditor-kontrol") }),
     ];
+    for spec in super::iot_projects::IOT_BADGE_SPECS {
+        badges.push(json!({
+            "id": spec.id,
+            "title": spec.title,
+            "detail": spec.detail,
+            "earned": achievements.iter().any(|a| a.achievement_key == spec.key),
+        }));
+    }
 
     Ok(Json(json!({
         "kpis": {
