@@ -58,6 +58,26 @@ void loop() {
     ],
   },
   {
+    id: 'esp32-c3-blank',
+    board: 'esp32-c3',
+    titleId: 'Blank Canvas · Proyek Baru Kosong',
+    titleEn: 'Blank Canvas · Empty Project',
+    badge: 'Blank Canvas · Bebas',
+    summaryId: 'Mulai rangkaian dari kanvas kosong tanpa komponen awal untuk proyek mandiri atau multi-file.',
+    summaryEn: 'Start wiring from an empty canvas with zero pre-placed parts for custom or multi-file projects.',
+    code: `// Blank Canvas · Proyek IoT Baru
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Blank Canvas Siap!");
+}
+
+void loop() {
+  delay(500);
+}`,
+    components: [],
+    wires: [],
+  },
+  {
     id: 'esp32-c3-button',
     missionId: 'iot-esp32-button-pullup',
     board: 'esp32-c3',

@@ -315,21 +315,47 @@ export interface IotMissionSpec {
   }) => MissionCheckResult[]
 }
 
+export interface SketchFileEntry {
+  name: string
+  content: string
+}
+
 export interface SavedIotProject {
   id: string
   title: string
   board: BoardId
   mission_id?: string | null
   code: string
+  files?: SketchFileEntry[]
   components: PlacedComponent[]
   wires: Wire[]
   updated_at: string
+  owner_id?: string
+  owner_name?: string
+  owner_email?: string
+  class_id?: string
 }
 
 export interface CompletedMission {
   mission_id: string
   score: number
   completed_at: string
+}
+
+export interface IotMissionAccessState {
+  mission_id: string
+  order: number
+  title: string
+  unlocked: boolean
+  completed: boolean
+  lock_reason?: string | null
+}
+
+export interface IotStudioAccess {
+  can_access_iot_studio: boolean
+  can_submit_assignments: boolean
+  iot_track_enabled: boolean
+  is_instructor: boolean
 }
 
 export interface IotAchievementBadge {

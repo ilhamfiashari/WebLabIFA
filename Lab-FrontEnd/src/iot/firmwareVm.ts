@@ -173,31 +173,78 @@ function parseStatements(lines: Array<{ text: string; num: number }>): ParsedSta
   return stmts
 }
 
+export interface ProjectSyncSummary {
+  linkedFiles: string[]
+  missingIncludes: string[]
+  combinedSource: string
+}
+
 function expandSketchIncludes(
   code: string,
   extraFiles: SketchFile[],
   visited = new Set<string>(),
+  missingIncludes = new Set<string>(),
 ): string {
-  if (!extraFiles.length) return code
+  if (!extraFiles.length && !/#include\s+"/.test(code)) return code
   return code
     .split('\n')
     .map((line) => {
       const m = /^\s*#include\s+"([^"]+)"/.exec(line)
       if (!m) return line
       const incName = m[1].trim()
-      if (visited.has(incName.toLowerCase())) return ''
+      const lowerInc = incName.toLowerCase()
+      if (visited.has(lowerInc)) return ''
       const file = extraFiles.find(
-        (f) => f.name.toLowerCase() === incName.toLowerCase() || f.name.toLowerCase().endsWith(`/${incName.toLowerCase()}`),
+        (f) => f.name.toLowerCase() === lowerInc || f.name.toLowerCase().endsWith(`/${lowerInc}`),
       )
-      if (!file) return line
-      visited.add(incName.toLowerCase())
-      return expandSketchIncludes(file.content, extraFiles, visited)
+      if (!file) {
+        missingIncludes.add(incName)
+        return line
+      }
+      visited.add(lowerInc)
+      visited.add(file.name.toLowerCase())
+      return expandSketchIncludes(file.content, extraFiles, visited, missingIncludes)
     })
     .join('\n')
 }
 
+/**
+ * Sinkronisasi seluruh file proyek (Main.ino + #include ".h/.hpp" + modul kompilasi .cpp/.c/.ino)
+ * menjadi satu unit kompilasi Arduino agar proyek besar multi-file saling terhubung.
+ */
+export function analyzeProjectFileSync(
+  code: string,
+  extraFiles: SketchFile[] = [],
+): ProjectSyncSummary {
+  const visited = new Set<string>()
+  const missingIncludes = new Set<string>()
+  const primaryExpanded = expandSketchIncludes(code, extraFiles, visited, missingIncludes)
+
+  const extraModuleChunks: string[] = []
+  for (const f of extraFiles) {
+    const lower = f.name.toLowerCase()
+    const isSourceUnit =
+      lower.endsWith('.cpp') || lower.endsWith('.c') || lower.endsWith('.ino')
+    if (isSourceUnit && !visited.has(lower)) {
+      visited.add(lower)
+      extraModuleChunks.push(expandSketchIncludes(f.content, extraFiles, visited, missingIncludes))
+    }
+  }
+
+  const combinedSource = extraModuleChunks.length
+    ? `${primaryExpanded}\n${extraModuleChunks.join('\n')}`
+    : primaryExpanded
+
+  const linkedFiles = ['Main.ino', ...extraFiles.map((f) => f.name)]
+  return {
+    linkedFiles,
+    missingIncludes: Array.from(missingIncludes),
+    combinedSource,
+  }
+}
+
 export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []): CompiledSketch {
-  const expanded = expandSketchIncludes(code, extraFiles)
+  const { combinedSource: expanded, missingIncludes } = analyzeProjectFileSync(code, extraFiles)
   const rawLines = expanded.split('\n')
   const defines: Record<string, number | string> = {
     HIGH: 1,
@@ -218,44 +265,94 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
   let hasSetup = false
   let hasLoop = false
 
+  const pushModeLine = (target: 'setup' | 'loop' | 'helper', text: string, num: number) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    if (target === 'setup') setupLines.push({ text: trimmed, num })
+    else if (target === 'loop') loopLines.push({ text: trimmed, num })
+    else if (activeHelper) helperBlocks[activeHelper].push({ text: trimmed, num })
+  }
+
+  const enterBlock = (target: 'setup' | 'loop' | 'helper', cleanLine: string, lineNum: number) => {
+    const openIdx = cleanLine.indexOf('{')
+    if (openIdx < 0) {
+      mode = target
+      braceDepth = 0
+      return
+    }
+    const delta = (cleanLine.match(/\{/g) ?? []).length - (cleanLine.match(/\}/g) ?? []).length
+    let afterOpen = cleanLine.slice(openIdx + 1).trim()
+    if (delta <= 0) {
+      if (afterOpen.endsWith('}')) afterOpen = afterOpen.slice(0, -1).trim()
+      if (afterOpen) pushModeLine(target, afterOpen, lineNum)
+      mode = 'top'
+      braceDepth = 0
+    } else {
+      mode = target
+      braceDepth = delta
+      if (afterOpen) pushModeLine(target, afterOpen, lineNum)
+    }
+  }
+
   for (let idx = 0; idx < rawLines.length; idx++) {
     const clean = stripComments(rawLines[idx])
     if (!clean) continue
-    if (clean.startsWith('#include')) continue
-    const defM = /^#define\s+([A-Za-z_]\w*)\s+([0-9.-]+)/.exec(clean)
-    if (defM) {
-      defines[defM[1]] = Number(defM[2])
+    if (
+      clean.startsWith('#include') ||
+      clean.startsWith('#pragma') ||
+      clean.startsWith('#ifndef') ||
+      clean.startsWith('#ifdef') ||
+      clean.startsWith('#if ') ||
+      clean.startsWith('#else') ||
+      clean.startsWith('#elif') ||
+      clean.startsWith('#endif')
+    ) {
+      continue
+    }
+    const defNumM = /^#define\s+([A-Za-z_]\w*)\s+([0-9.-]+)\s*$/.exec(clean)
+    if (defNumM) {
+      defines[defNumM[1]] = Number(defNumM[2])
+      continue
+    }
+    const defStrM = /^#define\s+([A-Za-z_]\w*)\s+"([^"]*)"\s*$/.exec(clean)
+    if (defStrM) {
+      defines[defStrM[1]] = defStrM[2]
+      continue
+    }
+    if (/^#define\s+[A-Za-z_]\w*\s*$/.test(clean)) {
       continue
     }
     if (mode === 'top') {
+      if (clean.startsWith('extern ')) continue
       const constM = /^(?:const\s+)?(?:int|float|double|long|bool|boolean)\s+([A-Za-z_]\w*)\s*=\s*([0-9.-]+|true|false)\s*;/.exec(clean)
       if (constM) {
         defines[constM[1]] = constM[2] === 'true' ? 1 : constM[2] === 'false' ? 0 : Number(constM[2])
         continue
       }
-      const strConstM = /^String\s+([A-Za-z_]\w*)\s*=\s*"([^"]*)"\s*;/.exec(clean)
+      const strConstM = /^(?:const\s+char\s*\*|const\s+String|String)\s+([A-Za-z_]\w*)\s*=\s*"([^"]*)"\s*;/.exec(clean)
       if (strConstM) {
         defines[strConstM[1]] = strConstM[2]
         continue
       }
       if (/^void\s+setup\s*\(/.test(clean)) {
         hasSetup = true
-        mode = 'setup'
-        braceDepth = (clean.match(/\{/g) ?? []).length - (clean.match(/\}/g) ?? []).length
+        enterBlock('setup', clean, idx + 1)
         continue
       }
       if (/^void\s+loop\s*\(/.test(clean)) {
         hasLoop = true
-        mode = 'loop'
-        braceDepth = (clean.match(/\{/g) ?? []).length - (clean.match(/\}/g) ?? []).length
+        enterBlock('loop', clean, idx + 1)
         continue
       }
-      const helperM = /^(?:void|int|bool)\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*\{?$/.exec(clean)
-      if (helperM) {
-        mode = 'helper'
+      // Abaikan forward declaration / prototipe fungsi pada file header (.h) yang diakhiri ';'
+      const helperM =
+        /^(?:void|int|float|double|long|bool|boolean|String|uint\d+_t)\s+([A-Za-z_]\w*)\s*\([^)]*\)(?:\s*\{.*)?$/.exec(
+          clean,
+        )
+      if (helperM && !clean.endsWith(';')) {
         activeHelper = helperM[1]
         helperBlocks[activeHelper] = []
-        braceDepth = (clean.match(/\{/g) ?? []).length - (clean.match(/\}/g) ?? []).length
+        enterBlock('helper', clean, idx + 1)
         continue
       }
       continue
@@ -265,18 +362,29 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
     const closes = (clean.match(/\}/g) ?? []).length
     braceDepth += opens - closes
     if (braceDepth <= 0) {
+      const beforeClose = clean.replace(/\}\s*$/, '').trim()
+      if (beforeClose) pushModeLine(mode, beforeClose, idx + 1)
       mode = 'top'
       braceDepth = 0
       continue
     }
-    if (mode === 'setup') setupLines.push({ text: clean, num: idx + 1 })
-    else if (mode === 'loop') loopLines.push({ text: clean, num: idx + 1 })
-    else if (mode === 'helper' && activeHelper) helperBlocks[activeHelper].push({ text: clean, num: idx + 1 })
+    pushModeLine(mode, clean, idx + 1)
   }
 
   const helpers: Record<string, ParsedStatement[]> = {}
   for (const [fnName, lines] of Object.entries(helperBlocks)) {
     helpers[fnName] = parseStatements(lines)
+  }
+
+  if (missingIncludes.length > 0) {
+    return {
+      defines,
+      setupStmts: [],
+      loopStmts: [],
+      helpers,
+      servoPins: [],
+      compileError: `Compile Error: File lokal #include "${missingIncludes[0]}" tidak ditemukan di tab file proyek.`,
+    }
   }
 
   if (!hasSetup || !hasLoop) {
@@ -1327,8 +1435,25 @@ export function verifyCircuitAndCode(
   extraFiles: SketchFile[] = [],
 ): CircuitDiagnosticItem[] {
   const items: CircuitDiagnosticItem[] = []
+  const syncInfo = analyzeProjectFileSync(code, extraFiles)
   const compiled = compileArduinoSketch(code, extraFiles)
   const extraMcus = components.filter((c) => c.kind === 'mcu' && c.id !== 'board')
+
+  if (syncInfo.missingIncludes.length > 0) {
+    items.push({
+      id: 'diag-sync-missing',
+      status: 'error',
+      textId: `Sinkronisasi file gagal: #include "${syncInfo.missingIncludes.join('", "')}" belum ada di proyek.`,
+      textEn: `File sync error: missing local include "${syncInfo.missingIncludes.join('", "')}".`,
+    })
+  } else if (extraFiles.length > 0) {
+    items.push({
+      id: 'diag-sync-ok',
+      status: 'ok',
+      textId: `Sinkronisasi multi-file aktif (${syncInfo.linkedFiles.join(' + ')} + diagram.json).`,
+      textEn: `Multi-file workspace synced (${syncInfo.linkedFiles.join(' + ')} + diagram.json).`,
+    })
+  }
 
   if (compiled.compileError) {
     items.push({

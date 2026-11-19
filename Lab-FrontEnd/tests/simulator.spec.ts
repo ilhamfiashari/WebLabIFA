@@ -862,21 +862,58 @@ test('peringkat mahasiswa, anti-NaN & anti-HTTP 500 dengan avg_score null, serta
 test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monitor, Plotter & verifikasi misi', async ({ page }) => {
   await page.route('**/api/me', r => r.fulfill({ json: student }))
   await buildMockSimulatorRoutes(page)()
+  const completedMissions: Array<{ mission_id: string; score: number; completed_at: string }> = []
+  const savedProjectsList: Array<Record<string, unknown>> = []
   await page.route('**/api/iot/projects', async r => {
     if (r.request().method() === 'POST') {
-      return r.fulfill({ json: { id: 'proj-1', title: 'Misi 1 · ESP32-C3 LED Blink & Resistor 220Ω', board: 'esp32-c3', saved: true } })
+      const body = JSON.parse(r.request().postData() || '{}') as Record<string, unknown>
+      const proj = {
+        id: 'proj-1',
+        title: String(body.title ?? 'Proyek Multi-File'),
+        board: String(body.board ?? 'esp32-c3'),
+        mission_id: body.mission_id ?? null,
+        code: String(body.code ?? ''),
+        files: Array.isArray(body.files) ? body.files : [],
+        components: Array.isArray(body.components) ? body.components : [],
+        wires: Array.isArray(body.wires) ? body.wires : [],
+        updated_at: '2026-11-19T15:00:00Z',
+        saved: true,
+      }
+      const idx = savedProjectsList.findIndex((p) => p.id === proj.id)
+      if (idx >= 0) savedProjectsList[idx] = proj
+      else savedProjectsList.unshift(proj)
+      return r.fulfill({ json: proj })
     }
-    return r.fulfill({ json: { projects: [], completed_missions: [] } })
+    return r.fulfill({
+      json: {
+        projects: savedProjectsList,
+        completed_missions: completedMissions,
+        access: {
+          can_access_iot_studio: true,
+          can_submit_assignments: true,
+          iot_track_enabled: true,
+          is_instructor: false,
+        },
+      },
+    })
   })
-  await page.route('**/api/iot/missions/submit', r =>
-    r.fulfill({ json: { session_id: 'ses-iot-1', mission_id: 'iot-esp32-gpio', score: 100, passed: true, xp_awarded: 50 } }),
-  )
+  await page.route('**/api/iot/missions/submit', r => {
+    const body = JSON.parse(r.request().postData() || '{}') as { mission_id?: string }
+    const missionId = body.mission_id ?? 'iot-esp32-gpio'
+    if (!completedMissions.some((m) => m.mission_id === missionId)) {
+      completedMissions.push({ mission_id: missionId, score: 100, completed_at: '2026-11-19T15:00:00Z' })
+    }
+    return r.fulfill({ json: { session_id: `ses-${missionId}`, mission_id: missionId, score: 100, passed: true, xp_awarded: 50 } })
+  })
 
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/lab/iot')
 
   await expect(page.getByRole('heading', { level: 1, name: 'Simulator Hardware IoT & ESP32' })).toBeVisible()
   await expect(page.getByText('ESP32-C3', { exact: true }).first()).toBeVisible()
+  // Pada sisi mahasiswa, misi terbuka bertahap (Misi 2 & Misi 3 masih terkunci sebelum Misi 1 selesai)
+  await expect(page.getByRole('button', { name: /Misi 2 · Sensor Jarak/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /Misi 3 · Monitoring DHT22/ })).toBeDisabled()
 
   // Background kode putih pada mode terang + syntax highlighting C++ (.ino)
   const codeBg = await page.locator('.iot-code-wrap').evaluate((el) => getComputedStyle(el).backgroundColor)
@@ -1118,6 +1155,15 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('button', { name: 'Kumpulkan Misi (+50 XP)' }).click()
   await expect(page.getByText(/Misi berhasil diverifikasi! Skor 100\/100 tercatat/)).toBeVisible()
 
+  // Misi 2 terbuka setelah Misi 1 selesai; selesaikan Misi 2 untuk membuka Misi 3
+  const m2Btn = page.getByRole('button', { name: /Misi 2 · Sensor Jarak/ })
+  await expect(m2Btn).toBeEnabled()
+  await m2Btn.click()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await page.getByRole('button', { name: 'Kumpulkan Misi (+50 XP)' }).click()
+  await expect(page.getByText(/Misi berhasil diverifikasi! Skor 100\/100 tercatat/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Misi 3 · Monitoring DHT22/ })).toBeEnabled()
+
   // Uji ganti preset ke Sensor Suhu DHT22 + OLED SSD1306 + Serial Plotter
   await page.getByLabel('Pilih template atau misi').selectOption('esp32-c3-dht-oled')
   await page.getByRole('button', { name: 'Jalankan' }).click()
@@ -1126,14 +1172,32 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await page.getByRole('tab', { name: /Serial Plotter/ }).click()
   await expect(page.locator('.iot-plot-legend')).toContainText('temp:')
 
+  // Uji tombol New File (Blank Canvas) untuk membuat kanvas kosong & multi-file sinkron (.h + .cpp)
+  await page.getByRole('button', { name: 'New File (Blank Canvas)' }).click()
+  await expect(page.locator('.iot-wire-group')).toHaveCount(0)
+  await page.getByRole('button', { name: /Tambah File/ }).click()
+  await page.getByLabel(/Nama file baru/).fill('sensor_mod.cpp')
+  await page.getByRole('button', { name: 'Buat', exact: true }).click()
+  await page.getByLabel('Kode program mikrokontroler').fill('#include <Arduino.h>\nvoid logSyncOk() { Serial.println("SYNC_MODULE_OK"); }\n')
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  await expect(page.getByLabel('Status sinkronisasi multi-file')).toContainText('Sinkron (3 file): Main.ino · sensor_mod.cpp · diagram.json')
+  await page.getByLabel('Kode program mikrokontroler').fill('void logSyncOk();\nvoid setup() { Serial.begin(115200); }\nvoid loop() { logSyncOk(); delay(200); }\n')
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('SYNC_MODULE_OK')
+
+  // Simpan proyek multi-file & uji penjelajah Tersimpan & File
+  await page.getByRole('button', { name: 'Simpan Proyek' }).click()
+  await expect(page.getByText(/tersimpan ke database/)).toBeVisible()
+  await page.getByRole('button', { name: /Tersimpan & File/ }).click()
+  const explorer = page.getByRole('region', { name: /Penjelajah proyek dan file tersimpan/i })
+  await expect(explorer).toBeVisible()
+  await expect(explorer.getByRole('button', { name: 'sensor_mod.cpp' })).toBeVisible()
+  await page.getByRole('button', { name: /Tersimpan & File/ }).click()
+
   // Uji template Multi-MCU: 2 board berjalan paralel (ESP32-C3 GPIO2 -> Arduino Uno D4 -> LED Node #2)
   await page.getByLabel('Pilih template atau misi').selectOption('multi-mcu-bridge')
   await page.getByRole('button', { name: 'Jalankan' }).click()
   await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('[Arduino Uno #2] RX=HIGH -> LED Node ON')
-
-  // Simpan proyek ke database
-  await page.getByRole('button', { name: 'Simpan Proyek' }).click()
-  await expect(page.getByText(/berhasil disimpan ke database/)).toBeVisible()
 
   // Tambah ketiga ukuran Breadboard (Medium 400-Pt, Mini 170-Pt, Large 830-Pt) & uji semua lubang dapat diklik + Mode Fokus + Fullscreen
   await page.getByRole('tab', { name: 'Components' }).click()
@@ -1200,9 +1264,44 @@ test('proyek belajar Wokwi interaktif (buzzer, sensor, layar) hanya muncul di mo
   await page.route('**/api/me', r => r.fulfill({ json: lecturer }))
   await buildMockSimulatorRoutes(page)()
   await page.route('**/api/iot/projects', async r => r.fulfill({ json: { projects: [], completed_missions: [] } }))
+  await page.route('**/api/dosen/iot-projects**', async r => r.fulfill({
+    json: {
+      total: 1,
+      projects: [
+        {
+          id: 'stu-proj-1',
+          owner_id: '00000000-0000-0000-0000-000000000011',
+          owner_name: 'Putri Wulandari',
+          owner_email: '122140011@student.itera.ac.id',
+          class_id: 'IF-4A',
+          title: 'Smart Thermal Guard Multi-File',
+          board: 'esp32-c3',
+          mission_id: 'iot-esp32-gpio',
+          code: '#include "pins.h"\nvoid setup(){ Serial.begin(115200); }\nvoid loop(){ Serial.println("PUTRI_MULTI_FILE"); delay(300); }',
+          files: [{ name: 'pins.h', content: '#define ALERT_PIN 7\n' }],
+          components: [],
+          wires: [],
+          updated_at: '2026-11-19T14:00:00Z',
+        },
+      ],
+    },
+  }))
 
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/lab/dosen/iot')
+
+  // Di mode Dosen semua 10 misi terbuka dan menu Proyek Mahasiswa tersedia
+  for (let i = 0; i < 10; i++) {
+    await expect(page.locator('.iot-mission-pill').nth(i)).toBeEnabled()
+  }
+  await page.getByRole('button', { name: /Tersimpan & File/ }).click()
+  await page.getByRole('button', { name: /Proyek Mahasiswa/ }).click()
+  await expect(page.getByText('Smart Thermal Guard Multi-File')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'pins.h' })).toBeVisible()
+  await page.getByRole('button', { name: 'Muat ke Kanvas' }).click()
+  await expect(page.getByRole('tab', { name: 'pins.h' })).toBeVisible()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByLabel('Konsol Serial Monitor')).toContainText('PUTRI_MULTI_FILE')
 
   // 0. Pembatas editor <-> kanvas bisa digeser untuk memperlebar panel kode
   const resizer = page.getByRole('separator', { name: /Geser untuk memperlebar panel/i })

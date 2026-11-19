@@ -2,17 +2,23 @@ use super::load_user_access_rights;
 use crate::{ApiError, AppState, identity, simulator_catalog::find_lab, verify_mutation};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
 };
 use axum_extra::extract::cookie::CookieJar;
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::FromRow;
 use std::collections::HashSet;
 use uuid::Uuid;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SketchFileEntry {
+    pub name: String,
+    pub content: String,
+}
 
 #[derive(FromRow)]
 struct ProjectRow {
@@ -21,9 +27,27 @@ struct ProjectRow {
     board: String,
     mission_id: Option<String>,
     code: String,
+    files_json: Value,
     components_json: Value,
     wires_json: Value,
     updated_at: DateTime<Utc>,
+}
+
+#[derive(FromRow)]
+struct StudentProjectRow {
+    id: Uuid,
+    title: String,
+    board: String,
+    mission_id: Option<String>,
+    code: String,
+    files_json: Value,
+    components_json: Value,
+    wires_json: Value,
+    updated_at: DateTime<Utc>,
+    owner_id: Uuid,
+    owner_name: String,
+    owner_email: String,
+    class_id: String,
 }
 
 #[derive(FromRow)]
@@ -34,12 +58,20 @@ struct CompletedMissionRow {
 }
 
 #[derive(Deserialize)]
+pub struct StudentProjectsQuery {
+    pub class_id: Option<String>,
+    pub q: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct SaveProjectReq {
     pub id: Option<Uuid>,
     pub title: String,
     pub board: String,
     pub mission_id: Option<String>,
     pub code: String,
+    #[serde(default)]
+    pub files: Vec<SketchFileEntry>,
     pub components: Vec<Value>,
     pub wires: Vec<Value>,
 }
@@ -50,6 +82,8 @@ pub struct SubmitMissionReq {
     pub mission_id: String,
     pub board: String,
     pub code: String,
+    #[serde(default)]
+    pub files: Vec<SketchFileEntry>,
     #[serde(default)]
     pub components: Vec<Value>,
     #[serde(default)]
@@ -235,6 +269,151 @@ fn find_mission_rule(mission_id: &str) -> Option<&'static IotMissionRule> {
     IOT_MISSION_RULES.iter().find(|r| r.id == mission_id)
 }
 
+pub fn mission_order(mission_id: &str) -> Option<usize> {
+    IOT_MISSION_RULES.iter().position(|r| r.id == mission_id)
+}
+
+pub fn evaluate_mission_access(
+    role: &str,
+    mission_id: &str,
+    completed_ids: &HashSet<String>,
+    can_access_iot_studio: bool,
+    iot_track_enabled: bool,
+) -> (bool, Option<String>) {
+    if matches!(role, "dosen" | "admin") {
+        return (true, None);
+    }
+    if !iot_track_enabled {
+        return (
+            false,
+            Some("Jalur praktikum IoT sedang dinonaktifkan admin.".to_string()),
+        );
+    }
+    if !can_access_iot_studio {
+        return (
+            false,
+            Some("Hak akses IoT Studio Anda dikunci oleh admin.".to_string()),
+        );
+    }
+    let Some(idx) = mission_order(mission_id) else {
+        return (false, Some("Misi IoT tidak ditemukan.".to_string()));
+    };
+    if idx == 0 || completed_ids.contains(mission_id) {
+        return (true, None);
+    }
+    let prev = &IOT_MISSION_RULES[idx - 1];
+    if completed_ids.contains(prev.id) {
+        (true, None)
+    } else {
+        (
+            false,
+            Some(format!(
+                "Misi terkunci: selesaikan {} terlebih dahulu.",
+                prev.title
+            )),
+        )
+    }
+}
+
+fn normalize_and_validate_files(
+    raw: &[SketchFileEntry],
+) -> Result<Vec<SketchFileEntry>, &'static str> {
+    if raw.len() > 24 {
+        return Err("Maksimal 24 file pendamping per proyek IoT.");
+    }
+    let mut out = Vec::with_capacity(raw.len());
+    let mut seen = HashSet::new();
+    let mut total_bytes = 0usize;
+    for f in raw {
+        let name = f.name.trim();
+        if name.is_empty()
+            || name.len() > 64
+            || name.contains('/')
+            || name.contains('\\')
+            || name.contains("..")
+        {
+            return Err("Nama file proyek tidak valid.");
+        }
+        let lower = name.to_ascii_lowercase();
+        if lower == "main.ino" {
+            continue;
+        }
+        let allowed_ext = [".h", ".hpp", ".c", ".cpp", ".ino", ".txt", ".json"]
+            .iter()
+            .any(|ext| lower.ends_with(ext));
+        if !allowed_ext {
+            return Err("Ekstensi file harus .h, .hpp, .c, .cpp, .ino, .txt, atau .json.");
+        }
+        if f.content.len() > 24_576 {
+            return Err("Ukuran satu file melebihi batas 24KB.");
+        }
+        total_bytes = total_bytes.saturating_add(f.content.len());
+        if total_bytes > 131_072 {
+            return Err("Total ukuran file proyek melebihi batas 128KB.");
+        }
+        if !seen.insert(lower) {
+            return Err("Terdapat nama file duplikat dalam proyek.");
+        }
+        out.push(SketchFileEntry {
+            name: name.to_string(),
+            content: f.content.clone(),
+        });
+    }
+    Ok(out)
+}
+
+fn combine_firmware_sources(main_code: &str, files: &[SketchFileEntry]) -> String {
+    if files.is_empty() {
+        return main_code.to_string();
+    }
+    let mut sorted: Vec<&SketchFileEntry> = files.iter().collect();
+    sorted.sort_by(|a, b| a.name.cmp(&b.name));
+    let cap = main_code.len() + sorted.iter().map(|f| f.content.len() + 32).sum::<usize>();
+    let mut out = String::with_capacity(cap);
+    out.push_str(main_code);
+    for f in sorted {
+        out.push_str("\n// --- FILE: ");
+        out.push_str(&f.name);
+        out.push_str(" ---\n");
+        out.push_str(&f.content);
+    }
+    out
+}
+
+async fn load_completed_mission_ids(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+) -> Result<
+    (
+        Vec<CompletedMissionRow>,
+        Vec<(String, Option<i32>, DateTime<Utc>)>,
+        HashSet<String>,
+    ),
+    ApiError,
+> {
+    let missions: Vec<CompletedMissionRow> = sqlx::query_as(
+        "SELECT mission_id, score, completed_at FROM iot_mission_completions WHERE user_id = $1 ORDER BY completed_at DESC",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let legacy_sessions: Vec<(String, Option<i32>, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT DISTINCT ON (lab_id) lab_id, score, updated_at FROM lab_sessions WHERE user_id = $1 AND lab_id LIKE 'iot-esp32-%' AND passed = true ORDER BY lab_id, updated_at DESC",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut completed_ids: HashSet<String> =
+        missions.iter().map(|m| m.mission_id.clone()).collect();
+    for (lab_id, _, _) in &legacy_sessions {
+        completed_ids.insert(lab_id.clone());
+    }
+    Ok((missions, legacy_sessions, completed_ids))
+}
+
 fn valid_board(board: &str) -> bool {
     matches!(
         board,
@@ -279,7 +458,8 @@ fn count_valid_wires(wires: &[Value]) -> usize {
 fn verify_iot_mission_payload(
     rule: &IotMissionRule,
     req: &SubmitMissionReq,
-) -> Result<(), &'static str> {
+    validated_files: &[SketchFileEntry],
+) -> Result<String, &'static str> {
     if req.has_hardware_alerts {
         return Err("Terdapat peringatan hardware/korsleting pada sirkuit.");
     }
@@ -292,7 +472,8 @@ fn verify_iot_mission_payload(
     if req.components.len() > 36 || req.wires.len() > 64 {
         return Err("Jumlah komponen atau kabel melebihi batas aman simulator.");
     }
-    let code = req.code.trim();
+    let combined = combine_firmware_sources(&req.code, validated_files);
+    let code = combined.trim();
     if code.is_empty() || !code.contains("setup") || !code.contains("loop") {
         return Err("Firmware harus berisi fungsi setup() dan loop() yang valid.");
     }
@@ -334,7 +515,7 @@ fn verify_iot_mission_payload(
         return Err("Layar OLED SSD1306 belum menampilkan pembacaan sensor.");
     }
 
-    Ok(())
+    Ok(combined)
 }
 
 pub async fn list_iot_projects(
@@ -342,30 +523,24 @@ pub async fn list_iot_projects(
     jar: CookieJar,
 ) -> Result<Json<Value>, ApiError> {
     let actor = identity(&state, &jar).await?;
+    let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+    let settings = crate::latihan::load_platform_settings(&state.pool).await;
+    let iot_track_enabled = settings
+        .active_tracks
+        .as_array()
+        .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("iot")));
 
     let rows: Vec<ProjectRow> = sqlx::query_as(
-        "SELECT id, title, board, mission_id, code, components_json, wires_json, updated_at FROM iot_projects WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 20",
+        "SELECT id, title, board, mission_id, code, files_json, components_json, wires_json, updated_at FROM iot_projects WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 30",
     )
     .bind(actor.id)
     .fetch_all(&state.pool)
     .await?;
 
-    let missions: Vec<CompletedMissionRow> = sqlx::query_as(
-        "SELECT mission_id, score, completed_at FROM iot_mission_completions WHERE user_id = $1 ORDER BY completed_at DESC",
-    )
-    .bind(actor.id)
-    .fetch_all(&state.pool)
-    .await
-    .unwrap_or_default();
+    let (missions, legacy_sessions, completed_ids) =
+        load_completed_mission_ids(&state.pool, actor.id).await?;
 
     let mut seen: HashSet<String> = missions.iter().map(|m| m.mission_id.clone()).collect();
-    let legacy_sessions: Vec<(String, Option<i32>, DateTime<Utc>)> = sqlx::query_as(
-        "SELECT DISTINCT ON (lab_id) lab_id, score, updated_at FROM lab_sessions WHERE user_id = $1 AND lab_id LIKE 'iot-esp32-%' AND passed = true ORDER BY lab_id, updated_at DESC",
-    )
-    .bind(actor.id)
-    .fetch_all(&state.pool)
-    .await?;
-
     let mut completed_missions: Vec<Value> = missions
         .into_iter()
         .map(|m| {
@@ -386,6 +561,28 @@ pub async fn list_iot_projects(
             }));
         }
     }
+
+    let mission_states: Vec<Value> = IOT_MISSION_RULES
+        .iter()
+        .enumerate()
+        .map(|(order, rule)| {
+            let (unlocked, lock_reason) = evaluate_mission_access(
+                &actor.role,
+                rule.id,
+                &completed_ids,
+                rights.can_access_iot_studio,
+                iot_track_enabled,
+            );
+            json!({
+                "mission_id": rule.id,
+                "order": order + 1,
+                "title": rule.title,
+                "unlocked": unlocked,
+                "completed": completed_ids.contains(rule.id),
+                "lock_reason": lock_reason,
+            })
+        })
+        .collect();
 
     let ach_rows: Vec<(String,)> = sqlx::query_as(
         "SELECT achievement_key FROM lab_achievements WHERE user_id = $1 AND achievement_key LIKE 'badge:iot-%' ORDER BY earned_at DESC",
@@ -426,6 +623,7 @@ pub async fn list_iot_projects(
                 "board": r.board,
                 "mission_id": r.mission_id,
                 "code": r.code,
+                "files": r.files_json,
                 "components": r.components_json,
                 "wires": r.wires_json,
                 "updated_at": r.updated_at,
@@ -436,8 +634,97 @@ pub async fn list_iot_projects(
     Ok(Json(json!({
         "projects": projects,
         "completed_missions": completed_missions,
+        "mission_states": mission_states,
         "achievements": achievements,
         "iot_xp": total_iot_xp,
+        "access": {
+            "can_access_iot_studio": actor.role != "mahasiswa" || rights.can_access_iot_studio,
+            "can_submit_assignments": actor.role != "mahasiswa" || rights.can_submit_assignments,
+            "iot_track_enabled": actor.role != "mahasiswa" || iot_track_enabled,
+            "is_instructor": matches!(actor.role.as_str(), "dosen" | "admin"),
+        }
+    })))
+}
+
+pub async fn list_student_iot_projects(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(q): Query<StudentProjectsQuery>,
+) -> Result<Json<Value>, ApiError> {
+    let actor = identity(&state, &jar).await?;
+    super::require_role(&actor, "dosen")?;
+
+    let class_filter = q.class_id.as_deref().unwrap_or("").trim().to_string();
+    let search_q = q.q.as_deref().unwrap_or("").trim().to_ascii_lowercase();
+
+    let mut rows: Vec<StudentProjectRow> = sqlx::query_as(
+        "SELECT DISTINCT ON (p.id)
+            p.id, p.title, p.board, p.mission_id, p.code, p.files_json,
+            p.components_json, p.wires_json, p.updated_at,
+            u.id AS owner_id, u.name AS owner_name, u.email AS owner_email,
+            cm_stu.class_id
+         FROM iot_projects p
+         JOIN users u ON u.id = p.user_id
+         JOIN class_memberships cm_stu ON cm_stu.user_id = p.user_id AND cm_stu.role_in_class = 'mahasiswa'
+         JOIN class_memberships cm_doc ON cm_doc.class_id = cm_stu.class_id AND cm_doc.user_id = $1 AND cm_doc.role_in_class = 'dosen'
+         WHERE ($2 = '' OR cm_stu.class_id = $2)
+         ORDER BY p.id, cm_stu.class_id",
+    )
+    .bind(actor.id)
+    .bind(&class_filter)
+    .fetch_all(&state.pool)
+    .await?;
+
+    rows.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
+
+    let projects: Vec<Value> = rows
+        .into_iter()
+        .filter(|r| {
+            if search_q.is_empty() {
+                return true;
+            }
+            let files_match = r.files_json.as_array().is_some_and(|arr| {
+                arr.iter().any(|item| {
+                    item.get("name")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|n| n.to_ascii_lowercase().contains(&search_q))
+                })
+            });
+            r.title.to_ascii_lowercase().contains(&search_q)
+                || r.owner_name.to_ascii_lowercase().contains(&search_q)
+                || r.owner_email.to_ascii_lowercase().contains(&search_q)
+                || r.board.to_ascii_lowercase().contains(&search_q)
+                || r.mission_id
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
+                    .contains(&search_q)
+                || files_match
+        })
+        .take(60)
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "owner_id": r.owner_id,
+                "owner_name": r.owner_name,
+                "owner_email": r.owner_email,
+                "class_id": r.class_id,
+                "title": r.title,
+                "board": r.board,
+                "mission_id": r.mission_id,
+                "code": r.code,
+                "files": r.files_json,
+                "components": r.components_json,
+                "wires": r.wires_json,
+                "updated_at": r.updated_at,
+            })
+        })
+        .collect();
+
+    let total = projects.len();
+    Ok(Json(json!({
+        "projects": projects,
+        "total": total,
     })))
 }
 
@@ -449,31 +736,65 @@ pub async fn save_iot_project(
 ) -> Result<Json<Value>, ApiError> {
     let actor = verify_mutation(&state, &jar, &headers).await?;
     let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
-    if actor.role == "mahasiswa" && !rights.can_access_iot_studio {
+    let settings = crate::latihan::load_platform_settings(&state.pool).await;
+    let iot_track_enabled = settings
+        .active_tracks
+        .as_array()
+        .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("iot")));
+
+    if actor.role == "mahasiswa" && (!rights.can_access_iot_studio || !iot_track_enabled) {
         return Err(ApiError(StatusCode::FORBIDDEN));
     }
+
+    let mission_id = req
+        .mission_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    if actor.role == "mahasiswa"
+        && let Some(mid) = mission_id.as_deref()
+    {
+        let (_, _, completed_ids) = load_completed_mission_ids(&state.pool, actor.id).await?;
+        let (unlocked, _) = evaluate_mission_access(
+            &actor.role,
+            mid,
+            &completed_ids,
+            rights.can_access_iot_studio,
+            iot_track_enabled,
+        );
+        if !unlocked {
+            return Err(ApiError(StatusCode::FORBIDDEN));
+        }
+    }
+
     let title = req.title.trim();
-    if title.is_empty() || title.len() > 80 {
+    if title.is_empty() || title.len() > 100 {
         return Err(ApiError(StatusCode::BAD_REQUEST));
     }
     if !valid_board(&req.board) {
         return Err(ApiError(StatusCode::BAD_REQUEST));
     }
-    if req.code.len() > 8192 || req.components.len() > 36 || req.wires.len() > 64 {
+    if req.code.len() > 32_768 || req.components.len() > 36 || req.wires.len() > 64 {
         return Err(ApiError(StatusCode::BAD_REQUEST));
     }
+    let validated_files =
+        normalize_and_validate_files(&req.files).map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
 
+    let files_json =
+        serde_json::to_value(&validated_files).map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
     let components_json = Value::Array(req.components);
     let wires_json = Value::Array(req.wires);
 
     let project_id = if let Some(existing_id) = req.id {
         let updated = sqlx::query(
-            "UPDATE iot_projects SET title=$1, board=$2, mission_id=$3, code=$4, components_json=$5, wires_json=$6, updated_at=now() WHERE id=$7 AND user_id=$8",
+            "UPDATE iot_projects SET title=$1, board=$2, mission_id=$3, code=$4, files_json=$5, components_json=$6, wires_json=$7, updated_at=now() WHERE id=$8 AND user_id=$9",
         )
         .bind(title)
         .bind(&req.board)
-        .bind(req.mission_id.as_deref())
+        .bind(mission_id.as_deref())
         .bind(&req.code)
+        .bind(&files_json)
         .bind(&components_json)
         .bind(&wires_json)
         .bind(existing_id)
@@ -487,14 +808,15 @@ pub async fn save_iot_project(
     } else {
         let new_id = Uuid::new_v4();
         sqlx::query(
-            "INSERT INTO iot_projects(id, user_id, title, board, mission_id, code, components_json, wires_json) VALUES($1, $2, $3, $4, $5, $6, $7, $8)",
+            "INSERT INTO iot_projects(id, user_id, title, board, mission_id, code, files_json, components_json, wires_json) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         )
         .bind(new_id)
         .bind(actor.id)
         .bind(title)
         .bind(&req.board)
-        .bind(req.mission_id.as_deref())
+        .bind(mission_id.as_deref())
         .bind(&req.code)
+        .bind(&files_json)
         .bind(&components_json)
         .bind(&wires_json)
         .execute(&state.pool)
@@ -506,6 +828,7 @@ pub async fn save_iot_project(
         "id": project_id,
         "title": title,
         "board": req.board,
+        "files": files_json,
         "saved": true,
     })))
 }
@@ -535,41 +858,43 @@ pub async fn submit_iot_mission(
     Json(req): Json<SubmitMissionReq>,
 ) -> Result<Json<Value>, ApiError> {
     let actor = verify_mutation(&state, &jar, &headers).await?;
-    if !valid_board(&req.board) || req.code.len() > 8192 {
+    if !valid_board(&req.board) || req.code.len() > 32_768 {
         return Err(ApiError(StatusCode::BAD_REQUEST));
     }
-    if actor.role == "mahasiswa" {
-        let settings = crate::latihan::load_platform_settings(&state.pool).await;
-        if let Some(list) = settings.active_tracks.as_array()
-            && !list.iter().any(|v| v.as_str() == Some("iot"))
-        {
-            return Err(ApiError(StatusCode::FORBIDDEN));
-        }
-        let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
-        if !rights.can_access_iot_studio || !rights.can_submit_assignments {
-            return Err(ApiError(StatusCode::FORBIDDEN));
-        }
-    }
+    let validated_files =
+        normalize_and_validate_files(&req.files).map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
 
     let Some(rule) = find_mission_rule(&req.mission_id) else {
         return Err(ApiError(StatusCode::NOT_FOUND));
     };
 
-    if let Err(reason) = verify_iot_mission_payload(rule, &req) {
-        if actor.role == "mahasiswa"
-            && req.checks_total > 0
-            && req.checks_passed >= req.checks_total
-        {
+    if actor.role == "mahasiswa" {
+        let settings = crate::latihan::load_platform_settings(&state.pool).await;
+        let iot_track_enabled = settings
+            .active_tracks
+            .as_array()
+            .is_some_and(|list| list.iter().any(|v| v.as_str() == Some("iot")));
+        let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+        if !iot_track_enabled || !rights.can_access_iot_studio || !rights.can_submit_assignments {
+            return Err(ApiError(StatusCode::FORBIDDEN));
+        }
+
+        let (_, _, completed_ids) = load_completed_mission_ids(&state.pool, actor.id).await?;
+        let (unlocked, lock_reason) = evaluate_mission_access(
+            &actor.role,
+            rule.id,
+            &completed_ids,
+            rights.can_access_iot_studio,
+            iot_track_enabled,
+        );
+        if !unlocked {
             let summary = format!(
-                "Klaim lulus misi {} ditolak server: {} (components={}, wires={}, loops={})",
+                "Percobaan lompat misi berurutan {} ditolak server: {}",
                 rule.id,
-                reason,
-                req.components.len(),
-                req.wires.len(),
-                req.loop_iterations
+                lock_reason.unwrap_or_else(|| "prasyarat misi belum tuntas".to_string())
             );
             let _ = sqlx::query(
-                "INSERT INTO security_anomalies(id,user_id,actor_email,kind,severity,summary) VALUES($1,$2,$3,'iot_submission_tampering','medium',$4)",
+                "INSERT INTO security_anomalies(id,user_id,actor_email,kind,severity,summary) VALUES($1,$2,$3,'iot_sequential_bypass_attempt','medium',$4)",
             )
             .bind(Uuid::new_v4())
             .bind(actor.id)
@@ -577,12 +902,41 @@ pub async fn submit_iot_mission(
             .bind(&summary)
             .execute(&state.pool)
             .await;
+            return Err(ApiError(StatusCode::FORBIDDEN));
         }
-        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
     }
 
+    let combined_code = match verify_iot_mission_payload(rule, &req, &validated_files) {
+        Ok(combined) => combined,
+        Err(reason) => {
+            if actor.role == "mahasiswa"
+                && req.checks_total > 0
+                && req.checks_passed >= req.checks_total
+            {
+                let summary = format!(
+                    "Klaim lulus misi {} ditolak server: {} (components={}, wires={}, loops={})",
+                    rule.id,
+                    reason,
+                    req.components.len(),
+                    req.wires.len(),
+                    req.loop_iterations
+                );
+                let _ = sqlx::query(
+                    "INSERT INTO security_anomalies(id,user_id,actor_email,kind,severity,summary) VALUES($1,$2,$3,'iot_submission_tampering','medium',$4)",
+                )
+                .bind(Uuid::new_v4())
+                .bind(actor.id)
+                .bind(&actor.email)
+                .bind(&summary)
+                .execute(&state.pool)
+                .await;
+            }
+            return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+        }
+    };
+
     let score = 100;
-    let code_hash = format!("{:x}", Sha256::digest(req.code.as_bytes()));
+    let code_hash = format!("{:x}", Sha256::digest(combined_code.as_bytes()));
     let mut tx = state.pool.begin().await?;
 
     sqlx::query(
@@ -606,6 +960,7 @@ pub async fn submit_iot_mission(
             "board": req.board,
             "component_count": req.components.len(),
             "wire_count": req.wires.len(),
+            "extra_file_count": validated_files.len(),
             "checks_passed": req.checks_passed,
             "checks_total": req.checks_total,
             "server_verified": true,
@@ -687,6 +1042,30 @@ pub async fn submit_iot_mission(
 
     tx.commit().await?;
 
+    let (_, _, updated_completed_ids) = load_completed_mission_ids(&state.pool, actor.id).await?;
+    let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+    let mission_states: Vec<Value> = IOT_MISSION_RULES
+        .iter()
+        .enumerate()
+        .map(|(order, r)| {
+            let (unlocked, lock_reason) = evaluate_mission_access(
+                &actor.role,
+                r.id,
+                &updated_completed_ids,
+                rights.can_access_iot_studio,
+                true,
+            );
+            json!({
+                "mission_id": r.id,
+                "order": order + 1,
+                "title": r.title,
+                "unlocked": unlocked,
+                "completed": updated_completed_ids.contains(r.id),
+                "lock_reason": lock_reason,
+            })
+        })
+        .collect();
+
     let earned_rows: Vec<(String,)> = sqlx::query_as(
         "SELECT achievement_key FROM lab_achievements WHERE user_id=$1 AND achievement_key LIKE 'badge:iot-%'",
     )
@@ -717,6 +1096,7 @@ pub async fn submit_iot_mission(
         "xp_awarded": xp_awarded,
         "newly_unlocked": newly_unlocked,
         "achievements": achievements,
+        "mission_states": mission_states,
     })))
 }
 
@@ -734,6 +1114,7 @@ mod tests {
             mission_id: "iot-esp32-mqtt".into(),
             board: "esp32-c3".into(),
             code: "void setup(){} void loop(){ mqtt.publish(\"a\", \"b\"); }".into(),
+            files: vec![],
             components: vec![],
             wires: vec![],
             component_count: 3,
@@ -746,12 +1127,16 @@ mod tests {
             has_oled_output: false,
             mqtt_tls_verified: true,
         };
-        assert!(verify_iot_mission_payload(rule_tls, &spoofed).is_err());
+        assert!(verify_iot_mission_payload(rule_tls, &spoofed, &[]).is_err());
 
-        let valid_tls = SubmitMissionReq {
+        let valid_multifile = SubmitMissionReq {
             mission_id: "iot-esp32-mqtt".into(),
             board: "esp32-c3".into(),
-            code: "void setup(){ mqtt.begin(\"mqtts://broker:8883\", true); } void loop(){ mqtt.publish(\"t\", \"1\"); }".into(),
+            code: "#include \"telemetry.h\"\nvoid setup(){ setupMqtt(); } void loop(){ sendTelemetry(); }".into(),
+            files: vec![SketchFileEntry {
+                name: "telemetry.h".into(),
+                content: "void setupMqtt(){ mqtt.begin(\"mqtts://broker:8883\", true); } void sendTelemetry(){ mqtt.publish(\"t\", \"1\"); }".into(),
+            }],
             components: vec![json!({"id": "ldr-1", "kind": "ldr"})],
             wires: vec![
                 json!({"from": {"nodeId": "board", "pinId": "3V3"}, "to": {"nodeId": "ldr-1", "pinId": "VCC"}}),
@@ -768,6 +1153,63 @@ mod tests {
             has_oled_output: false,
             mqtt_tls_verified: true,
         };
-        assert!(verify_iot_mission_payload(rule_tls, &valid_tls).is_ok());
+        let validated = normalize_and_validate_files(&valid_multifile.files).unwrap();
+        assert!(verify_iot_mission_payload(rule_tls, &valid_multifile, &validated).is_ok());
+
+        let insecure_in_extra_file = vec![SketchFileEntry {
+            name: "broker.h".into(),
+            content: "const char* URL = \"mqtt://insecure\";".into(),
+        }];
+        let insecure_req = SubmitMissionReq {
+            files: insecure_in_extra_file.clone(),
+            ..valid_multifile
+        };
+        assert!(
+            verify_iot_mission_payload(rule_tls, &insecure_req, &insecure_in_extra_file).is_err()
+        );
+    }
+
+    #[test]
+    fn sequential_mission_access_locks_students_and_unlocks_lecturers() {
+        let mut completed = HashSet::new();
+
+        // Mahasiswa tanpa progres: hanya Misi 1 yang terbuka
+        let (m1_ok, _) =
+            evaluate_mission_access("mahasiswa", "iot-esp32-gpio", &completed, true, true);
+        let (m2_locked, m2_reason) =
+            evaluate_mission_access("mahasiswa", "iot-esp32-ultrasonic", &completed, true, true);
+        let (m10_locked, _) = evaluate_mission_access(
+            "mahasiswa",
+            "iot-esp32-secure-telemetry",
+            &completed,
+            true,
+            true,
+        );
+        assert!(m1_ok);
+        assert!(!m2_locked);
+        assert!(m2_reason.unwrap().contains("Misi 1"));
+        assert!(!m10_locked);
+
+        // Setelah Misi 1 selesai: Misi 2 terbuka, Misi 3 masih terkunci
+        completed.insert("iot-esp32-gpio".to_string());
+        let (m2_ok, _) =
+            evaluate_mission_access("mahasiswa", "iot-esp32-ultrasonic", &completed, true, true);
+        let (m3_locked, _) =
+            evaluate_mission_access("mahasiswa", "iot-esp32-dht-oled", &completed, true, true);
+        assert!(m2_ok);
+        assert!(!m3_locked);
+
+        // Jika hak akses IoT Studio dikunci Admin: bahkan Misi 1 ikut terkunci
+        let (m1_revoked, revoked_reason) =
+            evaluate_mission_access("mahasiswa", "iot-esp32-gpio", &completed, false, true);
+        assert!(!m1_revoked);
+        assert!(revoked_reason.unwrap().contains("Hak akses"));
+
+        // Dosen selalu terbuka seluruh 10 misi
+        let empty = HashSet::new();
+        for rule in IOT_MISSION_RULES {
+            let (doc_ok, _) = evaluate_mission_access("dosen", rule.id, &empty, true, true);
+            assert!(doc_ok, "Dosen harus bisa mengakses semua misi {}", rule.id);
+        }
     }
 }
