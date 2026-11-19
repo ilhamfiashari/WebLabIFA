@@ -26,7 +26,7 @@ import { ExercisePlayer, LevelMap } from '../latihan/components'
 import { Shell, type NavPage } from '../portal/Shell'
 import { Pagination } from '../portal/Pagination'
 import { store, usePath, useTheme } from '../portal/hooks'
-import { Badge, Kpi, LoadState, NavLink, PageHead, SessionCard, TrackTabs } from '../portal/ui'
+import { Badge, Drawer, Kpi, LoadState, NavLink, PageHead, SessionCard, TrackTabs } from '../portal/ui'
 import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../shared/charts/AnimatedCharts'
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
@@ -569,6 +569,15 @@ function StudentLeaderboardPage({
   )
 }
 
+function safeAttachmentHref(raw?: string | null): string | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://') || trimmed.startsWith('/')) {
+    return trimmed
+  }
+  return null
+}
+
 function StudentAssignmentsPage({
   dashQ,
   csrf,
@@ -579,6 +588,8 @@ function StudentAssignmentsPage({
   go: (to: string) => void
 }) {
   const [assignPage, setAssignPage] = useState(1)
+  const [trackFilter, setTrackFilter] = useState<'all' | 'web' | 'iot'>('all')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const startMut = useMutation({
     mutationFn: ({ labId, levelId }: { labId: string; levelId: LevelId }) => simApi.startSession(csrf, labId, levelId),
     onSuccess: (res) => go(`/lab/sesi/${res.session_id}`),
@@ -588,64 +599,276 @@ function StudentAssignmentsPage({
     return <LoadState error={dashQ.isError} onRetry={() => void dashQ.refetch()} />
   }
 
-  const pagedAssignments = dashQ.data.assignments.slice((assignPage - 1) * 10, assignPage * 10)
+  const allAssignments = dashQ.data.assignments
+  const filteredAssignments = allAssignments.filter((a) => {
+    if (trackFilter === 'all') return true
+    const track = a.track ?? (a.lab_id.startsWith('iot') ? 'iot' : 'web')
+    return track === trackFilter
+  })
+  const pagedAssignments = filteredAssignments.slice((assignPage - 1) * 10, assignPage * 10)
+  const detail = allAssignments.find((a) => a.id === selectedId) ?? null
+  const detailHref = safeAttachmentHref(detail?.attachment_url)
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <PageHead title="Tugas Kelas & Status Penilaian" description="Daftar penugasan simulator dari dosen kelas Anda." />
+      <PageHead
+        title="Tugas Kelas & Status Penilaian"
+        description="Penugasan praktikum terperinci untuk jalur Cyber Security dan IoT beserta rubrik, batas percobaan, dan tenggat."
+        actions={
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} role="group" aria-label="Filter jalur tugas">
+            {(
+              [
+                ['all', `Semua (${allAssignments.length})`],
+                ['web', 'Cyber Security'],
+                ['iot', 'IoT'],
+              ] as const
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                className={trackFilter === val ? 'btn-primary' : 'btn-outline'}
+                style={{ minHeight: 34, fontSize: 13 }}
+                onClick={() => {
+                  setTrackFilter(val)
+                  setAssignPage(1)
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
+      {startMut.isError && (
+        <p className="feedback wrong" role="alert">
+          {startMut.error instanceof Error ? startMut.error.message : 'Gagal membuka sesi penugasan.'}
+        </p>
+      )}
       <section className="card">
         <div className="sim-table-wrap">
           <table className="sim-table">
             <thead>
               <tr>
                 <th>Tugas</th>
-                <th>Kelas</th>
+                <th>Jalur &amp; Kelas</th>
                 <th>Target Lab</th>
-                <th>Ambang</th>
+                <th>Percobaan &amp; Ambang</th>
                 <th>Tenggat</th>
                 <th>Status</th>
                 <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {pagedAssignments.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <strong>{a.title}</strong>
-                  </td>
-                  <td>{a.class_id}</td>
-                  <td>
-                    <code>{a.lab_id}</code> · {a.required_level}
-                  </td>
-                  <td>{a.pass_threshold}</td>
-                  <td>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(a.due_at))}</td>
-                  <td>
-                    <Badge tone={a.status === 'Tuntas' ? 'good' : a.status === 'Berjalan' ? 'warn' : 'muted'}>
-                      {a.status}
-                    </Badge>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      style={{ minHeight: 34, fontSize: 13 }}
-                      disabled={startMut.isPending}
-                      onClick={() =>
-                        a.session_id
-                          ? go(`/lab/sesi/${a.session_id}`)
-                          : startMut.mutate({ labId: a.lab_id, levelId: a.required_level })
-                      }
-                    >
-                      {a.session_id ? 'Buka Sesi' : 'Mulai'}
-                    </button>
+              {pagedAssignments.map((a) => {
+                const trackName = a.track_label ?? (a.track === 'iot' ? 'IoT' : 'Cyber Security')
+                const locked = Boolean(a.locked_by_deadline || a.locked_by_attempts)
+                const lockLabel = a.locked_by_deadline
+                  ? 'Terkunci Tenggat'
+                  : a.locked_by_attempts
+                    ? 'Batas Percobaan'
+                    : null
+                return (
+                  <tr key={a.id}>
+                    <td>
+                      <strong>{a.title}</strong>
+                      {a.description && (
+                        <div className="subtle-note" style={{ fontSize: 12 }}>
+                          {a.description.slice(0, 86)}
+                          {a.description.length > 86 ? '…' : ''}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <div>{trackName}</div>
+                      <small className="subtle-note">{a.class_id}</small>
+                    </td>
+                    <td>
+                      <div>{a.lab_title ?? a.lab_id}</div>
+                      <small className="subtle-note">
+                        <code>{a.lab_id}</code> · {a.required_level}
+                      </small>
+                    </td>
+                    <td>
+                      <div>Lulus ≥ {a.pass_threshold}</div>
+                      <small className="subtle-note">
+                        {a.max_attempts && a.max_attempts > 0
+                          ? `${a.attempts_used ?? 0}/${a.max_attempts} percobaan`
+                          : 'Tanpa batas percobaan'}
+                      </small>
+                    </td>
+                    <td>
+                      <div>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(a.due_at))}</div>
+                      {a.overdue && <Badge tone="warn">Lewat tenggat</Badge>}
+                    </td>
+                    <td>
+                      <Badge
+                        tone={
+                          a.status === 'Tuntas'
+                            ? 'good'
+                            : a.status === 'Terlambat'
+                              ? 'bad'
+                              : a.status === 'Berjalan'
+                                ? 'warn'
+                                : 'muted'
+                        }
+                      >
+                        {a.status}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn-outline"
+                          style={{ minHeight: 34, fontSize: 13 }}
+                          onClick={() => setSelectedId(a.id)}
+                        >
+                          Detail
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ minHeight: 34, fontSize: 13 }}
+                          disabled={startMut.isPending || locked}
+                          title={lockLabel ?? undefined}
+                          onClick={() =>
+                            a.session_id
+                              ? go(`/lab/sesi/${a.session_id}`)
+                              : startMut.mutate({ labId: a.lab_id, levelId: a.required_level })
+                          }
+                        >
+                          {lockLabel ?? (a.session_id ? 'Buka Sesi' : 'Mulai')}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {pagedAssignments.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 20 }}>
+                    Tidak ada penugasan pada filter jalur ini.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
-        <Pagination totalItems={dashQ.data.assignments.length} page={assignPage} pageSize={10} onPageChange={setAssignPage} />
+        <Pagination
+          totalItems={filteredAssignments.length}
+          page={assignPage}
+          pageSize={10}
+          onPageChange={setAssignPage}
+        />
       </section>
+
+      {detail && (
+        <Drawer title={detail.title} onClose={() => setSelectedId(null)}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Badge tone="good">{detail.track_label ?? (detail.track === 'iot' ? 'IoT' : 'Cyber Security')}</Badge>
+              <Badge tone="muted">{detail.class_id}</Badge>
+              <Badge tone={detail.status === 'Tuntas' ? 'good' : detail.status === 'Terlambat' ? 'bad' : 'warn'}>
+                {detail.status}
+              </Badge>
+            </div>
+
+            <dl className="detail-list">
+              <div>
+                <dt>Modul Praktikum</dt>
+                <dd>
+                  {detail.lab_title ?? detail.lab_id} (<code>{detail.lab_id}</code> · Level {detail.required_level})
+                </dd>
+              </div>
+              <div>
+                <dt>Ambang Lulus &amp; Skor Terbaik</dt>
+                <dd>
+                  Minimal {detail.pass_threshold} · Terbaik: {detail.best_score ?? '-'}
+                </dd>
+              </div>
+              <div>
+                <dt>Percobaan</dt>
+                <dd>
+                  {detail.max_attempts && detail.max_attempts > 0
+                    ? `${detail.attempts_used ?? 0} dari ${detail.max_attempts} percobaan`
+                    : `${detail.attempts_used ?? 0} percobaan (tanpa batas)`}
+                </dd>
+              </div>
+              <div>
+                <dt>Kebijakan Tenggat &amp; Hint</dt>
+                <dd>
+                  {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(
+                    new Date(detail.due_at),
+                  )}{' '}
+                  · {detail.allow_late ? 'Kumpul terlambat diizinkan' : 'Terkunci setelah tenggat'} ·{' '}
+                  {detail.allow_hints === false ? 'Tanpa hint' : 'Hint aktif'}
+                </dd>
+              </div>
+            </dl>
+
+            {(detail.locked_by_deadline || detail.locked_by_attempts) && (
+              <div className="feedback wrong" role="alert">
+                <Lock size={15} aria-hidden="true" />
+                {detail.locked_by_deadline
+                  ? 'Tugas dikunci otomatis karena melewati tenggat pengumpulan.'
+                  : 'Batas maksimal percobaan untuk tugas ini telah tercapai.'}
+              </div>
+            )}
+
+            {detail.description && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Deskripsi Praktikum</strong>
+                <p style={{ marginTop: 4, fontSize: 14, lineHeight: 1.55 }}>{detail.description}</p>
+              </div>
+            )}
+
+            {detail.instructions && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Langkah Pengerjaan</strong>
+                <pre
+                  style={{
+                    marginTop: 6,
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'inherit',
+                    fontSize: 13,
+                    lineHeight: 1.55,
+                    background: 'var(--surface-2)',
+                    padding: 12,
+                    borderRadius: 8,
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  {detail.instructions}
+                </pre>
+              </div>
+            )}
+
+            {detail.rubric && detail.rubric.length > 0 && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Rubrik Penilaian</strong>
+                <ul className="check-list" style={{ marginTop: 6 }}>
+                  {detail.rubric.map((r, i) => (
+                    <li key={`${r.criterion}-${i}`}>
+                      <Check size={14} aria-hidden="true" />
+                      <span>
+                        {r.criterion} — <strong>{r.weight}%</strong>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {detailHref && (
+              <div>
+                <a href={detailHref} target="_blank" rel="noreferrer noopener" className="btn-outline">
+                  Buka Lampiran Referensi
+                </a>
+              </div>
+            )}
+          </div>
+        </Drawer>
+      )}
     </div>
   )
 }
