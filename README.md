@@ -1,25 +1,27 @@
 # WebLabIFA
 
-**WebLabIFA** is an interactive virtual laboratory and practicum platform for **Web Security (OWASP Top 10:2025)** and **Internet of Things (IoT) Security** in the Informatics Engineering program. The platform lets students learn vulnerability concepts in a safe sandboxed simulator—moving step by step through hypothesis, controlled exploit testing, root-cause diagnosis, code patching, and verification—without exposing unsafe infrastructure in the host runtime.
+**WebLabIFA** is an interactive virtual laboratory and practicum platform for **Keamanan Web** (`OWASP Top 10:2025`, classes `IF-3A` & `IF-3B`) and **IoT** (`ESP32-C3`, `ESP32`, `Arduino Uno`, `Arduino Mega`, `Raspberry Pi Pico W`, class `IF-4A`) in the Informatics Engineering program. Students learn security concepts and embedded hardware engineering in a safe sandboxed simulator without exposing unsafe infrastructure to the host runtime.
 
 ---
 
 ## Key Capabilities
 
-- **Role-Based Portals**
-  - **Student Portal (`/lab`)**: Interactive OWASP Web & IoT simulation modules, guided step-by-step practice, animated mastery & progress charts, class assignments, session history, achievements, leaderboard ranking, and account security settings.
-  - **Lecturer Portal (`/lab/dosen`)**: Cohort progress analytics, score distribution histograms, 7-day activity trends, rubric evidence inspector, class CSV exports, demo cohort seeder, assignment creator with student email notifications, and full class leaderboard.
-  - **Admin Portal (`/lab/admin`)**: User and role management, class administration, simulator catalog publication controls, live session monitoring, anomaly alert review, activity audit logs, and sanitized system snapshot backups.
+- **Two Enforced Practicum Tracks**
+  - **Keamanan Web (`Cyber Security`)**: Step-by-step OWASP Top 10 labs (hypothesis, baseline, controlled probe, root-cause diagnosis, code patching, regression verification, and reflection) with progressive Easy -> Impossible unlocking for students.
+  - **IoT Hardware & ESP32 Simulator (`/lab/iot`, `/lab/dosen/iot`)**:
+    - **New File (`Blank Canvas`)** toolbar action & customizable board templates (`ESP32-C3`, `ESP32 DevKit`, `Arduino Uno`, `Arduino Mega`, `Pi Pico W`, Multi-MCU workspaces).
+    - **10 Guided IoT Missions & 5 Achievement Badges**: Strictly staged sequential unlocking (`Misi 1 -> Misi 10`) and admin permission enforcement (`can_access_iot_studio`, `can_submit_assignments`) for students, with server-side payload, hardware wiring, firmware token, and `mqtts://` TLS verification + tampering telemetry. All 10 missions and 9 interactive Wokwi teaching projects are unlocked in **Lecturer (`Dosen`)** mode.
+    - **Multi-File Synchronization for Large Projects**: Synchronized `Main.ino`, `.h`/`.hpp`/`.cpp`/`.c`/`.ino` modules, automatic companion module linking, cross-file VS Code-style C++ autocomplete & parameter hints, real-time `diagram.json` canvas synchronization, and PostgreSQL persistence (`iot_projects.files_json`).
+    - **Saved Projects & Student Files Explorer**: Browse, preview inline files, reopen, or delete saved multi-file projects; Lecturers can browse and load saved student IoT projects from their classes (`/api/dosen/iot-projects`).
+- **Moodle LMS Question Bank & Practicum Assignments**
+  - Bilingual practice banks restricted strictly to **Cyber Security** and **IoT**, supporting Moodle **XML**, **GIFT**, and **Aiken** import with XXE/DOCTYPE blocking, XSS sanitization, role-gated lecturer bank actions, detailed assignment briefs/rubrics, and deadline/attempt locks.
+- **Admin RBAC, Granular Permissions & Live Security Monitor (`/lab/admin`)**
+  - Full Admin control to assign multi-roles (`mahasiswa`, `dosen`, `admin`), manage class enrollments (`IF-3A`, `IF-3B`, `IF-4A` limited to `Keamanan Web` & `IoT`), and configure granular 7-flag `user_access_rights` (`/api/admin/users/{user_id}/access`) backed by immediate session revocation when roles change and last-active-admin protection.
+  - Active session tracking, confirmed security anomaly review (`iot_submission_tampering`, `iot_sequential_bypass_attempt`, etc.), activity audit logs, and sanitized backups.
 - **Account Security & Recovery**
-  - Google OIDC authentication with institutional domain validation, rotating session cookies, and exact-origin CSRF protection.
-  - **Authenticator App MFA (TOTP)**: Client-side scannable QR code generation (`qrcode`), manual setup secret fallback, and inline 6-digit verification.
-  - **Argon2id-Protected Backup Codes**: Single-use recovery codes hashed with **Argon2id** on the server.
-  - **Passkeys & Email Aliases**: Device passkey registration and secondary recovery email management.
-  - **Account & System Backups**: On-demand JSON export for individual user progress/preferences (`/api/account/backup`) and admin portal snapshots (`/api/admin/backup`).
+  - Google OIDC authentication with institutional email allowlists, rotating session cookies, exact-origin CSRF verification, Authenticator App MFA (**TOTP**), **Argon2id**-hashed single-use backup codes, passkeys, and vulnerability disclosure policy in [`.github/SECURITY.md`](.github/SECURITY.md).
 - **Usability & Accessibility**
-  - Bilingual interface supporting **Indonesian (`id`)** and **English (`en`)**.
-  - Consistent **10-item pagination** across security, audit, user, assignment, history, module, and leaderboard tables.
-  - Light, dark, and system theme modes with animated error boundary pages (`400` / `404` / `500`).
+  - Bilingual **Indonesian (`id`)** and **English (`en`)** interface, responsive mobile drawer navigation, light/dark themes, and consistent 10-item pagination.
 
 ---
 
@@ -27,24 +29,28 @@
 
 ```text
 WebLabIFA/
+├── .github/SECURITY.md     # Repository vulnerability disclosure policy
 ├── Lab-Backend/            # Rust + Axum REST API & PostgreSQL migrations
 │   ├── src/
 │   │   ├── config.rs       # Environment-driven OIDC, DB, and session config
 │   │   ├── oidc.rs         # Google OIDC discovery, state/nonce/PKCE verification
 │   │   ├── lib.rs          # Router wiring, CSP/security headers, public OpenAPI JSON
-│   │   ├── seed.rs         # Demo student cohort & practicum seeder
-│   │   ├── portal/         # Student, Lecturer, Admin portal endpoints
+│   │   ├── moodle.rs       # Moodle XML/GIFT/Aiken parser & XXE/XSS sanitizer
+│   │   ├── latihan.rs      # Cyber Security & IoT practice engine and settings
+│   │   ├── seed.rs         # Demo student cohorts, assignments & multi-file IoT projects
+│   │   ├── portal/         # Student, Lecturer, Admin RBAC & IoT project endpoints
 │   │   ├── simulator/      # Safe simulated request/patch evaluation engine
 │   │   ├── simulator_catalog/ # Structured OWASP Web & IoT lab scenarios
 │   │   └── security_account/  # TOTP, Argon2id backup codes, passkeys, monitor & backups
-│   ├── migrations/         # PostgreSQL SQLx schema migrations
+│   ├── migrations/         # PostgreSQL SQLx schema migrations (0001..0014)
 │   └── Dockerfile          # Multi-stage minimal Rust runtime container
 ├── Lab-FrontEnd/           # React 19 + TypeScript + Vite SPA
 │   ├── src/
-│   │   ├── admin/          # Admin portal & live security/anomaly monitor
-│   │   ├── lecturer/       # Lecturer analytics, grading drawer & leaderboard
+│   │   ├── admin/          # Admin portal, UserAccessModal & live security monitor
+│   │   ├── lecturer/       # Lecturer analytics, Moodle bank importer & IoT studio
 │   │   ├── student/        # Student dashboard, assignments, achievements & history
-│   │   ├── simulator/      # Interactive OWASP & IoT Studio workspace
+│   │   ├── iot/            # Multi-file C++ IDE, firmware VM, Wokwi canvas & explorer
+│   │   ├── simulator/      # OWASP Top 10 interactive pentest & patching simulator
 │   │   ├── shared/         # Bilingual i18n, animated charts, errors & MFA settings
 │   │   └── portal/         # Shared shell, pagination component & responsive CSS
 │   ├── tests/              # Playwright E2E test suites
