@@ -601,3 +601,86 @@ test('Penugasan Praktikum Dosen & Mahasiswa terperinci serta mengunci tugas lewa
     'https://example.edu/modul-iot.pdf',
   )
 })
+
+test('Mahasiswa melihat 10 misi IoT Studio, achievement badge, dan mengirim bukti rangkaian lengkap ke server', async ({
+  page,
+}) => {
+  await page.route('**/api/me', (r) => r.fulfill({ json: student }))
+  await mockSecurityRoutes(page, student.email)
+
+  const submittedPayloads: Array<Record<string, unknown>> = []
+  let mission10Done = false
+
+  await page.route('**/api/iot/projects', (r) =>
+    r.fulfill({
+      json: {
+        projects: [],
+        completed_missions: mission10Done
+          ? [{ mission_id: 'iot-esp32-secure-telemetry', score: 100, completed_at: '2026-11-19T12:00:00Z' }]
+          : [],
+        achievements: [
+          {
+            id: 'iot-perintis',
+            key: 'badge:iot-perintis',
+            title: 'Perintis IoT Studio',
+            detail: 'Menyelesaikan misi simulasi perangkat keras IoT pertama.',
+            xp: 25,
+            earned: mission10Done,
+          },
+          {
+            id: 'iot-telemetri-tls',
+            key: 'badge:iot-telemetri-tls',
+            title: 'Penjaga Telemetri TLS',
+            detail: 'Menuntaskan misi komunikasi IoT terenkripsi mqtts:// TLS.',
+            xp: 40,
+            earned: mission10Done,
+          },
+        ],
+        iot_xp: mission10Done ? 145 : 0,
+      },
+    }),
+  )
+
+  await page.route('**/api/iot/missions/submit', (r) => {
+    submittedPayloads.push(JSON.parse(r.request().postData() || '{}') as Record<string, unknown>)
+    mission10Done = true
+    return r.fulfill({
+      json: {
+        session_id: 'ses-iot-10',
+        mission_id: 'iot-esp32-secure-telemetry',
+        score: 100,
+        passed: true,
+        xp_awarded: 145,
+        newly_unlocked: ['Perintis IoT Studio', 'Penjaga Telemetri TLS'],
+      },
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/lab/iot')
+
+  await expect(page.getByText('Misi Praktikum IoT (0/10 Tuntas)')).toBeVisible()
+  await expect(page.getByText('0/2 Achievement IoT')).toBeVisible()
+  await expect(page.locator('.iot-mission-pill')).toHaveCount(10)
+
+  await page.getByRole('button', { name: /Misi 10 · Guard Sensor Suhu/ }).click()
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+
+  const submitBtn = page.getByRole('button', { name: 'Kumpulkan Misi (+80 XP)' })
+  await expect(submitBtn).toBeEnabled()
+  await submitBtn.click()
+
+  await expect(page.getByText(/Lencana terbuka: Perintis IoT Studio, Penjaga Telemetri TLS/)).toBeVisible()
+  await expect(page.getByText('Misi Praktikum IoT (1/10 Tuntas)')).toBeVisible()
+  await expect(page.getByText('2/2 Achievement IoT')).toBeVisible()
+
+  const submittedPayload = submittedPayloads[0]
+  expect(submittedPayload).toMatchObject({
+    mission_id: 'iot-esp32-secure-telemetry',
+    mqtt_tls_verified: true,
+    has_hardware_alerts: false,
+  })
+  expect(Array.isArray(submittedPayload?.components)).toBe(true)
+  expect(Array.isArray(submittedPayload?.wires)).toBe(true)
+  expect(Number(submittedPayload?.loop_iterations)).toBeGreaterThanOrEqual(1)
+})

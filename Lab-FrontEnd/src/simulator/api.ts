@@ -974,6 +974,8 @@ export const simApi = {
     return getJson<{
       projects: import('../iot/types').SavedIotProject[]
       completed_missions: import('../iot/types').CompletedMission[]
+      achievements?: import('../iot/types').IotAchievementBadge[]
+      iot_xp?: number
     }>('/api/iot/projects')
   },
   saveIotProject(
@@ -1006,11 +1008,17 @@ export const simApi = {
       mission_id: string
       board: string
       code: string
+      components: unknown[]
+      wires: unknown[]
       component_count: number
       wire_count: number
       checks_passed: number
       checks_total: number
       has_hardware_alerts: boolean
+      loop_iterations: number
+      has_serial_output: boolean
+      has_oled_output: boolean
+      mqtt_tls_verified: boolean
     },
   ) {
     return postJson<{
@@ -1019,6 +1027,8 @@ export const simApi = {
       score: number
       passed: boolean
       xp_awarded: number
+      newly_unlocked?: string[]
+      achievements?: import('../iot/types').IotAchievementBadge[]
     }>('/api/iot/missions/submit', csrf, body)
   },
 }

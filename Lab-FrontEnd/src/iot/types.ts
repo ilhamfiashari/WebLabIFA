@@ -331,3 +331,12 @@ export interface CompletedMission {
   score: number
   completed_at: string
 }
+
+export interface IotAchievementBadge {
+  id: string
+  key: string
+  title: string
+  detail: string
+  xp: number
+  earned: boolean
+}
