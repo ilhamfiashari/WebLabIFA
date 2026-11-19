@@ -255,7 +255,7 @@ function ClassesPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
   const qc = useQueryClient()
   const [clsId, setClsId] = useState('')
   const [clsName, setClsName] = useState('')
-  const [clsCourse, setClsCourse] = useState('Cyber Security & IoT')
+  const [clsCourse, setClsCourse] = useState<'Keamanan Web' | 'IoT'>('Keamanan Web')
   const clsSemester = 'Ganjil 2026/2027'
   const saveMut = useMutation({
     mutationFn: () => simApi.saveClass(csrf, { id: clsId, name: clsName, course: clsCourse, semester: clsSemester }),
@@ -279,7 +279,10 @@ function ClassesPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: stri
         <form style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }} onSubmit={e => { e.preventDefault(); saveMut.mutate() }}>
           <input className="sim-input" placeholder="Kode (mis. IF-4B)" value={clsId} onChange={e => setClsId(e.target.value)} required />
           <input className="sim-input" placeholder="Nama kelas" value={clsName} onChange={e => setClsName(e.target.value)} required />
-          <input className="sim-input" placeholder="Mata kuliah" value={clsCourse} onChange={e => setClsCourse(e.target.value)} required />
+          <select aria-label="Mata kuliah kelas" className="sim-input" value={clsCourse} onChange={e => setClsCourse(e.target.value as 'Keamanan Web' | 'IoT')}>
+            <option value="Keamanan Web">Keamanan Web</option>
+            <option value="IoT">IoT</option>
+          </select>
           <button type="submit" className="btn-primary" disabled={saveMut.isPending}>Simpan Kelas</button>
         </form>
       </section>

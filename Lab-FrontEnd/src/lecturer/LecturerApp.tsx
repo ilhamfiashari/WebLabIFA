@@ -811,7 +811,7 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
                 <select id="asg-class" className="sim-select-full" value={classId} onChange={(e) => setClassId(e.target.value)}>
                   {dash.classes.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.id} · {c.name}
+                      {c.id} · {c.course}
                     </option>
                   ))}
                 </select>

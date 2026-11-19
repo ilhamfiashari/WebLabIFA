@@ -201,13 +201,13 @@ pub async fn admin_create_class(
     let actor = verify_mutation(&state, &jar, &headers).await?;
     require_role(&actor, "admin")?;
     let id = req.id.trim().to_uppercase();
+    let course = req.course.trim();
     if id.is_empty()
         || id.len() > 24
         || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
         || req.name.trim().is_empty()
         || req.name.len() > 140
-        || req.course.trim().is_empty()
-        || req.course.len() > 140
+        || (course != "Keamanan Web" && course != "IoT")
         || req.semester.trim().is_empty()
         || req.semester.len() > 80
     {
@@ -218,7 +218,7 @@ pub async fn admin_create_class(
     sqlx::query("INSERT INTO classes(id,name,course,semester) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,course=EXCLUDED.course,semester=EXCLUDED.semester")
         .bind(&id)
         .bind(req.name.trim())
-        .bind(req.course.trim())
+        .bind(course)
         .bind(req.semester.trim())
         .execute(&mut *tx)
         .await?;
