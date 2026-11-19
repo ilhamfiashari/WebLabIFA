@@ -193,24 +193,14 @@ pub async fn seed_demo_data(
 ) -> Result<SeedReport, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    // Pastikan seluruh kelas aktif tersedia
+    // Pastikan seluruh kelas aktif tersedia (hanya 2 mata kuliah: Keamanan Web & IoT)
     for (id, name, course, lb) in [
-        (
-            "IF-3A",
-            "IF-3A · Keamanan Informasi",
-            "IF3101 Keamanan Web & Jaringan",
-            true,
-        ),
-        (
-            "IF-3B",
-            "IF-3B · Keamanan Informasi",
-            "IF3101 Keamanan Web & Jaringan",
-            true,
-        ),
-        ("IF-4A", "IF-4A · IoT", "IF4204 Sistem IoT & Tertanam", true),
+        ("IF-3A", "IF-3A · Keamanan Web", "Keamanan Web", true),
+        ("IF-3B", "IF-3B · Keamanan Web", "Keamanan Web", true),
+        ("IF-4A", "IF-4A · IoT", "IoT", true),
     ] {
         sqlx::query(
-            "INSERT INTO classes (id,name,course,semester,timezone,leaderboard_enabled,active) VALUES($1,$2,$3,'Ganjil 2026/2027','Asia/Jakarta',$4,true) ON CONFLICT (id) DO UPDATE SET leaderboard_enabled=EXCLUDED.leaderboard_enabled,active=true",
+            "INSERT INTO classes (id,name,course,semester,timezone,leaderboard_enabled,active) VALUES($1,$2,$3,'Ganjil 2026/2027','Asia/Jakarta',$4,true) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,course=EXCLUDED.course,leaderboard_enabled=EXCLUDED.leaderboard_enabled,active=true",
         )
         .bind(id)
         .bind(name)
