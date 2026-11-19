@@ -13,9 +13,12 @@ import {
   Expand,
   FileCode2,
   FileJson,
+  FilePlus2,
   Focus,
   FolderOpen,
   LayoutGrid,
+  Link2,
+  Lock,
   Minimize2,
   PanelLeftClose,
   Pencil,
@@ -27,6 +30,7 @@ import {
   Terminal,
   Trash2,
   Upload,
+  Users,
   Volume2,
   VolumeX,
 } from 'lucide-react'
@@ -55,6 +59,7 @@ import {
 } from './cppEditorHelpers'
 import { tokenizeArduinoCpp } from './cppHighlight'
 import {
+  analyzeProjectFileSync,
   compileArduinoSketch,
   createInitialSimulation,
   createVmContext,
@@ -168,7 +173,7 @@ export function IotSimulatorStudio({
   const [code, setCode] = useState(initialPreset.code)
   const [components, setComponents] = useState<PlacedComponent[]>(initialPreset.components)
   const [wires, setWires] = useState<Wire[]>(initialPreset.wires)
-  const [diagramText, setDiagramText] = useState('')
+  const [diagramDraft, setDiagramDraft] = useState<string | null>(null)
   const [diagramError, setDiagramError] = useState<string | null>(null)
   const [libSearch, setLibSearch] = useState('')
   const [wireColor, setWireColor] = useState(WIRE_COLORS[0].id)
@@ -178,6 +183,14 @@ export function IotSimulatorStudio({
   const [partCategory, setPartCategory] = useState<'all' | ComponentCategory>('all')
   const [pinnedKinds, setPinnedKinds] = useState<ComponentKind[]>(['led', 'pushbutton'])
   const [showSavedDrawer, setShowSavedDrawer] = useState(false)
+  const [savedExplorerTab, setSavedExplorerTab] = useState<'mine' | 'students'>('mine')
+  const [savedSearch, setSavedSearch] = useState('')
+  const [studentClassFilter, setStudentClassFilter] = useState('')
+  const [previewedProjFile, setPreviewedProjFile] = useState<{
+    projectId: string
+    fileName: string
+    content: string
+  } | null>(null)
   const [focusMode, setFocusMode] = useState<'normal' | 'focus' | 'canvas'>('normal')
   const [splitWidth, setSplitWidth] = useState<number>(420)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -415,13 +428,23 @@ export function IotSimulatorStudio({
     })
   }
 
+  const autocompleteExtraFiles = useMemo(() => {
+    if (activeExtraFileObj) {
+      return [
+        { name: 'Main.ino', content: activeCode },
+        ...extraFiles.filter((f) => f.name !== activeExtraFileObj.name),
+      ]
+    }
+    return extraFiles
+  }, [activeExtraFileObj, activeCode, extraFiles])
+
   const refreshAutocomplete = (nextCode: string, cursor: number | null, force = false) => {
     refreshSignatureHint(nextCode, cursor)
     if (cursor === null || cursor < 0) {
       setAcState(null)
       return
     }
-    const res = getArduinoAutocomplete(nextCode, cursor, force)
+    const res = getArduinoAutocomplete(nextCode, cursor, force, autocompleteExtraFiles)
     if (!res) {
       setAcState(null)
       return
@@ -642,9 +665,21 @@ export function IotSimulatorStudio({
     wiresRef.current = wires
   }, [wires])
 
+  const isInstructor = mode === 'dosen'
+
   const projectsQ = useQuery({
     queryKey: ['iot-projects'],
     queryFn: () => simApi.listIotProjects(),
+    retry: false,
+  })
+
+  const studentProjectsQ = useQuery({
+    queryKey: ['dosen-student-iot-projects', studentClassFilter],
+    queryFn: () =>
+      simApi.listDosenStudentIotProjects(
+        studentClassFilter ? { class_id: studentClassFilter } : undefined,
+      ),
+    enabled: isInstructor && showSavedDrawer && savedExplorerTab === 'students',
     retry: false,
   })
 
@@ -656,16 +691,25 @@ export function IotSimulatorStudio({
         board: boardId,
         mission_id: activeMissionId,
         code,
+        files: extraFiles,
         components,
         wires,
       }),
     onSuccess: async (res) => {
       setActiveProjectId(res.id)
-      setStatusNotice(en ? `Project "${res.title}" saved to database.` : `Proyek "${res.title}" berhasil disimpan ke database.`)
+      setStatusNotice(
+        en
+          ? `Project "${res.title}" (${1 + (res.files?.length ?? extraFiles.length)} code files + diagram.json) saved to database.`
+          : `Proyek "${res.title}" (${1 + (res.files?.length ?? extraFiles.length)} file kode + diagram.json) tersimpan ke database.`,
+      )
       await qc.invalidateQueries({ queryKey: ['iot-projects'] })
     },
     onError: () => {
-      setStatusNotice(en ? 'Could not save project. Check session or payload size.' : 'Gagal menyimpan proyek. Periksa sesi Anda.')
+      setStatusNotice(
+        en
+          ? 'Could not save project. Check access rights, session, or file limits.'
+          : 'Gagal menyimpan proyek. Periksa hak akses, sesi, atau batas ukuran file.',
+      )
     },
   })
 
@@ -676,6 +720,8 @@ export function IotSimulatorStudio({
     },
   })
 
+  const syncInfo = useMemo(() => analyzeProjectFileSync(code, extraFiles), [code, extraFiles])
+
   const activeMission = useMemo(
     () => IOT_MISSIONS.find((m) => m.id === activeMissionId) ?? null,
     [activeMissionId],
@@ -683,8 +729,15 @@ export function IotSimulatorStudio({
 
   const missionChecks = useMemo(() => {
     if (!activeMission) return []
-    return activeMission.evaluate({ board: boardId, code, components, wires, sim: simState, loopIterations })
-  }, [activeMission, boardId, code, components, wires, simState, loopIterations])
+    return activeMission.evaluate({
+      board: boardId,
+      code: syncInfo.combinedSource,
+      components,
+      wires,
+      sim: simState,
+      loopIterations,
+    })
+  }, [activeMission, boardId, syncInfo.combinedSource, components, wires, simState, loopIterations])
 
   const allMissionPassed = missionChecks.length > 0 && missionChecks.every((c) => c.passed)
 
@@ -698,6 +751,7 @@ export function IotSimulatorStudio({
         mission_id: activeMission.id,
         board: boardId,
         code,
+        files: extraFiles,
         components: components.map((c) => ({ id: c.id, kind: c.kind })),
         wires: wires.map((w) => ({ from: w.from, to: w.to })),
         component_count: components.length,
@@ -882,9 +936,70 @@ export function IotSimulatorStudio({
   const corePresets = useMemo(() => availablePresets.filter((p) => !p.dosenOnly), [availablePresets])
   const dosenShowcasePresets = useMemo(() => availablePresets.filter((p) => Boolean(p.dosenOnly)), [availablePresets])
 
+  const completedSet = useMemo(
+    () => new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id)),
+    [projectsQ.data?.completed_missions],
+  )
+  const studioAccess = projectsQ.data?.access
+  const canAccessIotStudio = isInstructor || (studioAccess?.can_access_iot_studio ?? true)
+  const canSubmitIot = isInstructor || (studioAccess?.can_submit_assignments ?? true)
+  const iotTrackEnabled = isInstructor || (studioAccess?.iot_track_enabled ?? true)
+  const serverMissionMap = useMemo(
+    () => new Map((projectsQ.data?.mission_states ?? []).map((ms) => [ms.mission_id, ms])),
+    [projectsQ.data?.mission_states],
+  )
+
+  const getMissionUnlockStatus = useCallback(
+    (missionId: string): { unlocked: boolean; reason: string | null } => {
+      if (isInstructor) return { unlocked: true, reason: null }
+      if (!iotTrackEnabled) {
+        return {
+          unlocked: false,
+          reason: en
+            ? 'IoT practicum track is currently disabled by admin.'
+            : 'Jalur praktikum IoT sedang dinonaktifkan admin.',
+        }
+      }
+      if (!canAccessIotStudio) {
+        return {
+          unlocked: false,
+          reason: en
+            ? 'Your IoT Studio access permission has been locked by admin.'
+            : 'Hak akses IoT Studio Anda dikunci oleh admin.',
+        }
+      }
+      const serverState = serverMissionMap.get(missionId)
+      if (serverState) {
+        return {
+          unlocked: serverState.unlocked,
+          reason: serverState.lock_reason ?? null,
+        }
+      }
+      const idx = IOT_MISSIONS.findIndex((m) => m.id === missionId)
+      if (idx < 0) return { unlocked: false, reason: 'Misi tidak ditemukan.' }
+      if (idx === 0 || completedSet.has(missionId) || completedSet.has(IOT_MISSIONS[idx - 1].id)) {
+        return { unlocked: true, reason: null }
+      }
+      return {
+        unlocked: false,
+        reason: en
+          ? `Complete Mission ${idx} first to unlock this mission.`
+          : `Selesaikan Misi ${idx} terlebih dahulu untuk membuka misi ini.`,
+      }
+    },
+    [isInstructor, iotTrackEnabled, canAccessIotStudio, serverMissionMap, completedSet, en],
+  )
+
   const loadPreset = (presetId: string) => {
     const preset = availablePresets.find((p) => p.id === presetId)
     if (!preset) return
+    if (preset.missionId) {
+      const lock = getMissionUnlockStatus(preset.missionId)
+      if (!lock.unlocked) {
+        setStatusNotice(lock.reason ?? (en ? 'This mission is currently locked.' : 'Misi ini masih terkunci.'))
+        return
+      }
+    }
     vmRef.current = null
     clearCircuitHistory({ boardId: preset.board, components: preset.components, wires: preset.wires })
     codeHistoryRef.current = {}
@@ -905,6 +1020,36 @@ export function IotSimulatorStudio({
     setDiagnostics(null)
     setSimState(createInitialSimulation(preset.board, preset.components, preset.wires))
     setStatusNotice(null)
+  }
+
+  const startBlankCanvas = () => {
+    const blankTitle = en ? 'Blank Canvas · New Project' : 'Blank Canvas · Proyek Baru'
+    const starterCode = `// ${blankTitle}\nvoid setup() {\n  Serial.begin(115200);\n  Serial.println("Blank Canvas Siap!");\n}\n\nvoid loop() {\n  delay(500);\n}`
+    vmRef.current = null
+    clearCircuitHistory({ boardId, components: [], wires: [] })
+    codeHistoryRef.current = {}
+    setEditingNodeId('board')
+    setExtraFiles([])
+    setActiveCustomFile(null)
+    setFileActionMode(null)
+    setAcState(null)
+    setLeftTab('code')
+    setActivePresetId('esp32-c3-blank')
+    setActiveMissionId(null)
+    setActiveProjectId(null)
+    setProjectTitle(blankTitle)
+    setCode(starterCode)
+    setComponents([])
+    setWires([])
+    setLoopIterations(0)
+    setDiagnostics(null)
+    setSimState(createInitialSimulation(boardId, [], []))
+    setShowSavedDrawer(false)
+    setStatusNotice(
+      en
+        ? `Blank Canvas (${BOARDS[boardId].shortName}) created. Drag parts or add sketch files freely.`
+        : `Blank Canvas (${BOARDS[boardId].shortName}) siap dirangkai. Tambah komponen & file kode bebas.`,
+    )
   }
 
   const switchBoard = (nextBoard: BoardId) => {
@@ -971,23 +1116,59 @@ export function IotSimulatorStudio({
     setComponents(nextComps)
   }
 
-  const loadSavedProject = (p: SavedIotProject) => {
+  const loadSavedProject = (
+    p: SavedIotProject,
+    options?: { focusFile?: string | null; fromStudentExplorer?: boolean },
+  ) => {
+    if (!options?.fromStudentExplorer && p.mission_id) {
+      const lock = getMissionUnlockStatus(p.mission_id)
+      if (!lock.unlocked) {
+        setStatusNotice(lock.reason ?? (en ? 'Mission locked.' : 'Misi pada proyek ini masih terkunci.'))
+        return
+      }
+    }
+    const loadedFiles = Array.isArray(p.files) ? p.files : []
     vmRef.current = null
     clearCircuitHistory({ boardId: p.board, components: p.components, wires: p.wires })
     codeHistoryRef.current = {}
     setBoardId(p.board)
-    setActivePresetId('custom')
+    setEditingNodeId('board')
+    setActivePresetId(loadedFiles.length > 0 ? 'esp32-c3-blank' : 'custom')
     setActiveMissionId(p.mission_id ?? null)
-    setActiveProjectId(p.id)
+    setActiveProjectId(options?.fromStudentExplorer ? null : p.id)
     setProjectTitle(p.title)
     setCode(p.code)
+    setExtraFiles(loadedFiles)
+    setFileActionMode(null)
+    setAcState(null)
+    if (options?.focusFile === 'diagram.json') {
+      setActiveCustomFile(null)
+      setDiagramDraft(null)
+      setDiagramError(null)
+      setLeftTab('diagram')
+    } else if (options?.focusFile && options.focusFile !== 'Main.ino') {
+      const exists = loadedFiles.find((f) => f.name === options.focusFile)
+      setActiveCustomFile(exists ? exists.name : null)
+      setLeftTab('code')
+    } else {
+      setActiveCustomFile(null)
+      setLeftTab('code')
+    }
     setComponents(p.components)
     setWires(p.wires)
     setLoopIterations(0)
     setDiagnostics(null)
     setSimState(createInitialSimulation(p.board, p.components, p.wires))
     setShowSavedDrawer(false)
-    setStatusNotice(en ? `Loaded "${p.title}".` : `Proyek "${p.title}" dimuat.`)
+    setStatusNotice(
+      options?.fromStudentExplorer
+        ? en
+          ? `Loaded student project "${p.title}" by ${p.owner_name ?? 'Student'} (${1 + loadedFiles.length} synced file(s)).`
+          : `Memuat proyek mahasiswa "${p.title}" (${p.owner_name ?? 'Mahasiswa'}) beserta ${1 + loadedFiles.length} file tersinkron.`
+        : en
+          ? `Loaded "${p.title}" (${1 + loadedFiles.length} file(s) synced).`
+          : `Proyek "${p.title}" dimuat (${1 + loadedFiles.length} file tersinkron).`,
+    )
   }
 
   const runCheckCircuit = () => {
@@ -1100,9 +1281,14 @@ export function IotSimulatorStudio({
     setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, cur.wires), running: prev.running }))
   }
 
+  const syncedDiagramJson = useMemo(
+    () => JSON.stringify(toWokwiDiagramJson(boardId, components, wires, projectTitle), null, 2),
+    [boardId, components, wires, projectTitle],
+  )
+  const diagramText = diagramDraft ?? syncedDiagramJson
+
   const openDiagramTab = () => {
-    const json = JSON.stringify(toWokwiDiagramJson(boardId, components, wires, projectTitle), null, 2)
-    setDiagramText(json)
+    setDiagramDraft(null)
     setDiagramError(null)
     setLeftTab('diagram')
   }
@@ -1116,6 +1302,7 @@ export function IotSimulatorStudio({
     pushCircuitUndo()
     liveCircuitRef.current = { boardId: parsed.boardId, components: parsed.components, wires: parsed.wires }
     setDiagramError(null)
+    setDiagramDraft(null)
     setBoardId(parsed.boardId)
     setComponents(parsed.components)
     setWires(parsed.wires)
@@ -1152,7 +1339,33 @@ export function IotSimulatorStudio({
   const acActiveItem = acState ? (acState.items[acState.activeIndex] ?? acState.items[0] ?? null) : null
   const acActiveSig = acActiveItem ? formatSuggestionSignature(acActiveItem) : null
 
-  const completedSet = new Set((projectsQ.data?.completed_missions ?? []).map((m) => m.mission_id))
+  const activeMissionLock = activeMissionId
+    ? getMissionUnlockStatus(activeMissionId)
+    : { unlocked: true, reason: null }
+
+  const mySavedProjects = useMemo(() => projectsQ.data?.projects ?? [], [projectsQ.data?.projects])
+  const studentSavedProjects = useMemo(
+    () => studentProjectsQ.data?.projects ?? [],
+    [studentProjectsQ.data?.projects],
+  )
+  const displayedExplorerProjects = useMemo(() => {
+    const src = isInstructor && savedExplorerTab === 'students' ? studentSavedProjects : mySavedProjects
+    const term = savedSearch.trim().toLowerCase()
+    if (!term) return src
+    return src.filter((p) => {
+      const fileMatch = (p.files ?? []).some((f) => f.name.toLowerCase().includes(term))
+      return (
+        p.title.toLowerCase().includes(term) ||
+        (BOARDS[p.board]?.shortName ?? p.board).toLowerCase().includes(term) ||
+        (p.owner_name ?? '').toLowerCase().includes(term) ||
+        (p.owner_email ?? '').toLowerCase().includes(term) ||
+        'main.ino'.includes(term) ||
+        'diagram.json'.includes(term) ||
+        fileMatch
+      )
+    })
+  }, [isInstructor, savedExplorerTab, studentSavedProjects, mySavedProjects, savedSearch])
+
   const iotAchievements = projectsQ.data?.achievements ?? []
   const earnedAchCount = iotAchievements.filter((a) => a.earned).length
   const lineCount = Math.max(18, displayedCode.split('\n').length)
@@ -1231,10 +1444,31 @@ export function IotSimulatorStudio({
                 {boardInstances.length > 1 ? ` · ${boardInstances.length} MCU` : ''}
               </Badge>
               {focusBarControls}
-              <button type="button" className="btn-outline" onClick={() => setShowSavedDrawer((v) => !v)}>
-                <FolderOpen size={15} /> {en ? 'Saved' : 'Tersimpan'} ({projectsQ.data?.projects.length ?? 0})
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={startBlankCanvas}
+                aria-label="New File (Blank Canvas)"
+                title={en ? 'Start a fresh Blank Canvas project' : 'Buat Blank Canvas / proyek kosong baru'}
+              >
+                <FilePlus2 size={15} /> New File
               </button>
-              <button type="button" className="btn-primary" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => {
+                  setPreviewedProjFile(null)
+                  setShowSavedDrawer((v) => !v)
+                }}
+              >
+                <FolderOpen size={15} /> {en ? 'Projects & Files' : 'Tersimpan & File'} ({mySavedProjects.length})
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={saveMut.isPending || (!isInstructor && (!canAccessIotStudio || !iotTrackEnabled))}
+                onClick={() => saveMut.mutate()}
+              >
                 <Save size={15} /> {saveMut.isPending ? (en ? 'Saving...' : 'Menyimpan...') : en ? 'Save Project' : 'Simpan Proyek'}
               </button>
             </div>
@@ -1263,37 +1497,189 @@ export function IotSimulatorStudio({
       ) : null}
 
       {showSavedDrawer ? (
-        <section className="card iot-saved-shelf">
-          <div className="card-head">
+        <section className="card iot-saved-shelf" aria-label={en ? 'Saved projects and files explorer' : 'Penjelajah proyek dan file tersimpan'}>
+          <div className="card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <h2>{en ? 'Saved Projects' : 'Proyek Tersimpan'}</h2>
-              <p>{en ? 'Load a saved circuit + sketch from database.' : 'Muat kembali rangkaian dan sketsa yang tersimpan.'}</p>
+              <h2>
+                {isInstructor && savedExplorerTab === 'students'
+                  ? en ? 'Student Saved Projects & Multi-Files' : 'Proyek & File Tersimpan Mahasiswa'
+                  : en ? 'Saved Projects & Files' : 'Proyek & File Tersimpan'}
+              </h2>
+              <p>
+                {isInstructor && savedExplorerTab === 'students'
+                  ? en
+                    ? 'Inspect multi-file code & circuits saved by students across your classes.'
+                    : 'Tinjau daftar proyek dan file kode (.ino, .h, .cpp, diagram.json) yang disimpan mahasiswa.'
+                  : en
+                    ? 'Load saved multi-file projects (Main.ino + headers/modules + diagram.json) from database.'
+                    : 'Muat kembali proyek tersimpan beserta seluruh file kode tersinkron (.h, .cpp, diagram.json).'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={savedExplorerTab === 'mine' ? 'btn-primary iot-mini-btn' : 'btn-outline iot-mini-btn'}
+                onClick={() => {
+                  setSavedExplorerTab('mine')
+                  setPreviewedProjFile(null)
+                }}
+              >
+                <FolderOpen size={13} /> {en ? 'My Projects' : 'Proyek Saya'} ({mySavedProjects.length})
+              </button>
+              {isInstructor ? (
+                <button
+                  type="button"
+                  className={savedExplorerTab === 'students' ? 'btn-primary iot-mini-btn' : 'btn-outline iot-mini-btn'}
+                  onClick={() => {
+                    setSavedExplorerTab('students')
+                    setPreviewedProjFile(null)
+                  }}
+                >
+                  <Users size={13} /> {en ? 'Student Projects' : 'Proyek Mahasiswa'} ({studentSavedProjects.length})
+                </button>
+              ) : null}
             </div>
           </div>
-          {projectsQ.data?.projects.length ? (
+
+          <div className="iot-explorer-filters">
+            <label className="iot-explorer-search">
+              <Search size={14} />
+              <input
+                type="search"
+                value={savedSearch}
+                onChange={(e) => setSavedSearch(e.target.value)}
+                placeholder={
+                  en
+                    ? 'Filter by project title, student name, or filename (e.g. pins.h)...'
+                    : 'Cari judul proyek, nama mahasiswa, atau nama file (mis. pins.h)...'
+                }
+              />
+            </label>
+            {isInstructor && savedExplorerTab === 'students' ? (
+              <select
+                aria-label={en ? 'Filter student class' : 'Filter kelas mahasiswa'}
+                className="sim-select-full"
+                style={{ width: 'auto', minWidth: 140 }}
+                value={studentClassFilter}
+                onChange={(e) => setStudentClassFilter(e.target.value)}
+              >
+                <option value="">{en ? 'All Classes' : 'Semua Kelas'}</option>
+                <option value="IF-4A">IF-4A · IoT</option>
+                <option value="IF-3A">IF-3A · Keamanan Web</option>
+                <option value="IF-3B">IF-3B · Keamanan Web</option>
+              </select>
+            ) : null}
+          </div>
+
+          {displayedExplorerProjects.length ? (
             <div className="iot-saved-grid">
-              {projectsQ.data.projects.map((p) => (
-                <div key={p.id} className="iot-saved-item">
-                  <div>
-                    <strong>{p.title}</strong>
-                    <small className="muted" style={{ display: 'block' }}>
-                      {BOARDS[p.board]?.shortName ?? p.board} · {p.components.length} parts · {p.wires.length} wires
-                    </small>
+              {displayedExplorerProjects.map((p) => {
+                const extraList = Array.isArray(p.files) ? p.files : []
+                const fromStudent = isInstructor && savedExplorerTab === 'students'
+                const diagramPreview = JSON.stringify(
+                  toWokwiDiagramJson(p.board, p.components, p.wires, p.title),
+                  null,
+                  2,
+                )
+                const projectFilesForChips = [
+                  { name: 'Main.ino', content: p.code },
+                  ...extraList,
+                  { name: 'diagram.json', content: diagramPreview },
+                ]
+                return (
+                  <div key={p.id} className="iot-saved-item iot-saved-item-rich">
+                    <div className="iot-saved-item-top">
+                      <div>
+                        <strong>{p.title}</strong>
+                        {fromStudent && p.owner_name ? (
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                            <Badge tone="info">{p.owner_name}</Badge>
+                            {p.class_id ? <Badge tone="muted">{p.class_id}</Badge> : null}
+                            {p.owner_email ? <small className="muted">{p.owner_email}</small> : null}
+                          </div>
+                        ) : null}
+                        <small className="muted" style={{ display: 'block', marginTop: 4 }}>
+                          {BOARDS[p.board]?.shortName ?? p.board} · {p.components.length} parts · {p.wires.length} wires ·{' '}
+                          {1 + extraList.length} code file(s)
+                        </small>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          className="btn-outline iot-mini-btn"
+                          onClick={() => loadSavedProject(p, { fromStudentExplorer: fromStudent })}
+                        >
+                          {fromStudent ? (en ? 'Open in Studio' : 'Muat ke Kanvas') : en ? 'Load' : 'Buka'}
+                        </button>
+                        {!fromStudent ? (
+                          <button
+                            type="button"
+                            className="btn-outline iot-mini-btn"
+                            onClick={() => deleteProjMut.mutate(p.id)}
+                            aria-label="Hapus proyek"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="iot-saved-file-chips" role="group" aria-label={`Files in ${p.title}`}>
+                      {projectFilesForChips.map((file) => {
+                        const isPreviewed =
+                          previewedProjFile?.projectId === p.id && previewedProjFile.fileName === file.name
+                        return (
+                          <button
+                            key={file.name}
+                            type="button"
+                            className={`iot-file-chip ${isPreviewed ? 'is-active' : ''}`}
+                            onClick={() =>
+                              setPreviewedProjFile(
+                                isPreviewed
+                                  ? null
+                                  : { projectId: p.id, fileName: file.name, content: file.content },
+                              )
+                            }
+                            title={en ? `Preview ${file.name}` : `Pratinjau ${file.name}`}
+                          >
+                            <FileCode2 size={12} />
+                            <span>{file.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {previewedProjFile?.projectId === p.id ? (
+                      <div className="iot-saved-file-preview">
+                        <div className="iot-saved-file-preview-head">
+                          <strong>{previewedProjFile.fileName}</strong>
+                          <button
+                            type="button"
+                            className="btn-outline iot-mini-btn"
+                            onClick={() =>
+                              loadSavedProject(p, {
+                                focusFile: previewedProjFile.fileName,
+                                fromStudentExplorer: fromStudent,
+                              })
+                            }
+                          >
+                            {en ? 'Edit this file' : 'Buka file ini di Editor'}
+                          </button>
+                        </div>
+                        <pre>{previewedProjFile.content}</pre>
+                      </div>
+                    ) : null}
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button type="button" className="btn-outline iot-mini-btn" onClick={() => loadSavedProject(p)}>
-                      {en ? 'Load' : 'Buka'}
-                    </button>
-                    <button type="button" className="btn-outline iot-mini-btn" onClick={() => deleteProjMut.mutate(p.id)} aria-label="Hapus proyek">
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              {en ? 'No saved projects yet.' : 'Belum ada proyek tersimpan.'}
+              {isInstructor && savedExplorerTab === 'students'
+                ? studentProjectsQ.isLoading
+                  ? en ? 'Loading student projects...' : 'Memuat proyek mahasiswa...'
+                  : en ? 'No student IoT projects matched this filter.' : 'Belum ada proyek IoT mahasiswa pada filter ini.'
+                : en ? 'No saved projects yet.' : 'Belum ada proyek tersimpan.'}
             </p>
           )}
         </section>
@@ -1325,11 +1711,15 @@ export function IotSimulatorStudio({
               value={activePresetId}
               onChange={(e) => loadPreset(e.target.value)}
             >
-              {corePresets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {en ? p.titleEn : p.titleId}
-                </option>
-              ))}
+              {corePresets.map((p) => {
+                const lock = p.missionId ? getMissionUnlockStatus(p.missionId) : { unlocked: true, reason: null }
+                const label = en ? p.titleEn : p.titleId
+                return (
+                  <option key={p.id} value={p.id} disabled={!lock.unlocked}>
+                    {!lock.unlocked ? `🔒 ${label}` : label}
+                  </option>
+                )
+              })}
               {mode === 'dosen' && dosenShowcasePresets.length > 0 ? (
                 <optgroup label={en ? 'Instructor · Wokwi Interactive Projects' : 'Dosen · Contoh Proyek Belajar Wokwi'}>
                   {dosenShowcasePresets.map((p) => (
@@ -1392,6 +1782,22 @@ export function IotSimulatorStudio({
       {/* Guided Practicum Missions Strip */}
       {focusMode === 'normal' && !isFullscreen ? (
       <section className="card iot-missions-strip" aria-label={en ? 'IoT Missions & Achievements' : 'Misi & Pencapaian IoT'}>
+        {!isInstructor && (!canAccessIotStudio || !iotTrackEnabled || !canSubmitIot) ? (
+          <div className="feedback wrong" role="alert" style={{ marginBottom: 4 }}>
+            <Lock size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            {!iotTrackEnabled
+              ? en
+                ? 'IoT practicum track is disabled by Admin.'
+                : 'Jalur praktikum IoT dinonaktifkan Admin.'
+              : !canAccessIotStudio
+                ? en
+                  ? 'Your IoT Studio access right has been locked by Admin. Contact an administrator.'
+                  : 'Hak akses IoT Studio Anda dikunci Admin. Hubungi Admin atau Dosen.'
+                : en
+                  ? 'Mission submission permission is restricted for your account by Admin.'
+                  : 'Hak kirim penilaian/misi Anda sedang dikunci Admin (mode baca saja).'}
+          </div>
+        ) : null}
         <div
           style={{
             display: 'flex',
@@ -1408,6 +1814,11 @@ export function IotSimulatorStudio({
                 ? `IoT Missions (${completedSet.size}/${IOT_MISSIONS.length} Completed)`
                 : `Misi Praktikum IoT (${completedSet.size}/${IOT_MISSIONS.length} Tuntas)`}
             </strong>
+            <Badge tone={isInstructor ? 'info' : 'muted'}>
+              {isInstructor
+                ? en ? 'Lecturer · All 10 Missions Open' : 'Dosen · Semua 10 Misi Terbuka'
+                : en ? 'Sequential · Unlock in Order' : 'Bertahap · Kunci Hak Akses Berurutan'}
+            </Badge>
             {iotAchievements.length > 0 && (
               <Badge tone={earnedAchCount > 0 ? 'good' : 'muted'}>
                 <Award size={12} /> {earnedAchCount}/{iotAchievements.length} Achievement IoT
@@ -1431,14 +1842,24 @@ export function IotSimulatorStudio({
           {IOT_MISSIONS.map((m) => {
             const isSelected = activeMissionId === m.id
             const isDone = completedSet.has(m.id)
+            const lock = getMissionUnlockStatus(m.id)
             return (
               <button
                 key={m.id}
                 type="button"
-                className={`iot-mission-pill ${isSelected ? 'is-active' : ''} ${isDone ? 'is-done' : ''}`}
+                disabled={!lock.unlocked}
+                aria-disabled={!lock.unlocked}
+                title={lock.reason ?? (en ? m.objectiveEn : m.objectiveId)}
+                className={`iot-mission-pill ${isSelected ? 'is-active' : ''} ${isDone ? 'is-done' : ''} ${!lock.unlocked ? 'is-locked' : ''}`}
                 onClick={() => loadPreset(m.presetId)}
               >
-                {isDone ? <CheckCircle2 size={13} /> : <Sparkles size={13} />}
+                {!lock.unlocked ? (
+                  <Lock size={12} />
+                ) : isDone ? (
+                  <CheckCircle2 size={13} />
+                ) : (
+                  <Sparkles size={13} />
+                )}
                 <span>{en ? m.titleEn : m.titleId}</span>
               </button>
             )
@@ -1470,10 +1891,18 @@ export function IotSimulatorStudio({
             <button
               type="button"
               className="btn-primary"
-              disabled={!allMissionPassed || submitMissionMut.isPending}
+              disabled={
+                !allMissionPassed ||
+                submitMissionMut.isPending ||
+                (!isInstructor && (!canAccessIotStudio || !canSubmitIot || !iotTrackEnabled || !activeMissionLock.unlocked))
+              }
               onClick={() => submitMissionMut.mutate()}
             >
-              <Award size={15} />
+              {!isInstructor && (!activeMissionLock.unlocked || !canSubmitIot) ? (
+                <Lock size={14} />
+              ) : (
+                <Award size={15} />
+              )}
               {mode === 'dosen'
                 ? en ? 'Verify Demo Run' : 'Verifikasi Demo'
                 : submitMissionMut.isPending
@@ -1751,6 +2180,24 @@ export function IotSimulatorStudio({
                       MCU {idx + 1}: {b.label}
                     </button>
                   ))}
+                </div>
+              ) : null}
+              {extraFiles.length > 0 || syncInfo.missingIncludes.length > 0 ? (
+                <div
+                  className={`iot-file-sync-bar ${syncInfo.missingIncludes.length > 0 ? 'has-error' : ''}`}
+                  role="status"
+                  aria-label={en ? 'Project file synchronization status' : 'Status sinkronisasi multi-file'}
+                >
+                  <Link2 size={13} />
+                  <span>
+                    {syncInfo.missingIncludes.length > 0
+                      ? en
+                        ? `Missing include: ${syncInfo.missingIncludes.join(', ')}`
+                        : `File #include belum ditemukan: ${syncInfo.missingIncludes.join(', ')}`
+                      : en
+                        ? `Synced (${syncInfo.linkedFiles.length + 1} files): ${syncInfo.linkedFiles.join(' · ')} · diagram.json`
+                        : `Sinkron (${syncInfo.linkedFiles.length + 1} file): ${syncInfo.linkedFiles.join(' · ')} · diagram.json`}
+                  </span>
                 </div>
               ) : null}
               {activeMcuCompileError ? (
@@ -2072,6 +2519,9 @@ export function IotSimulatorStudio({
                     <Badge tone={lint.valid ? 'good' : 'bad'}>
                       {lint.valid ? 'wokwi-cli lint: OK (0 errors)' : `Lint Errors: ${lint.errors.length}`}
                     </Badge>
+                    <Badge tone="info">
+                      <Link2 size={11} /> {en ? 'Canvas Synced' : 'Tersinkron Otomatis'}
+                    </Badge>
                     {!lint.valid || diagramError ? (
                       <span className="iot-lint-err">{diagramError ?? lint.errors[0]}</span>
                     ) : null}
@@ -2081,7 +2531,7 @@ export function IotSimulatorStudio({
                     className="iot-diagram-textarea"
                     spellCheck={false}
                     value={diagramText}
-                    onChange={(e) => setDiagramText(e.target.value)}
+                    onChange={(e) => setDiagramDraft(e.target.value)}
                   />
                 </div>
               )

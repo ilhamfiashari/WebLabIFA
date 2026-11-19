@@ -974,9 +974,21 @@ export const simApi = {
     return getJson<{
       projects: import('../iot/types').SavedIotProject[]
       completed_missions: import('../iot/types').CompletedMission[]
+      mission_states?: import('../iot/types').IotMissionAccessState[]
       achievements?: import('../iot/types').IotAchievementBadge[]
       iot_xp?: number
+      access?: import('../iot/types').IotStudioAccess
     }>('/api/iot/projects')
+  },
+  listDosenStudentIotProjects(params?: { class_id?: string; q?: string }) {
+    const qs = new URLSearchParams()
+    if (params?.class_id) qs.set('class_id', params.class_id)
+    if (params?.q) qs.set('q', params.q)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return getJson<{
+      projects: import('../iot/types').SavedIotProject[]
+      total: number
+    }>(`/api/dosen/iot-projects${suffix}`)
   },
   saveIotProject(
     csrf: string,
@@ -986,11 +998,18 @@ export const simApi = {
       board: string
       mission_id?: string | null
       code: string
+      files?: import('../iot/types').SketchFileEntry[]
       components: unknown[]
       wires: unknown[]
     },
   ) {
-    return postJson<{ id: string; title: string; board: string; saved: boolean }>(
+    return postJson<{
+      id: string
+      title: string
+      board: string
+      files?: import('../iot/types').SketchFileEntry[]
+      saved: boolean
+    }>(
       '/api/iot/projects',
       csrf,
       body,
@@ -1008,6 +1027,7 @@ export const simApi = {
       mission_id: string
       board: string
       code: string
+      files?: import('../iot/types').SketchFileEntry[]
       components: unknown[]
       wires: unknown[]
       component_count: number
@@ -1029,6 +1049,7 @@ export const simApi = {
       xp_awarded: number
       newly_unlocked?: string[]
       achievements?: import('../iot/types').IotAchievementBadge[]
+      mission_states?: import('../iot/types').IotMissionAccessState[]
     }>('/api/iot/missions/submit', csrf, body)
   },
 }

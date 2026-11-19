@@ -609,15 +609,34 @@ test('Mahasiswa melihat 10 misi IoT Studio, achievement badge, dan mengirim bukt
   await mockSecurityRoutes(page, student.email)
 
   const submittedPayloads: Array<Record<string, unknown>> = []
-  let mission10Done = false
+  const initialCompleted = [
+    'iot-esp32-gpio',
+    'iot-esp32-ultrasonic',
+    'iot-esp32-dht-oled',
+    'iot-esp32-mqtt',
+    'iot-esp32-button-pullup',
+    'iot-esp32-adc-servo',
+    'iot-esp32-pir-alarm',
+    'iot-esp32-lcd-access',
+    'iot-esp32-gas-safety',
+  ]
+  let stage: 'empty' | 'nine' | 'ten' = 'empty'
 
-  await page.route('**/api/iot/projects', (r) =>
-    r.fulfill({
+  await page.route('**/api/iot/projects', (r) => {
+    const doneIds =
+      stage === 'empty'
+        ? []
+        : stage === 'nine'
+          ? initialCompleted
+          : [...initialCompleted, 'iot-esp32-secure-telemetry']
+    return r.fulfill({
       json: {
         projects: [],
-        completed_missions: mission10Done
-          ? [{ mission_id: 'iot-esp32-secure-telemetry', score: 100, completed_at: '2026-11-19T12:00:00Z' }]
-          : [],
+        completed_missions: doneIds.map((id) => ({
+          mission_id: id,
+          score: 100,
+          completed_at: '2026-11-19T12:00:00Z',
+        })),
         achievements: [
           {
             id: 'iot-perintis',
@@ -625,7 +644,7 @@ test('Mahasiswa melihat 10 misi IoT Studio, achievement badge, dan mengirim bukt
             title: 'Perintis IoT Studio',
             detail: 'Menyelesaikan misi simulasi perangkat keras IoT pertama.',
             xp: 25,
-            earned: mission10Done,
+            earned: stage !== 'empty',
           },
           {
             id: 'iot-telemetri-tls',
@@ -633,25 +652,31 @@ test('Mahasiswa melihat 10 misi IoT Studio, achievement badge, dan mengirim bukt
             title: 'Penjaga Telemetri TLS',
             detail: 'Menuntaskan misi komunikasi IoT terenkripsi mqtts:// TLS.',
             xp: 40,
-            earned: mission10Done,
+            earned: stage === 'ten',
           },
         ],
-        iot_xp: mission10Done ? 145 : 0,
+        iot_xp: stage === 'ten' ? 680 : 0,
+        access: {
+          can_access_iot_studio: true,
+          can_submit_assignments: true,
+          iot_track_enabled: true,
+          is_instructor: false,
+        },
       },
-    }),
-  )
+    })
+  })
 
   await page.route('**/api/iot/missions/submit', (r) => {
     submittedPayloads.push(JSON.parse(r.request().postData() || '{}') as Record<string, unknown>)
-    mission10Done = true
+    stage = 'ten'
     return r.fulfill({
       json: {
         session_id: 'ses-iot-10',
         mission_id: 'iot-esp32-secure-telemetry',
         score: 100,
         passed: true,
-        xp_awarded: 145,
-        newly_unlocked: ['Perintis IoT Studio', 'Penjaga Telemetri TLS'],
+        xp_awarded: 180,
+        newly_unlocked: ['Master Praktikum IoT', 'Penjaga Telemetri TLS'],
       },
     })
   })
@@ -659,19 +684,28 @@ test('Mahasiswa melihat 10 misi IoT Studio, achievement badge, dan mengirim bukt
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/lab/iot')
 
+  // Awalnya (0/10): hanya Misi 1 terbuka, Misi 2 & Misi 10 terkunci bertahap
   await expect(page.getByText('Misi Praktikum IoT (0/10 Tuntas)')).toBeVisible()
-  await expect(page.getByText('0/2 Achievement IoT')).toBeVisible()
   await expect(page.locator('.iot-mission-pill')).toHaveCount(10)
+  await expect(page.getByRole('button', { name: /Misi 1 · Kontrol GPIO/ })).toBeEnabled()
+  await expect(page.getByRole('button', { name: /Misi 2 · Sensor Jarak/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /Misi 10 · Guard Sensor Suhu/ })).toBeDisabled()
 
-  await page.getByRole('button', { name: /Misi 10 · Guard Sensor Suhu/ }).click()
+  // Setelah Misi 1..9 tuntas, Misi 10 terbuka dan dapat diverifikasi lengkap dengan achievement
+  stage = 'nine'
+  await page.reload()
+  await expect(page.getByText('Misi Praktikum IoT (9/10 Tuntas)')).toBeVisible()
+  const m10Btn = page.getByRole('button', { name: /Misi 10 · Guard Sensor Suhu/ })
+  await expect(m10Btn).toBeEnabled()
+  await m10Btn.click()
   await page.getByRole('button', { name: 'Jalankan' }).click()
 
   const submitBtn = page.getByRole('button', { name: 'Kumpulkan Misi (+80 XP)' })
   await expect(submitBtn).toBeEnabled()
   await submitBtn.click()
 
-  await expect(page.getByText(/Lencana terbuka: Perintis IoT Studio, Penjaga Telemetri TLS/)).toBeVisible()
-  await expect(page.getByText('Misi Praktikum IoT (1/10 Tuntas)')).toBeVisible()
+  await expect(page.getByText(/Lencana terbuka: Master Praktikum IoT, Penjaga Telemetri TLS/)).toBeVisible()
+  await expect(page.getByText('Misi Praktikum IoT (10/10 Tuntas)')).toBeVisible()
   await expect(page.getByText('2/2 Achievement IoT')).toBeVisible()
 
   const submittedPayload = submittedPayloads[0]
@@ -683,4 +717,30 @@ test('Mahasiswa melihat 10 misi IoT Studio, achievement badge, dan mengirim bukt
   expect(Array.isArray(submittedPayload?.components)).toBe(true)
   expect(Array.isArray(submittedPayload?.wires)).toBe(true)
   expect(Number(submittedPayload?.loop_iterations)).toBeGreaterThanOrEqual(1)
+})
+
+test('Hak akses IoT Studio mahasiswa terkunci ketika dinonaktifkan oleh Admin', async ({ page }) => {
+  await page.route('**/api/me', (r) => r.fulfill({ json: student }))
+  await mockSecurityRoutes(page, student.email)
+  await page.route('**/api/iot/projects', (r) =>
+    r.fulfill({
+      json: {
+        projects: [],
+        completed_missions: [],
+        achievements: [],
+        iot_xp: 0,
+        access: {
+          can_access_iot_studio: false,
+          can_submit_assignments: false,
+          iot_track_enabled: true,
+          is_instructor: false,
+        },
+      },
+    }),
+  )
+
+  await page.goto('/lab/iot')
+  await expect(page.getByRole('alert')).toContainText(/Hak akses IoT Studio Anda dikunci Admin/)
+  await expect(page.getByRole('button', { name: /Misi 1 · Kontrol GPIO/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Simpan Proyek' })).toBeDisabled()
 })

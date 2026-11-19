@@ -479,38 +479,63 @@ export function formatSuggestionSignature(item: AcSuggestion): string | null {
   return `${ret}${item.label}(${plist})`
 }
 
-function extractSketchSymbols(code: string): AcSuggestion[] {
+function extractSketchSymbols(
+  code: string,
+  extraFiles: Array<{ name: string; content: string }> = [],
+): AcSuggestion[] {
   const seen = new Set<string>(STATIC_SUGGESTIONS.map((s) => s.label))
   const found: AcSuggestion[] = []
+  const sources = [
+    { name: 'Main.ino', content: code },
+    ...extraFiles,
+  ]
 
-  const defRe = /^\s*#define\s+([A-Za-z_]\w*)(?:\s+([^\s/]+))?/gm
-  for (let m = defRe.exec(code); m !== null; m = defRe.exec(code)) {
-    const name = m[1]
-    if (!seen.has(name)) {
-      seen.add(name)
-      const val = m[2] ? ` = ${m[2]}` : ''
-      found.push({
-        label: name,
-        insertText: name,
-        kind: 'const',
-        detailId: `#define ${name}${val}`,
-        detailEn: `#define ${name}${val}`,
-      })
+  for (const src of sources) {
+    const defRe = /^\s*#define\s+([A-Za-z_]\w*)(?:\s+([^\n/]+?))?\s*$/gm
+    for (let m = defRe.exec(src.content); m !== null; m = defRe.exec(src.content)) {
+      const name = m[1]
+      if (!seen.has(name)) {
+        seen.add(name)
+        const val = m[2] ? ` = ${m[2].trim()}` : ''
+        found.push({
+          label: name,
+          insertText: name,
+          kind: 'const',
+          detailId: `#define ${name}${val} (${src.name})`,
+          detailEn: `#define ${name}${val} (${src.name})`,
+        })
+      }
     }
-  }
 
-  const declRe = /\b(?:int|float|double|bool|boolean|byte|long|uint8_t|uint16_t|uint32_t|String|Servo)\s+([A-Za-z_]\w*)/g
-  for (let m = declRe.exec(code); m !== null; m = declRe.exec(code)) {
-    const name = m[1]
-    if (!seen.has(name) && name !== 'setup' && name !== 'loop') {
-      seen.add(name)
-      found.push({
-        label: name,
-        insertText: name,
-        kind: 'var',
-        detailId: 'Variabel / objek lokal pada sketsa',
-        detailEn: 'Local sketch variable / object',
-      })
+    const declRe = /\b(?:int|float|double|bool|boolean|byte|long|uint8_t|uint16_t|uint32_t|String|Servo)\s+([A-Za-z_]\w*)/g
+    for (let m = declRe.exec(src.content); m !== null; m = declRe.exec(src.content)) {
+      const name = m[1]
+      if (!seen.has(name) && name !== 'setup' && name !== 'loop') {
+        seen.add(name)
+        found.push({
+          label: name,
+          insertText: name,
+          kind: 'var',
+          detailId: `Variabel / objek (${src.name})`,
+          detailEn: `Sketch variable / object (${src.name})`,
+        })
+      }
+    }
+
+    const fnRe = /^\s*(?:void|int|float|double|long|bool|boolean|String|uint\d+_t)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/gm
+    for (let m = fnRe.exec(src.content); m !== null; m = fnRe.exec(src.content)) {
+      const fnName = m[1]
+      if (!seen.has(fnName) && fnName !== 'setup' && fnName !== 'loop') {
+        seen.add(fnName)
+        const hasArgs = m[2].trim().length > 0
+        found.push({
+          label: fnName,
+          insertText: hasArgs ? `${fnName}($0)` : `${fnName}()`,
+          kind: 'fn',
+          detailId: `Fungsi proyek (${src.name}): ${fnName}(${m[2].trim()})`,
+          detailEn: `Project function (${src.name}): ${fnName}(${m[2].trim()})`,
+        })
+      }
     }
   }
 
@@ -532,7 +557,12 @@ function isInsideCommentOrString(lineBeforeCursor: string): boolean {
  * Compute autocomplete suggestions at the given textarea cursor offset.
  * Pass `force = true` for explicit Ctrl+Space invocation.
  */
-export function getArduinoAutocomplete(code: string, cursor: number, force = false): AcResult | null {
+export function getArduinoAutocomplete(
+  code: string,
+  cursor: number,
+  force = false,
+  extraFiles: Array<{ name: string; content: string }> = [],
+): AcResult | null {
   const lineStart = code.lastIndexOf('\n', cursor - 1) + 1
   const lineBefore = code.slice(lineStart, cursor)
 
@@ -540,12 +570,23 @@ export function getArduinoAutocomplete(code: string, cursor: number, force = fal
     return null
   }
 
-  // 1. Preprocessor (#include / #define)
-  const preprocMatch = /^\s*(#[A-Za-z0-9_<./ ]*)$/.exec(lineBefore)
+  // 1. Preprocessor (#include / #define) — ikut menyarankan file lokal proyek (#include "file.h")
+  const preprocMatch = /^\s*(#[A-Za-z0-9_<./" ]*)$/.exec(lineBefore)
   if (preprocMatch) {
     const typed = preprocMatch[1].toLowerCase()
     const replaceStart = cursor - preprocMatch[1].length
-    const items = PREPROC_SUGGESTIONS.filter((s) => s.label.toLowerCase().startsWith(typed) || s.label.toLowerCase().includes(typed)).slice(0, 8)
+    const localIncludeItems: AcSuggestion[] = extraFiles
+      .filter((f) => /\.(h|hpp|cpp|c|ino)$/i.test(f.name))
+      .map((f) => ({
+        label: `#include "${f.name}"`,
+        insertText: `#include "${f.name}"\n$0`,
+        kind: 'hdr' as const,
+        detailId: `Sertakan file proyek lokal (${f.name})`,
+        detailEn: `Include local project file (${f.name})`,
+      }))
+    const items = [...localIncludeItems, ...PREPROC_SUGGESTIONS]
+      .filter((s) => s.label.toLowerCase().startsWith(typed) || s.label.toLowerCase().includes(typed))
+      .slice(0, 8)
     return items.length > 0 ? { replaceStart, replaceEnd: cursor, items } : null
   }
 
@@ -571,7 +612,7 @@ export function getArduinoAutocomplete(code: string, cursor: number, force = fal
 
   const replaceStart = cursor - typedWord.length
   const lower = typedWord.toLowerCase()
-  const all = [...extractSketchSymbols(code), ...STATIC_SUGGESTIONS]
+  const all = [...extractSketchSymbols(code, extraFiles), ...STATIC_SUGGESTIONS]
 
   const starts = all.filter((s) => s.label.toLowerCase().startsWith(lower) && s.label !== typedWord)
   const contains = all.filter((s) => !s.label.toLowerCase().startsWith(lower) && s.label.toLowerCase().includes(lower))
