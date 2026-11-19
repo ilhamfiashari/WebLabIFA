@@ -8,6 +8,9 @@
 
 - **Two Enforced Practicum Tracks**
   - **Keamanan Web (`Cyber Security`)**: Step-by-step OWASP Top 10 labs (hypothesis, baseline, controlled probe, root-cause diagnosis, code patching, regression verification, and reflection) with progressive Easy -> Impossible unlocking for students.
+  - **Web App Development Virtual Lab (`/lab/web-dev`, `/lab/dosen/web-dev`)**:
+    - Dedicated dual-pane interactive Web coding & live rendering studio covering HTML5, CSS3 Flexbox/Grid, Forms/Tables/Media, JavaScript DOM & ES6+, React JSX (`useState`), Python & OOP, FastAPI REST endpoints, PostgreSQL schema/queries, and AI web integration (`P1–P16`), built 100% inside a strict CSP-safe sandbox (`DOMParser`, safe CSS-to-style mapping, and in-browser interpreters without `eval` or unsafe inline execution).
+    - Features a minimalist single-row collapsible Mission strip with progressive **XP Experience** & prerequisite enforcement for Students (`Mahasiswa`), while unlocking all 14 curriculum missions & student project inspection in **Lecturer (`Dosen`)** mode.
   - **IoT Hardware & ESP32 Simulator (`/lab/iot`, `/lab/dosen/iot`)**:
     - **New File (`Blank Canvas`)** toolbar action & customizable board templates (`ESP32-C3`, `ESP32 DevKit`, `Arduino Uno`, `Arduino Mega`, `Pi Pico W`, Multi-MCU workspaces).
     - **Simulated IoT WebServer & Interactive Web Browser (`web-browser` component)**: Drag a live `Web Browser` client onto the circuit canvas, serve custom multi-file `index.html` templates (`{{TEMP}}`, `{{HUMIDITY}}`, `{{LED_STATE}}`) or ESP32 `WebServer` routes (`server.on`, `server.send`), inspect real-time canvas sensor telemetry over HTTP/JSON, and trigger two-way actuator control routes safely inside a CSP-compliant DOM sandbox.
@@ -39,17 +42,18 @@ WebLabIFA/
 │   │   ├── moodle.rs       # Moodle XML/GIFT/Aiken parser & XXE/XSS sanitizer
 │   │   ├── latihan.rs      # Cyber Security & IoT practice engine and settings
 │   │   ├── seed.rs         # Demo student cohorts, assignments & multi-file IoT projects
-│   │   ├── portal/         # Student, Lecturer, Admin RBAC & IoT project endpoints
+│   │   ├── portal/         # Student, Lecturer, Admin RBAC, IoT & Web Dev endpoints
 │   │   ├── simulator/      # Safe simulated request/patch evaluation engine
 │   │   ├── simulator_catalog/ # Structured OWASP Web & IoT lab scenarios
 │   │   └── security_account/  # TOTP, Argon2id backup codes, passkeys, monitor & backups
-│   ├── migrations/         # PostgreSQL SQLx schema migrations (0001..0014)
+│   ├── migrations/         # PostgreSQL SQLx schema migrations (0001..0015)
 │   └── Dockerfile          # Multi-stage minimal Rust runtime container
 ├── Lab-FrontEnd/           # React 19 + TypeScript + Vite SPA
 │   ├── src/
 │   │   ├── admin/          # Admin portal, UserAccessModal & live security monitor
 │   │   ├── lecturer/       # Lecturer analytics, Moodle bank importer & IoT studio
 │   │   ├── student/        # Student dashboard, assignments, achievements & history
+│   │   ├── webdev/         # Web App Dev Virtual Lab IDE & CSP-safe live renderer
 │   │   ├── iot/            # Multi-file C++ IDE, firmware VM, Wokwi canvas & explorer
 │   │   ├── simulator/      # OWASP Top 10 interactive pentest & patching simulator
 │   │   ├── shared/         # Bilingual i18n, animated charts, errors & MFA settings

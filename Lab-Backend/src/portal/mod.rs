@@ -4,6 +4,7 @@ mod instructor;
 mod iot_projects;
 mod sessions;
 mod student;
+mod webdev_projects;
 
 pub use admin::*;
 pub use catalog::*;
@@ -11,6 +12,7 @@ pub use instructor::*;
 pub use iot_projects::*;
 pub use sessions::*;
 pub use student::*;
+pub use webdev_projects::*;
 
 use crate::{ApiError, Identity, simulator_catalog::LevelId};
 use axum::http::StatusCode;

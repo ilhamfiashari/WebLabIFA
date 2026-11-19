@@ -242,6 +242,14 @@ pub async fn student_dashboard(
             "earned": achievements.iter().any(|a| a.achievement_key == spec.key),
         }));
     }
+    for spec in super::webdev_projects::WEBDEV_BADGE_SPECS {
+        badges.push(json!({
+            "id": spec.id,
+            "title": spec.title,
+            "detail": spec.detail,
+            "earned": achievements.iter().any(|a| a.achievement_key == spec.key),
+        }));
+    }
 
     Ok(Json(json!({
         "kpis": {

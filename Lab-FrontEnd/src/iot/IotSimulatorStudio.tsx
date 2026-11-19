@@ -186,6 +186,7 @@ export function IotSimulatorStudio({
   const [partCategory, setPartCategory] = useState<'all' | ComponentCategory>('all')
   const [pinnedKinds, setPinnedKinds] = useState<ComponentKind[]>(['led', 'pushbutton'])
   const [showSavedDrawer, setShowSavedDrawer] = useState(false)
+  const [showIotBadgesDrawer, setShowIotBadgesDrawer] = useState(false)
   const [savedExplorerTab, setSavedExplorerTab] = useState<'mine' | 'students'>('mine')
   const [savedSearch, setSavedSearch] = useState('')
   const [studentClassFilter, setStudentClassFilter] = useState('')
@@ -1860,24 +1861,29 @@ export function IotSimulatorStudio({
                 : en ? 'Sequential · Unlock in Order' : 'Bertahap · Kunci Hak Akses Berurutan'}
             </Badge>
             {iotAchievements.length > 0 && (
-              <Badge tone={earnedAchCount > 0 ? 'good' : 'muted'}>
+              <button
+                type="button"
+                className="btn-outline iot-mini-btn"
+                onClick={() => setShowIotBadgesDrawer((v) => !v)}
+                aria-expanded={showIotBadgesDrawer}
+              >
                 <Award size={12} /> {earnedAchCount}/{iotAchievements.length} Achievement IoT
-              </Badge>
+              </button>
             )}
           </div>
-          {iotAchievements.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} aria-label="Achievement IoT">
-              {iotAchievements.map((ach) => (
-                <span key={ach.id} title={`${ach.detail} (+${ach.xp} XP)`}>
-                  <Badge tone={ach.earned ? 'good' : 'muted'}>
-                    {ach.earned ? '★ ' : '○ '}
-                    {ach.title}
-                  </Badge>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
+        {showIotBadgesDrawer && iotAchievements.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} aria-label="Achievement IoT">
+            {iotAchievements.map((ach) => (
+              <span key={ach.id} title={`${ach.detail} (+${ach.xp} XP)`}>
+                <Badge tone={ach.earned ? 'good' : 'muted'}>
+                  {ach.earned ? '★ ' : '○ '}
+                  {ach.title}
+                </Badge>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="iot-mission-tabs">
           {IOT_MISSIONS.map((m) => {
             const isSelected = activeMissionId === m.id
