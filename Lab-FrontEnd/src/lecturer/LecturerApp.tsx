@@ -689,31 +689,89 @@ function InstructorSimulatorView({
   )
 }
 
+const DEFAULT_RUBRIC = [
+  { criterion: 'Identifikasi Skenario & Batas Kepercayaan', weight: 20 },
+  { criterion: 'Bukti Pengujian / Simulasi', weight: 25 },
+  { criterion: 'Perbaikan Kode / Rangkaian', weight: 30 },
+  { criterion: 'Verifikasi & Refleksi', weight: 25 },
+]
+
 function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardResponse; csrf: string }) {
   const qc = useQueryClient()
   const labsQ = useQuery({ queryKey: ['labs-catalog', 'dosen'], queryFn: () => simApi.getCatalog() })
   const [classId, setClassId] = useState(dash.selected_class)
+  const [track, setTrack] = useState<'web' | 'iot'>('web')
   const [title, setTitle] = useState('')
   const [labId, setLabId] = useState('a05-sqli')
   const [levelId, setLevelId] = useState<LevelId>('medium')
   const [dueInDays, setDueInDays] = useState(7)
   const [threshold, setThreshold] = useState(80)
+  const [maxAttempts, setMaxAttempts] = useState(3)
+  const [allowLate, setAllowLate] = useState(false)
+  const [allowHints, setAllowHints] = useState(true)
+  const [description, setDescription] = useState('')
+  const [instructions, setInstructions] = useState('')
+  const [attachmentUrl, setAttachmentUrl] = useState('')
+  const [rubric, setRubric] = useState(DEFAULT_RUBRIC)
+  const [detailId, setDetailId] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
+
+  const filteredLabs = (labsQ.data?.labs ?? []).filter((l) => l.track === track)
+  const effectiveLabId = filteredLabs.some((l) => l.id === labId)
+    ? labId
+    : (filteredLabs[0]?.id ?? (track === 'iot' ? 'iot-esp32-gpio' : 'a05-sqli'))
+  const detailAssignment = dash.assignments.find((a) => a.id === detailId) ?? null
+  const rubricTotal = rubric.reduce((s, r) => s + r.weight, 0)
+
+  const onTrackChange = (nextTrack: 'web' | 'iot') => {
+    setTrack(nextTrack)
+    const first = (labsQ.data?.labs ?? []).find((l) => l.track === nextTrack)
+    setLabId(first?.id ?? (nextTrack === 'iot' ? 'iot-esp32-gpio' : 'a05-sqli'))
+  }
 
   const createMut = useMutation({
     mutationFn: () =>
       simApi.createAssignment(csrf, {
         class_id: classId,
         title,
-        lab_id: labId,
+        lab_id: effectiveLabId,
+        track,
         required_level: levelId,
         due_in_days: dueInDays,
         pass_threshold: threshold,
+        description: description.trim() || undefined,
+        instructions: instructions.trim() || undefined,
+        attachment_url: attachmentUrl.trim() || undefined,
+        max_attempts: maxAttempts,
+        allow_late: allowLate,
+        allow_hints: allowHints,
+        rubric: rubric.filter((r) => r.criterion.trim().length > 0),
       }),
     onSuccess: async (res) => {
       setTitle('')
+      setDescription('')
+      setInstructions('')
+      setAttachmentUrl('')
+      setErrMsg(null)
       setSavedMsg(`Penugasan "${res.title}" untuk kelas ${res.class_id} tersimpan.`)
       await qc.invalidateQueries({ queryKey: ['instructor-dashboard'] })
+    },
+    onError: (err) => {
+      setSavedMsg(null)
+      setErrMsg(err instanceof Error ? err.message : 'Gagal menerbitkan penugasan.')
+    },
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => simApi.deleteAssignment(csrf, id),
+    onSuccess: async () => {
+      setDetailId(null)
+      setSavedMsg('Penugasan berhasil dihapus.')
+      await qc.invalidateQueries({ queryKey: ['instructor-dashboard'] })
+    },
+    onError: (err) => {
+      setErrMsg(err instanceof Error ? err.message : 'Gagal menghapus penugasan.')
     },
   })
 
@@ -721,7 +779,7 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
     <div style={{ display: 'grid', gap: 16 }}>
       <PageHead
         title="Kelola Penugasan Praktikum"
-        description="Buat tugas lab simulator OWASP Web atau IoT Studio untuk kelas yang Anda ampu."
+        description="Rancang tugas praktikum terperinci (Cyber Security & IoT) lengkap dengan deskripsi, instruksi langkah, rubrik penilaian, dan batas percobaan."
       />
       <div className="sim-workbench">
         <section className="card">
@@ -735,6 +793,11 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
               <strong style={{ color: 'var(--good)' }}>{savedMsg}</strong>
             </div>
           ) : null}
+          {errMsg ? (
+            <p className="feedback wrong" role="alert" style={{ marginBottom: 12 }}>
+              {errMsg}
+            </p>
+          ) : null}
           <form
             style={{ display: 'grid', gap: 12 }}
             onSubmit={(e) => {
@@ -742,15 +805,29 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
               createMut.mutate()
             }}
           >
-            <div className="sim-form-field">
-              <label htmlFor="asg-class">Kelas</label>
-              <select id="asg-class" className="sim-select-full" value={classId} onChange={(e) => setClassId(e.target.value)}>
-                {dash.classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id} · {c.name}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="sim-form-field">
+                <label htmlFor="asg-class">Kelas</label>
+                <select id="asg-class" className="sim-select-full" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                  {dash.classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.id} · {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sim-form-field">
+                <label htmlFor="asg-track">Jalur Praktikum</label>
+                <select
+                  id="asg-track"
+                  className="sim-select-full"
+                  value={track}
+                  onChange={(e) => onTrackChange(e.target.value as 'web' | 'iot')}
+                >
+                  <option value="web">Cyber Security</option>
+                  <option value="iot">IoT</option>
+                </select>
+              </div>
             </div>
             <div className="sim-form-field">
               <label htmlFor="asg-title">Judul Penugasan</label>
@@ -759,15 +836,24 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
                 className="sim-input"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Mis. Praktikum SQL Injection & Parameterized Query"
+                placeholder={
+                  track === 'iot'
+                    ? 'Mis. Praktikum Validasi CRC & TLS Telemetri ESP32'
+                    : 'Mis. Praktikum SQL Injection & Parameterized Query'
+                }
                 required
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="sim-form-field">
-                <label htmlFor="asg-lab">Modul Lab</label>
-                <select id="asg-lab" className="sim-select-full" value={labId} onChange={(e) => setLabId(e.target.value)}>
-                  {(labsQ.data?.labs ?? []).map((l) => (
+                <label htmlFor="asg-lab">Modul Lab ({track === 'iot' ? 'IoT' : 'Cyber Security'})</label>
+                <select
+                  id="asg-lab"
+                  className="sim-select-full"
+                  value={effectiveLabId}
+                  onChange={(e) => setLabId(e.target.value)}
+                >
+                  {filteredLabs.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.owasp_code ?? 'IoT'} · {l.title}
                     </option>
@@ -789,9 +875,9 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
                 </select>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
               <div className="sim-form-field">
-                <label htmlFor="asg-days">Tenggat (hari ke depan)</label>
+                <label htmlFor="asg-days">Tenggat (hari)</label>
                 <input
                   id="asg-days"
                   type="number"
@@ -803,7 +889,7 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
                 />
               </div>
               <div className="sim-form-field">
-                <label htmlFor="asg-pass">Ambang Lulus (1–100)</label>
+                <label htmlFor="asg-pass">Ambang Lulus</label>
                 <input
                   id="asg-pass"
                   type="number"
@@ -814,29 +900,255 @@ function AssignmentsCreatePage({ dash, csrf }: { dash: InstructorDashboardRespon
                   onChange={(e) => setThreshold(Number(e.target.value))}
                 />
               </div>
+              <div className="sim-form-field">
+                <label htmlFor="asg-attempts">Batas Percobaan (0 = bebas)</label>
+                <input
+                  id="asg-attempts"
+                  type="number"
+                  min={0}
+                  max={20}
+                  className="sim-input"
+                  value={maxAttempts}
+                  onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                />
+              </div>
             </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={allowHints} onChange={(e) => setAllowHints(e.target.checked)} />
+                Izinkan Petunjuk Simulator
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={allowLate} onChange={(e) => setAllowLate(e.target.checked)} />
+                Izinkan Kumpul Lewat Tenggat
+              </label>
+            </div>
+
+            <div className="sim-form-field">
+              <label htmlFor="asg-desc">Deskripsi Tugas &amp; Skenario</label>
+              <textarea
+                id="asg-desc"
+                rows={2}
+                className="sim-input"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ringkasan capaian keamanan atau arsitektur IoT yang harus diverifikasi mahasiswa."
+              />
+            </div>
+
+            <div className="sim-form-field">
+              <label htmlFor="asg-instr">Instruksi Langkah Pengerjaan</label>
+              <textarea
+                id="asg-instr"
+                rows={3}
+                className="sim-input"
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="1. Identifikasi kerentanan/pin aktif&#10;2. Jalankan uji eksploitasi atau simulasi sensor&#10;3. Terapkan patch & verifikasi"
+              />
+            </div>
+
+            <div className="sim-form-field">
+              <label htmlFor="asg-url">Tautan Modul / Lampiran (opsional, https://)</label>
+              <input
+                id="asg-url"
+                type="url"
+                className="sim-input"
+                value={attachmentUrl}
+                onChange={(e) => setAttachmentUrl(e.target.value)}
+                placeholder="https://lms.example.edu/modul-praktikum.pdf"
+              />
+            </div>
+
+            <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: 13 }}>Rubrik Penilaian (Total Bobot: {rubricTotal}%)</strong>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  style={{ minHeight: 28, fontSize: 12, padding: '0 8px' }}
+                  disabled={rubric.length >= 10}
+                  onClick={() => setRubric((prev) => [...prev, { criterion: '', weight: 10 }])}
+                >
+                  + Tambah Kriteria
+                </button>
+              </div>
+              {rubric.map((row, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 86px auto', gap: 6 }}>
+                  <input
+                    aria-label={`Kriteria rubrik ${idx + 1}`}
+                    className="sim-input"
+                    value={row.criterion}
+                    onChange={(e) =>
+                      setRubric((prev) => prev.map((it, i) => (i === idx ? { ...it, criterion: e.target.value } : it)))
+                    }
+                    placeholder="Kriteria penilaian"
+                  />
+                  <input
+                    aria-label={`Bobot kriteria ${idx + 1}`}
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="sim-input"
+                    value={row.weight}
+                    onChange={(e) =>
+                      setRubric((prev) =>
+                        prev.map((it, i) => (i === idx ? { ...it, weight: Number(e.target.value) || 1 } : it)),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    style={{ minHeight: 34, padding: '0 10px' }}
+                    disabled={rubric.length <= 1}
+                    onClick={() => setRubric((prev) => prev.filter((_, i) => i !== idx))}
+                    aria-label={`Hapus kriteria ${idx + 1}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
             <button type="submit" className="btn-primary" disabled={createMut.isPending || !title.trim()}>
               <ClipboardPlus size={16} /> Terbitkan Penugasan
             </button>
           </form>
         </section>
 
-        <section className="card" style={{ display: 'grid', gap: 10 }}>
+        <section className="card" style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
           <div className="card-head">
             <div>
               <h2>Daftar Tugas Terbit ({dash.assignments.length})</h2>
+              <p>Klik Lihat Detail untuk meninjau rubrik dan progres tiap mahasiswa.</p>
             </div>
           </div>
           {dash.assignments.map((a) => (
-            <div key={a.id} className="sim-vis-box">
-              <strong>{a.title}</strong>
+            <div key={a.id} className="sim-vis-box" style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <strong>{a.title}</strong>
+                <Badge tone="good">{a.track_label ?? (a.track === 'iot' ? 'IoT' : 'Cyber Security')}</Badge>
+              </div>
               <span className="muted" style={{ fontSize: 13 }}>
-                {a.lab_id} ({a.required_level}) · Lulus: {a.passed}/{a.denominator} mahasiswa
+                {a.lab_title ?? a.lab_id} ({a.required_level}) · Lulus: {a.passed}/{a.denominator} · Berjalan: {a.running} · Tenggat:{' '}
+                {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(a.due_at))}
               </span>
+              {a.description && (
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)' }}>
+                  {a.description.slice(0, 120)}
+                  {a.description.length > 120 ? '…' : ''}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  style={{ minHeight: 30, fontSize: 12, padding: '0 10px' }}
+                  onClick={() => setDetailId(a.id)}
+                >
+                  Lihat Detail
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  style={{ minHeight: 30, fontSize: 12, padding: '0 10px' }}
+                  disabled={deleteMut.isPending}
+                  onClick={() => deleteMut.mutate(a.id)}
+                >
+                  Hapus
+                </button>
+              </div>
             </div>
           ))}
         </section>
       </div>
+
+      {detailAssignment && (
+        <Drawer title={`Detail Penugasan · ${detailAssignment.title}`} onClose={() => setDetailId(null)}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Badge tone="good">
+                {detailAssignment.track_label ?? (detailAssignment.track === 'iot' ? 'IoT' : 'Cyber Security')}
+              </Badge>
+              <Badge tone="muted">{detailAssignment.lab_id}</Badge>
+              <Badge tone="warn">Level {detailAssignment.required_level}</Badge>
+            </div>
+            {detailAssignment.description && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Deskripsi</strong>
+                <p style={{ margin: '4px 0 0', fontSize: 14 }}>{detailAssignment.description}</p>
+              </div>
+            )}
+            {detailAssignment.instructions && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Instruksi Langkah Pengerjaan</strong>
+                <pre
+                  style={{
+                    margin: '6px 0 0',
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'inherit',
+                    fontSize: 13,
+                    padding: 10,
+                    background: 'var(--surface-2)',
+                    borderRadius: 8,
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  {detailAssignment.instructions}
+                </pre>
+              </div>
+            )}
+            {detailAssignment.rubric && detailAssignment.rubric.length > 0 && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Rubrik Penilaian</strong>
+                <ul className="check-list" style={{ marginTop: 6 }}>
+                  {detailAssignment.rubric.map((r, i) => (
+                    <li key={`${r.criterion}-${i}`}>
+                      <span>
+                        {r.criterion} — <strong>{r.weight}%</strong>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {detailAssignment.student_details && detailAssignment.student_details.length > 0 && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Status Pengerjaan Mahasiswa</strong>
+                <div className="table-wrap" style={{ marginTop: 6 }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Mahasiswa</th>
+                        <th>Status</th>
+                        <th>Skor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailAssignment.student_details.map((s) => (
+                        <tr key={s.user_id}>
+                          <td>
+                            <div className="strong">{s.name}</div>
+                            <small className="subtle-note">{s.email}</small>
+                          </td>
+                          <td>
+                            <Badge tone={s.status === 'Lulus' ? 'good' : s.status === 'Berjalan' ? 'warn' : 'muted'}>
+                              {s.status}
+                            </Badge>
+                          </td>
+                          <td>{s.score ?? '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </Drawer>
+      )}
     </div>
   )
 }
