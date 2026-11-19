@@ -261,6 +261,22 @@ export interface ProbeInput {
   advance_minutes?: number
 }
 
+export interface AssignmentRubricItem {
+  criterion: string
+  weight: number
+}
+
+export interface PlatformSettings {
+  active_tracks: Array<'web' | 'iot'>
+  enforce_sequential_unlock: boolean
+  strict_deadline_lock: boolean
+  block_concurrent_attempts: boolean
+  max_import_questions: number
+  allow_dosen_question_import: boolean
+  allow_student_hints: boolean
+  hide_answer_explanations_until_due: boolean
+}
+
 export interface StudentDashboardResponse {
   kpis: {
     labs_completed: number
@@ -300,9 +316,24 @@ export interface StudentDashboardResponse {
     class_id: string
     title: string
     lab_id: string
+    lab_title?: string
+    track?: 'web' | 'iot'
+    track_label?: string
     required_level: LevelId
     due_at: string
     pass_threshold: number
+    allow_hints?: boolean
+    description?: string
+    instructions?: string
+    rubric?: AssignmentRubricItem[]
+    attachment_url?: string | null
+    max_attempts?: number
+    attempts_used?: number
+    allow_late?: boolean
+    overdue?: boolean
+    locked_by_deadline?: boolean
+    locked_by_attempts?: boolean
+    best_score?: number | null
     status: string
     session_id: string | null
   }>
@@ -365,15 +396,34 @@ export interface InstructorDashboardResponse {
   }
   assignments: Array<{
     id: string
+    class_id?: string
     title: string
     lab_id: string
+    lab_title?: string
+    track?: 'web' | 'iot'
+    track_label?: string
     required_level: LevelId
     due_at: string
     pass_threshold: number
+    allow_hints?: boolean
+    description?: string
+    instructions?: string
+    rubric?: AssignmentRubricItem[]
+    attachment_url?: string | null
+    max_attempts?: number
+    allow_late?: boolean
     not_started: number
     running: number
     passed: number
     denominator: number
+    student_details?: Array<{
+      user_id: string
+      name: string
+      email: string
+      status: string
+      score: number | null
+      session_id: string | null
+    }>
   }>
   score_histogram: Array<{ label: string; count: number }>
   ungraded_count: number
@@ -412,6 +462,7 @@ export interface AdminDashboardResponse {
     dosen: number
     admin: number
   }
+  settings?: PlatformSettings
   users: Array<{
     id: string
     name: string
@@ -447,9 +498,18 @@ export interface AdminDashboardResponse {
   }>
 }
 
+async function parseApiError(response: Response): Promise<ApiError> {
+  try {
+    const data = (await response.json()) as { message?: string }
+    return new ApiError(response.status, typeof data.message === 'string' ? data.message : undefined)
+  } catch {
+    return new ApiError(response.status)
+  }
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' })
-  if (!response.ok) throw new ApiError(response.status)
+  if (!response.ok) throw await parseApiError(response)
   return response.json() as Promise<T>
 }
 
@@ -460,7 +520,7 @@ async function postJson<T>(url: string, csrf: string, body: unknown): Promise<T>
     headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
     body: JSON.stringify(body),
   })
-  if (!response.ok) throw new ApiError(response.status)
+  if (!response.ok) throw await parseApiError(response)
   return response.json() as Promise<T>
 }
 
@@ -470,7 +530,7 @@ async function deleteJson<T>(url: string, csrf: string): Promise<T> {
     credentials: 'same-origin',
     headers: { 'x-csrf-token': csrf },
   })
-  if (!response.ok) throw new ApiError(response.status)
+  if (!response.ok) throw await parseApiError(response)
   return response.json() as Promise<T>
 }
 
@@ -691,16 +751,27 @@ export const simApi = {
       class_id: string
       title: string
       lab_id: string
+      track?: 'web' | 'iot'
       required_level: LevelId
       due_in_days: number
       pass_threshold: number
+      description?: string
+      instructions?: string
+      rubric?: AssignmentRubricItem[]
+      attachment_url?: string
+      max_attempts?: number
+      allow_late?: boolean
+      allow_hints?: boolean
     },
   ) {
-    return postJson<{ id: string; class_id: string; title: string }>(
+    return postJson<{ id: string; class_id: string; title: string; track?: string }>(
       '/api/dosen/assignments',
       csrf,
       body,
     )
+  },
+  deleteAssignment(csrf: string, assignmentId: string) {
+    return deleteJson<{ deleted: string }>(`/api/dosen/assignments/${encodeURIComponent(assignmentId)}`, csrf)
   },
   addFeedback(csrf: string, sessionId: string, comment: string) {
     return postJson<{ id: string; comment: string }>(
@@ -722,6 +793,12 @@ export const simApi = {
   },
   getAdminDashboard() {
     return getJson<AdminDashboardResponse>('/api/dashboard/admin')
+  },
+  getAdminSettings() {
+    return getJson<{ settings: PlatformSettings }>('/api/admin/settings')
+  },
+  updateAdminSettings(csrf: string, settings: PlatformSettings) {
+    return postJson<{ settings: PlatformSettings }>('/api/admin/settings', csrf, settings)
   },
   triggerAdminSeed(csrf: string) {
     return postJson<{

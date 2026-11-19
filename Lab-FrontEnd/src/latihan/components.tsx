@@ -1,9 +1,9 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, Check, CircleCheck, Eye, EyeOff, KeyRound, Lightbulb, Lock, LoaderCircle, Sparkles, Star, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CircleCheck, Eye, EyeOff, KeyRound, Lightbulb, Lock, LoaderCircle, Sparkles, Star, Trash2, X } from 'lucide-react'
 import { NavLink } from '../portal/ui'
 import './latihan.css'
-import { errorText, levelName, revealHint, submitAnswer, type AnswerResult, type Catalog, type Exercise, type Track } from './api'
+import { deleteQuestion, errorText, levelName, revealHint, submitAnswer, type AnswerResult, type Catalog, type Exercise, type Track } from './api'
 
 type Mode = 'mahasiswa' | 'dosen'
 const basePath = (mode: Mode) => mode === 'dosen' ? '/lab/dosen/latihan' : '/lab/latihan'
@@ -14,20 +14,22 @@ export function LevelMap({ catalog, track, mode, go }: { catalog: Catalog; track
     {catalog.levels.map((level, li) => {
       const list = track.exercises.filter(e => e.level === level.level)
       const done = list.filter(e => e.status === 'selesai').length
-      const locked = mode === 'mahasiswa' && list.every(e => e.status === 'terkunci')
-      const complete = mode === 'mahasiswa' && done === list.length
+      const locked = mode === 'mahasiswa' && list.length > 0 && list.every(e => e.status === 'terkunci')
+      const complete = mode === 'mahasiswa' && list.length > 0 && done === list.length
       const previous = catalog.levels[li - 1]
       return <li key={level.level} className={`level ${locked ? 'is-locked' : ''} ${complete ? 'is-complete' : ''}`}>
         <header className="level-head">
           <span className="level-badge" aria-hidden="true">{locked ? <Lock size={16} /> : complete ? <Check size={16} /> : level.level}</span>
           <div><h3>Level {level.name}</h3><p>{mode === 'dosen' ? `${list.length} latihan · ${level.points} poin per latihan bagi mahasiswa` : locked ? `Terkunci. Tuntaskan level ${previous?.name ?? ''} untuk membuka.` : `${done} dari ${list.length} selesai · ${level.points} XP per latihan`}</p></div>
-          {mode === 'mahasiswa' && !locked && <div className="level-progress" aria-hidden="true"><span style={{ width: `${(done / list.length) * 100}%` }} /></div>}
+          {mode === 'mahasiswa' && !locked && list.length > 0 && <div className="level-progress" aria-hidden="true"><span style={{ width: `${(done / list.length) * 100}%` }} /></div>}
         </header>
         <ol className="steps">{list.map((e, i) => {
           const current = mode === 'mahasiswa' && e.status === 'terbuka'
+          const sourceBadge = e.source_format && e.source_format !== 'json' ? ` · ${e.source_format.toUpperCase()}` : ''
+          const durationNote = e.estimated_minutes ? ` · ~${e.estimated_minutes} mnt` : ''
           const inner = <>
             <span className={`step-node status-${mode === 'dosen' ? 'terbuka' : e.status}`} aria-hidden="true">{e.status === 'selesai' && mode === 'mahasiswa' ? <Check size={15} /> : e.status === 'terkunci' ? <Lock size={13} /> : i + 1}</span>
-            <span className="step-text"><strong>{e.title}</strong><small>{e.owasp ? `OWASP ${e.owasp} · ` : ''}{mode === 'mahasiswa' ? e.status === 'selesai' ? `+${e.progress?.earned ?? 0} XP` : e.status === 'terkunci' ? 'Terkunci' : `${e.points} XP` : e.content?.kind === 'pilihan' ? 'Pilihan ganda' : 'Isian singkat'}</small></span>
+            <span className="step-text"><strong>{e.title}</strong><small>{e.owasp ? `OWASP ${e.owasp} · ` : ''}{mode === 'mahasiswa' ? e.status === 'selesai' ? `+${e.progress?.earned ?? 0} XP` : e.status === 'terkunci' ? 'Terkunci' : `${e.points} XP` : e.content?.kind === 'pilihan' ? 'Pilihan ganda' : 'Isian singkat'}{durationNote}{sourceBadge}</small></span>
             {current && <span className="step-cta">Mulai <ArrowRight size={14} aria-hidden="true" /></span>}
           </>
           return <li key={e.id} className={current ? 'is-current' : ''}>
@@ -47,6 +49,14 @@ function CodeBlock({ code, lang }: { code: string; lang: string | null }) {
 
 /** Satu latihan. Mode Mahasiswa mengirim jawaban ke server; mode Dosen menampilkan kunci dan pembahasan. */
 export function ExercisePlayer({ catalog, track, exercise, mode, go, csrf, hideAnswers }: { catalog: Catalog; track: Track; exercise: Exercise; mode: Mode; go: (to: string) => void; csrf?: string; hideAnswers?: boolean }) {
+  const client = useQueryClient()
+  const deleteM = useMutation({
+    mutationFn: () => deleteQuestion(exercise.id, csrf ?? ''),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['latihan'] })
+      go(basePath(mode))
+    },
+  })
   const index = track.exercises.findIndex(e => e.id === exercise.id)
   const prev = track.exercises[index - 1]
   const next = track.exercises[index + 1]
@@ -67,7 +77,21 @@ export function ExercisePlayer({ catalog, track, exercise, mode, go, csrf, hideA
       <div className="player-tags">
         {exercise.owasp && <span className="tag">OWASP {exercise.owasp}</span>}
         <span className="tag">{c?.kind === 'isian' ? 'Isian singkat' : 'Pilihan ganda'}</span>
+        {exercise.estimated_minutes && <span className="tag">~{exercise.estimated_minutes} menit</span>}
+        {exercise.source_format && exercise.source_format !== 'json' && <span className="tag">Impor {exercise.source_format.toUpperCase()}</span>}
+        {(exercise.tags ?? []).map((t) => <span key={t} className="tag">{t}</span>)}
         {mode === 'mahasiswa' && <span className="tag tag-xp"><Star size={13} aria-hidden="true" />{exercise.points} XP</span>}
+        {mode === 'dosen' && csrf && exercise.id.startsWith('imp-') && (
+          <button
+            type="button"
+            className="btn-outline"
+            style={{ marginLeft: 'auto', minHeight: 30, padding: '0 10px', fontSize: 12 }}
+            disabled={deleteM.isPending}
+            onClick={() => deleteM.mutate()}
+          >
+            <Trash2 size={13} aria-hidden="true" /> Hapus soal impor
+          </button>
+        )}
       </div>
     </header>
     {!c ? <LockedNotice track={track} mode={mode} go={go} /> : <>
@@ -79,7 +103,7 @@ export function ExercisePlayer({ catalog, track, exercise, mode, go, csrf, hideA
         </p>
       </div>
       <h2 className="question">{c.question}</h2>
-      {mode === 'dosen' ? <LecturerAnswer key={`${exercise.id}-${hideAnswers ? 1 : 0}`} exercise={exercise} hide={!!hideAnswers} /> : <StudentAnswer key={exercise.id} exercise={exercise} csrf={csrf ?? ''} next={next} go={go} />}
+      {mode === 'dosen' ? <LecturerAnswer key={`${exercise.id}-${hideAnswers ? 1 : 0}`} exercise={exercise} hide={!!hideAnswers} /> : <StudentAnswer key={exercise.id} exercise={exercise} csrf={csrf ?? ''} next={next} go={go} allowHints={catalog.policy?.allow_student_hints !== false} />}
     </>}
     {nav}
   </article>
@@ -108,7 +132,7 @@ function LecturerAnswer({ exercise, hide }: { exercise: Exercise; hide: boolean 
   </div>
 }
 
-function StudentAnswer({ exercise, csrf, next, go }: { exercise: Exercise; csrf: string; next?: Exercise; go: (to: string) => void }) {
+function StudentAnswer({ exercise, csrf, next, go, allowHints = true }: { exercise: Exercise; csrf: string; next?: Exercise; go: (to: string) => void; allowHints?: boolean }) {
   const client = useQueryClient()
   const c = exercise.content!
   const [value, setValue] = useState('')
@@ -148,9 +172,10 @@ function StudentAnswer({ exercise, csrf, next, go }: { exercise: Exercise; csrf:
     {hint ? <section className="explain hint"><h3><Lightbulb size={16} aria-hidden="true" />Petunjuk</h3><p>{hint}</p></section> : null}
     <div className="answer-actions">
       <button type="submit" className="btn-primary" disabled={!value.trim() || answer.isPending}>{answer.isPending ? <LoaderCircle className="spin" size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}Periksa jawaban</button>
-      {!hint && (confirmHint
+      {!hint && allowHints && (confirmHint
         ? <span className="hint-confirm">XP latihan ini menjadi setengah. <button type="button" className="text-btn" onClick={() => hintMutation.mutate()} disabled={hintMutation.isPending}>Ya, tampilkan</button><button type="button" className="text-btn muted" onClick={() => setConfirmHint(false)}>Batal</button></span>
         : <button type="button" className="btn-outline" onClick={() => setConfirmHint(true)}><Lightbulb size={16} aria-hidden="true" />Petunjuk</button>)}
+      {!hint && !allowHints && <span className="subtle-note">Petunjuk dinonaktifkan oleh kebijakan Admin.</span>}
     </div>
   </form>
 }

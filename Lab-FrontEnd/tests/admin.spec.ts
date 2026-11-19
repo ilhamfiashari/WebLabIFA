@@ -31,6 +31,22 @@ test.beforeEach(async ({ page }) => {
       anomalies: [],
     },
   }))
+  await page.route('**/api/admin/settings', route => {
+    const method = route.request().method()
+    const payload = method === 'POST'
+      ? JSON.parse(route.request().postData() || '{}')
+      : {
+          active_tracks: ['web', 'iot'],
+          enforce_sequential_unlock: true,
+          strict_deadline_lock: true,
+          block_concurrent_attempts: true,
+          max_import_questions: 100,
+          allow_dosen_question_import: true,
+          allow_student_hints: true,
+          hide_answer_explanations_until_due: true,
+        }
+    return route.fulfill({ json: { settings: payload } })
+  })
 })
 
 const pages = [
