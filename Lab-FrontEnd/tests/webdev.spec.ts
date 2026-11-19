@@ -383,4 +383,24 @@ test('editor kode Web Dev selaras tanpa drift CSS, mendukung autocomplete, auto-
   await page.getByRole('button', { name: 'Rapikan' }).click()
   await expect(editor).toHaveValue('<div>\n  <p>Halo</p>\n</div>\n')
   await expect(page.getByLabel('Status bar editor')).toContainText('Spaces: 2')
+  await expect(page.getByLabel('Status bar editor')).toContainText('0 Error')
+
+  // 5. Uji red error penanda baris saat tag HTML belum ditutup atau CSS kurang ';'
+  await editor.fill('<section>\n  <h1>Judul Tanpa Penutup</h1>')
+  await expect(page.locator('.wd-line-gutter .is-error-line[data-error-line="1"]')).toBeVisible()
+  await expect(page.locator('.wd-error-line-bg[data-error-line="1"]')).toBeVisible()
+  await expect(page.locator('.wd-code-highlight .ed-code-error-squiggle[data-error-line="1"]')).toBeVisible()
+  await expect(page.locator('.wd-compile-error')).toContainText("Tag '<section>' di baris 1 belum ditutup")
+  await expect(page.getByLabel('Status bar editor')).toContainText('1 Error · Ln 1')
+
+  await page.getByRole('tab', { name: 'style.css' }).click()
+  const cssCode = await editor.inputValue()
+  await editor.fill(cssCode.replace('padding: 14px;', 'padding: 14px'))
+  await expect(page.locator('.wd-error-line-bg[data-error-line="2"]')).toBeVisible()
+  await expect(page.locator('.wd-compile-error')).toContainText('Baris 2')
+  await expect(page.locator('.wd-compile-error')).toContainText("titik koma (';')")
+
+  await editor.fill(cssCode)
+  await expect(page.locator('.wd-error-line-bg')).toHaveCount(0)
+  await expect(page.getByLabel('Status bar editor')).toContainText('0 Error')
 })

@@ -254,6 +254,15 @@
   background: var(--surface);
 }
 
+.wd-compile-error {
+  padding: 6px 10px;
+  background: var(--bad-bg);
+  color: var(--bad-ink);
+  border-bottom: 1px solid rgba(220, 38, 38, 0.25);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .wd-code-shell {
   position: relative;
   display: flex;
@@ -283,20 +292,26 @@
   flex-shrink: 0;
   align-self: stretch;
   user-select: none;
-  padding: 12px 10px 12px 8px;
+  padding: 12px 0;
   text-align: right;
   font-size: 12px;
   line-height: 19.375px;
   color: #94a3b8;
   border-right: 1px solid var(--line);
   background: var(--surface-2);
-  min-width: 44px;
+  min-width: 48px;
   box-sizing: border-box;
 }
 
 .wd-line-num {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  padding: 0 10px 0 6px;
   height: 19.375px;
   line-height: 19.375px;
+  box-sizing: border-box;
 }
 
 .wd-line-num.is-active-line {
@@ -306,6 +321,31 @@
 
 .wd-code-shell.theme-dark .wd-line-num.is-active-line {
   color: #f8fafc;
+}
+
+.wd-line-num.is-error-line {
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wd-line-num.is-error-line::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #dc2626;
+  flex-shrink: 0;
+}
+
+.wd-code-shell.theme-dark .wd-line-num.is-error-line {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+}
+
+.wd-code-shell.theme-dark .wd-line-num.is-error-line::before {
+  background: #f87171;
 }
 
 .wd-code-stage {
@@ -332,6 +372,23 @@
 .wd-code-shell.theme-dark .wd-active-line-bg {
   background: rgba(56, 189, 248, 0.1);
   border-color: rgba(56, 189, 248, 0.2);
+}
+
+.wd-error-line-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 19.375px;
+  background: rgba(239, 68, 68, 0.11);
+  border-left: 3px solid #dc2626;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wd-code-shell.theme-dark .wd-error-line-bg {
+  background: rgba(248, 113, 113, 0.17);
+  border-left-color: #f87171;
 }
 
 .wd-code-highlight,

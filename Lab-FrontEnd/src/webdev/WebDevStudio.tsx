@@ -52,6 +52,13 @@ import {
   handleWebSmartEnter,
   handleWebSmartPairOrClose,
 } from './webEditorHelpers'
+import { lintWebDevCode } from './webDiagnostics'
+import { lineColToOffset, type CodeDiagnostic } from '../shared/editorDiagnostics'
+import {
+  EditorDiagnosticsList,
+  EditorStatusDiagnosticPill,
+  HighlightedCodeLines,
+} from '../shared/EditorDiagnosticsUi'
 import './webdev.css'
 
 const EDITOR_LINE_HEIGHT = 19.375
@@ -509,6 +516,30 @@ export function WebDevStudio({
   const tokens = useMemo(() => tokenizeWebDevCode(activeFile.content, fileLang), [activeFile.content, fileLang])
   const lineCount = Math.max(16, activeFile.content.split('\n').length)
   const safeCursorLine = Math.min(Math.max(1, cursorPos.line), lineCount)
+  const editorDiagnostics = useMemo(
+    () => lintWebDevCode(activeFile.content, fileLang),
+    [activeFile.content, fileLang],
+  )
+  const errorLineMap = useMemo(
+    () => new Map(editorDiagnostics.map((d) => [d.line, d])),
+    [editorDiagnostics],
+  )
+  const errorLineSet = useMemo(() => new Set(errorLineMap.keys()), [errorLineMap])
+
+  const jumpToDiagnostic = (diag: CodeDiagnostic) => {
+    const el = editorRef.current
+    if (!el) return
+    const offset = lineColToOffset(activeFile.content, diag.line, diag.col)
+    el.focus()
+    el.setSelectionRange(offset, offset)
+    setCursorPos({ line: diag.line, col: diag.col })
+    setAcState(null)
+    const shell = codeShellRef.current
+    if (shell) {
+      const targetTop = Math.max(0, (diag.line - 1) * EDITOR_LINE_HEIGHT - shell.clientHeight / 3)
+      shell.scrollTo({ top: targetTop, behavior: 'smooth' })
+    }
+  }
 
   const achievements = projectsQ.data?.achievements ?? []
   const earnedAchCount = achievements.filter((a) => a.earned).length
@@ -883,7 +914,14 @@ export function WebDevStudio({
                   </button>
                 )}
               </div>
-              <Badge tone="info">{fileLang.toUpperCase()}</Badge>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {editorDiagnostics.length > 0 && (
+                  <Badge tone="bad">
+                    {editorDiagnostics.length} {en ? 'Error' : 'Error'}
+                  </Badge>
+                )}
+                <Badge tone="info">{fileLang.toUpperCase()}</Badge>
+              </div>
             </div>
 
             {newFileMode && (
@@ -902,6 +940,16 @@ export function WebDevStudio({
               </div>
             )}
 
+            {editorDiagnostics.length > 0 && (
+              <div className="wd-compile-error" role="alert">
+                <EditorDiagnosticsList
+                  diagnostics={editorDiagnostics}
+                  en={en}
+                  onJump={jumpToDiagnostic}
+                />
+              </div>
+            )}
+
             <div
               ref={codeShellRef}
               className={`wd-code-shell ${isDark ? 'theme-dark' : 'theme-light'}`}
@@ -909,10 +957,21 @@ export function WebDevStudio({
               <div className="wd-line-gutter" aria-hidden="true">
                 {Array.from({ length: lineCount }, (_, idx) => {
                   const lineNo = idx + 1
+                  const err = errorLineMap.get(lineNo)
+                  const cls = [
+                    'wd-line-num',
+                    lineNo === safeCursorLine ? 'is-active-line' : '',
+                    err ? 'is-error-line' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
                   return (
                     <div
                       key={lineNo}
-                      className={`wd-line-num ${lineNo === safeCursorLine ? 'is-active-line' : ''}`}
+                      className={cls}
+                      data-error-line={err ? lineNo : undefined}
+                      title={err ? (en ? err.messageEn : err.messageId) : undefined}
+                      onClick={err ? () => jumpToDiagnostic(err) : undefined}
                     >
                       {lineNo}
                     </div>
@@ -925,14 +984,22 @@ export function WebDevStudio({
                   aria-hidden="true"
                   style={{ top: EDITOR_PAD_TOP + (safeCursorLine - 1) * EDITOR_LINE_HEIGHT }}
                 />
+                {editorDiagnostics.map((d) => (
+                  <div
+                    key={`wd-err-bg-${d.line}`}
+                    className="wd-error-line-bg"
+                    data-error-line={d.line}
+                    style={{ top: EDITOR_PAD_TOP + (d.line - 1) * EDITOR_LINE_HEIGHT }}
+                    aria-hidden="true"
+                  />
+                ))}
                 <pre className="wd-code-highlight" aria-hidden="true">
                   <code>
-                    {tokens.map((tok, i) => (
-                      <span key={i} className={`wd-tok-${tok.type}`}>
-                        {tok.text}
-                      </span>
-                    ))}
-                    {'\n '}
+                    <HighlightedCodeLines
+                      tokens={tokens}
+                      classPrefix="wd-tok-"
+                      errorLines={errorLineSet}
+                    />
                   </code>
                 </pre>
                 <textarea
@@ -1098,8 +1165,15 @@ export function WebDevStudio({
               </div>
             </div>
             <div className="wd-editor-statusbar" aria-label={en ? 'Editor status bar' : 'Status bar editor'}>
-              <span>
-                Ln {cursorPos.line}, Col {cursorPos.col} · {fileLang.toUpperCase()} · UTF-8 · Spaces: 2
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span>
+                  Ln {cursorPos.line}, Col {cursorPos.col} · {fileLang.toUpperCase()} · UTF-8 · Spaces: 2
+                </span>
+                <EditorStatusDiagnosticPill
+                  diagnostics={editorDiagnostics}
+                  en={en}
+                  onJump={jumpToDiagnostic}
+                />
               </span>
               <span>
                 {en ? 'Auto-Close HTML · Ctrl+Space Suggest · Shift+Alt+F Format' : 'Auto-Close HTML · Ctrl+Space Saran · Shift+Alt+F Rapikan'}
