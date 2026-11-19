@@ -128,6 +128,39 @@ pub fn sanitize_csv_cell(input: &str) -> String {
     format!("\"{escaped}\"")
 }
 
+pub(super) fn track_display_label(track: &str) -> &'static str {
+    if track == "iot" {
+        "IoT"
+    } else {
+        "Cyber Security"
+    }
+}
+
+pub(super) fn sanitize_attachment_url(raw: &str) -> Result<Option<String>, ()> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > 500 || trimmed.chars().any(|c| c.is_control()) {
+        return Err(());
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("https://") || lower.starts_with("http://") {
+        Ok(Some(trimmed.to_string()))
+    } else {
+        Err(())
+    }
+}
+
+pub(super) fn is_assignment_locked_by_deadline(
+    due_at: DateTime<Utc>,
+    now: DateTime<Utc>,
+    allow_late: bool,
+    strict_deadline_lock: bool,
+) -> bool {
+    strict_deadline_lock && !allow_late && now > due_at
+}
+
 // ---------------------------------------------------------------------------
 // Katalog & Detail Lab (Mahasiswa / Dosen)
 // ---------------------------------------------------------------------------
@@ -240,5 +273,27 @@ mod tests {
         assert!(level_unlock_status("mahasiswa", "a05-sqli", LevelId::Medium, &easy_passed).0);
         assert!(!level_unlock_status("mahasiswa", "a05-sqli", LevelId::Hard, &easy_passed).0);
         assert!(!level_unlock_status("mahasiswa", "a01-idor", LevelId::Medium, &easy_passed).0);
+    }
+
+    #[test]
+    fn sanitizes_assignment_urls_and_enforces_deadline_lock() {
+        assert_eq!(sanitize_attachment_url("").unwrap(), None);
+        assert_eq!(
+            sanitize_attachment_url("  https://owasp.org/Top10/  ").unwrap(),
+            Some("https://owasp.org/Top10/".to_string())
+        );
+        assert!(sanitize_attachment_url("javascript:alert(1)").is_err());
+        assert!(sanitize_attachment_url("data:text/html,<script>1</script>").is_err());
+
+        assert_eq!(track_display_label("web"), "Cyber Security");
+        assert_eq!(track_display_label("iot"), "IoT");
+
+        let now = Utc::now();
+        let past = now - chrono::Duration::hours(2);
+        let future = now + chrono::Duration::hours(2);
+        assert!(is_assignment_locked_by_deadline(past, now, false, true));
+        assert!(!is_assignment_locked_by_deadline(past, now, true, true));
+        assert!(!is_assignment_locked_by_deadline(past, now, false, false));
+        assert!(!is_assignment_locked_by_deadline(future, now, false, true));
     }
 }

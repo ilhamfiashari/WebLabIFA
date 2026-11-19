@@ -27,9 +27,17 @@ pub(super) struct AssignmentRow {
     pub(super) class_id: String,
     pub(super) title: String,
     pub(super) lab_id: String,
+    pub(super) track: String,
     pub(super) required_level: String,
     pub(super) due_at: DateTime<Utc>,
     pub(super) pass_threshold: i32,
+    pub(super) allow_hints: bool,
+    pub(super) description: String,
+    pub(super) instructions: String,
+    pub(super) rubric_json: Value,
+    pub(super) attachment_url: Option<String>,
+    pub(super) max_attempts: i32,
+    pub(super) allow_late: bool,
 }
 
 pub async fn student_dashboard(
@@ -71,8 +79,9 @@ pub async fn student_dashboard(
         })
         .count();
 
+    let settings = crate::latihan::load_platform_settings(&state.pool).await;
     let assignments: Vec<AssignmentRow> = sqlx::query_as(
-        "SELECT a.id,a.class_id,a.title,a.lab_id,a.required_level,a.due_at,a.pass_threshold FROM assignments a JOIN class_memberships m ON m.class_id=a.class_id WHERE m.user_id=$1 ORDER BY a.due_at ASC",
+        "SELECT a.id,a.class_id,a.title,a.lab_id,a.track,a.required_level,a.due_at,a.pass_threshold,a.allow_hints,a.description,a.instructions,a.rubric_json,a.attachment_url,a.max_attempts,a.allow_late FROM assignments a JOIN class_memberships m ON m.class_id=a.class_id WHERE m.user_id=$1 ORDER BY a.due_at ASC",
     )
     .bind(actor.id)
     .fetch_all(&state.pool)
@@ -83,27 +92,60 @@ pub async fn student_dashboard(
         .filter(|a| passed_pairs.contains(&(a.lab_id.as_str(), a.required_level.as_str())))
         .count();
 
+    let now = Utc::now();
     let assignments_json: Vec<Value> = assignments
         .iter()
         .map(|a| {
-            let matching = sessions
+            let matching_all: Vec<_> = sessions
                 .iter()
-                .find(|s| s.lab_id == a.lab_id && s.level_id == a.required_level);
-            let status = if passed_pairs.contains(&(a.lab_id.as_str(), a.required_level.as_str())) {
+                .filter(|s| s.lab_id == a.lab_id && s.level_id == a.required_level)
+                .collect();
+            let matching = matching_all.first();
+            let is_passed = passed_pairs.contains(&(a.lab_id.as_str(), a.required_level.as_str()));
+            let attempts_used = matching_all.len() as i32;
+            let overdue = now > a.due_at;
+            let locked_by_deadline = !is_passed
+                && is_assignment_locked_by_deadline(
+                    a.due_at,
+                    now,
+                    a.allow_late,
+                    settings.strict_deadline_lock,
+                );
+            let locked_by_attempts =
+                !is_passed && a.max_attempts > 0 && attempts_used >= a.max_attempts;
+            let status = if is_passed {
                 "Tuntas"
+            } else if locked_by_deadline {
+                "Terlambat"
             } else if matching.is_some() {
                 "Berjalan"
             } else {
                 "Belum mulai"
             };
+            let lab_meta = find_lab(&a.lab_id);
             json!({
                 "id": a.id,
                 "class_id": a.class_id,
                 "title": a.title,
                 "lab_id": a.lab_id,
+                "lab_title": lab_meta.map(|l| l.title).unwrap_or(a.lab_id.as_str()),
+                "track": a.track,
+                "track_label": track_display_label(&a.track),
                 "required_level": a.required_level,
                 "due_at": a.due_at,
                 "pass_threshold": a.pass_threshold,
+                "allow_hints": a.allow_hints && settings.allow_student_hints,
+                "description": a.description,
+                "instructions": a.instructions,
+                "rubric": a.rubric_json,
+                "attachment_url": a.attachment_url,
+                "max_attempts": a.max_attempts,
+                "attempts_used": attempts_used,
+                "allow_late": a.allow_late,
+                "overdue": overdue,
+                "locked_by_deadline": locked_by_deadline,
+                "locked_by_attempts": locked_by_attempts,
+                "best_score": matching_all.iter().filter_map(|s| s.score).max(),
                 "status": status,
                 "session_id": matching.map(|m| m.id),
             })

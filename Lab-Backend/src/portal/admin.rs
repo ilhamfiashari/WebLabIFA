@@ -90,6 +90,8 @@ pub async fn admin_dashboard(
         "admin": users.iter().filter(|u| u.roles.contains(&"admin".to_string())).count(),
     });
 
+    let settings = crate::latihan::load_platform_settings(&state.pool).await;
+
     Ok(Json(json!({
         "kpis": {
             "active_accounts": users.iter().filter(|u| u.active).count(),
@@ -100,6 +102,7 @@ pub async fn admin_dashboard(
             "total_sessions": session_count.0,
         },
         "role_counts": role_counts,
+        "settings": settings,
         "users": users.iter().map(|u| json!({
             "id": u.id, "name": u.name, "email": u.email, "active": u.active, "roles": u.roles, "created_at": u.created_at
         })).collect::<Vec<_>>(),
@@ -275,4 +278,95 @@ pub async fn admin_update_module_status(
     tx.commit().await?;
 
     Ok(Json(json!({ "lab_id": lab_id, "status": req.status })))
+}
+
+pub async fn admin_get_settings(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> Result<Json<Value>, ApiError> {
+    let actor = identity(&state, &jar).await?;
+    if require_role(&actor, "admin").is_err() {
+        crate::latihan::record_role_tampering(&state.pool, &actor, "/api/admin/settings").await;
+        return Err(ApiError(StatusCode::FORBIDDEN));
+    }
+    let settings = crate::latihan::load_platform_settings(&state.pool).await;
+    Ok(Json(json!({ "settings": settings })))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateAdminSettingsRequest {
+    pub active_tracks: Vec<String>,
+    pub enforce_sequential_unlock: bool,
+    pub strict_deadline_lock: bool,
+    pub block_concurrent_attempts: bool,
+    pub max_import_questions: i32,
+    pub allow_dosen_question_import: bool,
+    pub allow_student_hints: bool,
+    pub hide_answer_explanations_until_due: bool,
+}
+
+pub async fn admin_update_settings(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    Json(req): Json<UpdateAdminSettingsRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let actor = verify_mutation(&state, &jar, &headers).await?;
+    if require_role(&actor, "admin").is_err() {
+        crate::latihan::record_role_tampering(&state.pool, &actor, "/api/admin/settings").await;
+        return Err(ApiError(StatusCode::FORBIDDEN));
+    }
+
+    // Pastikan jalur hanya boleh 'web' (Cyber Security) dan/atau 'iot' (IoT), dan minimal 1 aktif.
+    let mut clean_tracks = Vec::new();
+    for t in &req.active_tracks {
+        if t != "web" && t != "iot" {
+            return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+        }
+        if !clean_tracks.contains(t) {
+            clean_tracks.push(t.clone());
+        }
+    }
+    if clean_tracks.is_empty() || !(10..=500).contains(&req.max_import_questions) {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+    }
+
+    let tracks_json = serde_json::json!(clean_tracks);
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        "INSERT INTO platform_settings(id,active_tracks,enforce_sequential_unlock,strict_deadline_lock,block_concurrent_attempts,max_import_questions,allow_dosen_question_import,allow_student_hints,hide_answer_explanations_until_due,updated_by,updated_at) VALUES('default',$1,$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(id) DO UPDATE SET active_tracks=EXCLUDED.active_tracks,enforce_sequential_unlock=EXCLUDED.enforce_sequential_unlock,strict_deadline_lock=EXCLUDED.strict_deadline_lock,block_concurrent_attempts=EXCLUDED.block_concurrent_attempts,max_import_questions=EXCLUDED.max_import_questions,allow_dosen_question_import=EXCLUDED.allow_dosen_question_import,allow_student_hints=EXCLUDED.allow_student_hints,hide_answer_explanations_until_due=EXCLUDED.hide_answer_explanations_until_due,updated_by=EXCLUDED.updated_by,updated_at=now()",
+    )
+    .bind(&tracks_json)
+    .bind(req.enforce_sequential_unlock)
+    .bind(req.strict_deadline_lock)
+    .bind(req.block_concurrent_attempts)
+    .bind(req.max_import_questions)
+    .bind(req.allow_dosen_question_import)
+    .bind(req.allow_student_hints)
+    .bind(req.hide_answer_explanations_until_due)
+    .bind(actor.id)
+    .execute(&mut *tx)
+    .await?;
+
+    let summary = format!(
+        "tracks={:?}, seq={}, deadline={}, hints={}, import={}",
+        clean_tracks,
+        req.enforce_sequential_unlock,
+        req.strict_deadline_lock,
+        req.allow_student_hints,
+        req.allow_dosen_question_import
+    );
+    sqlx::query(
+        "INSERT INTO platform_audit_logs(id,actor_id,kind,title,target,result) VALUES($1,$2,'Kebijakan','Perbarui Pengaturan Admin & Anti-Kecurangan',$3,'Berhasil')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(actor.id)
+    .bind(&summary)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    let saved = crate::latihan::load_platform_settings(&state.pool).await;
+    Ok(Json(json!({ "settings": saved })))
 }

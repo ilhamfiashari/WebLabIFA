@@ -227,7 +227,7 @@ pub async fn instructor_dashboard(
     };
 
     let assignments: Vec<student::AssignmentRow> = sqlx::query_as(
-        "SELECT id,class_id,title,lab_id,required_level,due_at,pass_threshold FROM assignments WHERE class_id=ANY($1) ORDER BY due_at ASC",
+        "SELECT id,class_id,title,lab_id,track,required_level,due_at,pass_threshold,allow_hints,description,instructions,rubric_json,attachment_url,max_attempts,allow_late FROM assignments WHERE class_id=ANY($1) ORDER BY due_at ASC",
     )
     .bind(&target_class_ids)
     .fetch_all(&state.pool)
@@ -306,36 +306,83 @@ pub async fn instructor_dashboard(
         }
     }
 
-    // Agregasi status per tugas
+    // Agregasi status per tugas beserta detail per mahasiswa untuk dosen
     let assignment_progress: Vec<Value> = assignments
         .iter()
         .map(|a| {
             let mut not_started = 0;
             let mut running = 0;
             let mut passed = 0;
+            let mut details = Vec::new();
             for sid in &unique_students {
                 let s = rows.iter().find(|r| {
                     r.user_id == *sid
                         && r.lab_id.as_deref() == Some(&a.lab_id)
                         && r.level_id.as_deref() == Some(&a.required_level)
                 });
+                let student_meta = rows.iter().find(|r| r.user_id == *sid);
                 match s {
-                    Some(r) if r.passed == Some(true) => passed += 1,
-                    Some(_) => running += 1,
-                    None => not_started += 1,
+                    Some(r) if r.passed == Some(true) => {
+                        passed += 1;
+                        details.push(json!({
+                            "user_id": r.user_id,
+                            "name": r.name,
+                            "email": r.email,
+                            "status": "Lulus",
+                            "score": r.score,
+                            "session_id": r.session_id,
+                        }));
+                    }
+                    Some(r) => {
+                        running += 1;
+                        details.push(json!({
+                            "user_id": r.user_id,
+                            "name": r.name,
+                            "email": r.email,
+                            "status": "Berjalan",
+                            "score": r.score,
+                            "session_id": r.session_id,
+                        }));
+                    }
+                    None => {
+                        not_started += 1;
+                        if let Some(m) = student_meta {
+                            details.push(json!({
+                                "user_id": m.user_id,
+                                "name": m.name,
+                                "email": m.email,
+                                "status": "Belum mulai",
+                                "score": null,
+                                "session_id": null,
+                            }));
+                        }
+                    }
                 }
             }
+            let lab_meta = find_lab(&a.lab_id);
             json!({
                 "id": a.id,
+                "class_id": a.class_id,
                 "title": a.title,
                 "lab_id": a.lab_id,
+                "lab_title": lab_meta.map(|l| l.title).unwrap_or(a.lab_id.as_str()),
+                "track": a.track,
+                "track_label": track_display_label(&a.track),
                 "required_level": a.required_level,
                 "due_at": a.due_at,
                 "pass_threshold": a.pass_threshold,
+                "allow_hints": a.allow_hints,
+                "description": a.description,
+                "instructions": a.instructions,
+                "rubric": a.rubric_json,
+                "attachment_url": a.attachment_url,
+                "max_attempts": a.max_attempts,
+                "allow_late": a.allow_late,
                 "not_started": not_started,
                 "running": running,
                 "passed": passed,
                 "denominator": unique_students.len(),
+                "student_details": details,
             })
         })
         .collect();
@@ -468,13 +515,36 @@ pub async fn instructor_dashboard(
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RubricItemInput {
+    pub criterion: String,
+    pub weight: i32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateAssignmentRequest {
     pub class_id: String,
     pub title: String,
     pub lab_id: String,
+    #[serde(default)]
+    pub track: Option<String>,
     pub required_level: String,
     pub due_in_days: i64,
     pub pass_threshold: i32,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub instructions: Option<String>,
+    #[serde(default)]
+    pub rubric: Option<Vec<RubricItemInput>>,
+    #[serde(default)]
+    pub attachment_url: Option<String>,
+    #[serde(default)]
+    pub max_attempts: Option<i32>,
+    #[serde(default)]
+    pub allow_late: Option<bool>,
+    #[serde(default)]
+    pub allow_hints: Option<bool>,
 }
 
 pub async fn create_assignment(
@@ -484,10 +554,20 @@ pub async fn create_assignment(
     Json(req): Json<CreateAssignmentRequest>,
 ) -> Result<Json<Value>, ApiError> {
     let actor = verify_mutation(&state, &jar, &headers).await?;
-    require_role(&actor, "dosen")?;
+    if require_role(&actor, "dosen").is_err() {
+        crate::latihan::record_role_tampering(&state.pool, &actor, "/api/dosen/assignments").await;
+        return Err(ApiError(StatusCode::FORBIDDEN));
+    }
     verify_lecturer_class(&state.pool, actor.id, &req.class_id).await?;
-    if find_lab(&req.lab_id).is_none()
-        || LevelId::parse(&req.required_level).is_none()
+    let Some(lab) = find_lab(&req.lab_id) else {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+    };
+    if let Some(ref tr) = req.track
+        && ((tr != "web" && tr != "iot") || tr != lab.track)
+    {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+    }
+    if LevelId::parse(&req.required_level).is_none()
         || req.title.trim().is_empty()
         || req.title.len() > 140
         || !(1..=100).contains(&req.pass_threshold)
@@ -496,17 +576,67 @@ pub async fn create_assignment(
         return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
     }
 
+    let description = req.description.unwrap_or_default().trim().to_string();
+    let instructions = req.instructions.unwrap_or_default().trim().to_string();
+    if description.len() > 2000 || instructions.len() > 4000 {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+    }
+
+    let clean_url = match req.attachment_url {
+        Some(ref raw) => {
+            sanitize_attachment_url(raw).map_err(|()| ApiError(StatusCode::UNPROCESSABLE_ENTITY))?
+        }
+        None => None,
+    };
+    let max_attempts = req.max_attempts.unwrap_or(0);
+    if !(0..=100).contains(&max_attempts) {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+    }
+    let allow_late = req.allow_late.unwrap_or(false);
+    let allow_hints = req.allow_hints.unwrap_or(true);
+
+    let rubric_vec = req.rubric.unwrap_or_default();
+    if rubric_vec.len() > 10 {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+    }
+    let mut clean_rubric = Vec::with_capacity(rubric_vec.len());
+    for r in rubric_vec {
+        let crit = r.criterion.trim();
+        if crit.is_empty() || crit.len() > 120 || !(1..=100).contains(&r.weight) {
+            return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
+        }
+        clean_rubric.push(json!({ "criterion": crit, "weight": r.weight }));
+    }
+    let rubric_json = if clean_rubric.is_empty() {
+        json!([
+            { "criterion": "Identifikasi Skenario & Batas Kepercayaan", "weight": 20 },
+            { "criterion": "Bukti Pengujian / Simulasi", "weight": 25 },
+            { "criterion": "Perbaikan Kode / Rangkaian", "weight": 30 },
+            { "criterion": "Verifikasi & Refleksi", "weight": 25 }
+        ])
+    } else {
+        json!(clean_rubric)
+    };
+
     let id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO assignments(id,class_id,title,lab_id,required_level,due_at,pass_threshold,created_by) VALUES($1,$2,$3,$4,$5,now()+($6 || ' days')::interval,$7,$8)",
+        "INSERT INTO assignments(id,class_id,title,lab_id,track,required_level,due_at,pass_threshold,allow_hints,description,instructions,rubric_json,attachment_url,max_attempts,allow_late,created_by) VALUES($1,$2,$3,$4,$5,$6,now()+($7 || ' days')::interval,$8,$9,$10,$11,$12,$13,$14,$15,$16)",
     )
     .bind(id)
     .bind(&req.class_id)
     .bind(req.title.trim())
     .bind(&req.lab_id)
+    .bind(lab.track)
     .bind(&req.required_level)
     .bind(req.due_in_days.to_string())
     .bind(req.pass_threshold)
+    .bind(allow_hints)
+    .bind(&description)
+    .bind(&instructions)
+    .bind(&rubric_json)
+    .bind(&clean_url)
+    .bind(max_attempts)
+    .bind(allow_late)
     .bind(actor.id)
     .execute(&state.pool)
     .await?;
@@ -520,9 +650,53 @@ pub async fn create_assignment(
     )
     .await;
 
-    Ok(Json(
-        json!({ "id": id, "class_id": req.class_id, "title": req.title.trim() }),
-    ))
+    Ok(Json(json!({
+        "id": id,
+        "class_id": req.class_id,
+        "title": req.title.trim(),
+        "track": lab.track,
+        "track_label": track_display_label(lab.track),
+    })))
+}
+
+pub async fn delete_assignment(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    Path(assignment_id): Path<Uuid>,
+) -> Result<Json<Value>, ApiError> {
+    let actor = verify_mutation(&state, &jar, &headers).await?;
+    if require_role(&actor, "dosen").is_err() {
+        crate::latihan::record_role_tampering(
+            &state.pool,
+            &actor,
+            &format!("/api/dosen/assignments/{assignment_id}"),
+        )
+        .await;
+        return Err(ApiError(StatusCode::FORBIDDEN));
+    }
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT class_id,title FROM assignments WHERE id=$1")
+            .bind(assignment_id)
+            .fetch_optional(&state.pool)
+            .await?;
+    let Some((class_id, title)) = row else {
+        return Err(ApiError(StatusCode::NOT_FOUND));
+    };
+    verify_lecturer_class(&state.pool, actor.id, &class_id).await?;
+    sqlx::query("DELETE FROM assignments WHERE id=$1")
+        .bind(assignment_id)
+        .execute(&state.pool)
+        .await?;
+    sqlx::query(
+        "INSERT INTO platform_audit_logs(id,actor_id,kind,title,target,result) VALUES($1,$2,'Kelas','Hapus penugasan praktikum',$3,'Berhasil')",
+    )
+    .bind(Uuid::new_v4())
+    .bind(actor.id)
+    .bind(&title)
+    .execute(&state.pool)
+    .await?;
+    Ok(Json(json!({ "deleted": assignment_id })))
 }
 
 #[derive(Deserialize)]
