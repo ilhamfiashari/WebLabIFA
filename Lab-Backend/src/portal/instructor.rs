@@ -558,6 +558,10 @@ pub async fn create_assignment(
         crate::latihan::record_role_tampering(&state.pool, &actor, "/api/dosen/assignments").await;
         return Err(ApiError(StatusCode::FORBIDDEN));
     }
+    let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+    if !rights.can_manage_assignments {
+        return Err(ApiError(StatusCode::FORBIDDEN));
+    }
     verify_lecturer_class(&state.pool, actor.id, &req.class_id).await?;
     let Some(lab) = find_lab(&req.lab_id) else {
         return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
@@ -756,6 +760,10 @@ pub async fn export_class_csv(
 ) -> Result<Response, ApiError> {
     let actor = identity(&state, &jar).await?;
     require_role(&actor, "dosen")?;
+    let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+    if !rights.can_export_reports {
+        return Err(ApiError(StatusCode::FORBIDDEN));
+    }
     let class_id = q
         .class_id
         .ok_or(ApiError(StatusCode::UNPROCESSABLE_ENTITY))?;

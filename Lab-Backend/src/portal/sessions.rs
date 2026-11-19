@@ -73,6 +73,13 @@ pub async fn start_or_resume_session(
             return Err(ApiError(StatusCode::FORBIDDEN));
         }
 
+        let rights = load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+        if (lab.track == "web" && !rights.can_access_web_labs)
+            || (lab.track == "iot" && !rights.can_access_iot_studio)
+        {
+            return Err(ApiError(StatusCode::FORBIDDEN));
+        }
+
         let mod_status: Option<(String,)> =
             sqlx::query_as("SELECT status FROM lab_modules WHERE lab_id=$1")
                 .bind(lab.id)

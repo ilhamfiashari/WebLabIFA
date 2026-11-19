@@ -158,3 +158,69 @@ test('subrute admin ditolak untuk peran lain', async ({ page }) => {
   await page.goto('/lab/admin/pengguna')
   await expect(page.getByRole('heading', { name: 'Akses halaman ditolak' })).toBeVisible()
 })
+
+test('admin mengatur peran pengguna, kelas, dan hak akses granular serta mata kuliah dibatasi 2', async ({ page }) => {
+  await page.unroute('**/api/dashboard/admin')
+  let accessPayload: Record<string, unknown> | null = null
+  let accessCsrf = ''
+  await page.route('**/api/dashboard/admin', route => route.fulfill({
+    json: {
+      kpis: { active_accounts: 2, total_accounts: 2, active_classes: 2, published_labs: 15, owasp_covered: 10, total_sessions: 5 },
+      role_counts: { mahasiswa: 1, dosen: 1, admin: 1 },
+      users: [
+        {
+          id: 'u-stu-1',
+          name: 'Nadia Mahasiswa',
+          email: '123140051@student.itera.ac.id',
+          active: true,
+          roles: ['mahasiswa'],
+          class_ids: ['IF-3A'],
+          permissions: {
+            can_access_web_labs: true,
+            can_access_iot_studio: true,
+            can_submit_assignments: true,
+            can_import_questions: false,
+            can_manage_assignments: false,
+            can_view_class_analytics: false,
+            can_export_reports: false,
+          },
+          created_at: '2026-11-01T00:00:00Z',
+        },
+      ],
+      classes: [
+        { id: 'IF-3A', name: 'IF-3A · Keamanan Web', course: 'Keamanan Web', semester: 'Ganjil 2026/2027', timezone: 'Asia/Jakarta', leaderboard_enabled: true, active: true },
+        { id: 'IF-4A', name: 'IF-4A · IoT', course: 'IoT', semester: 'Ganjil 2026/2027', timezone: 'Asia/Jakarta', leaderboard_enabled: true, active: true },
+      ],
+      modules: [],
+      audit_logs: [],
+    },
+  }))
+  await page.route('**/api/admin/users/u-stu-1/access', route => {
+    accessCsrf = route.request().headers()['x-csrf-token'] ?? ''
+    accessPayload = JSON.parse(route.request().postData() || '{}') as Record<string, unknown>
+    return route.fulfill({ json: { user_id: 'u-stu-1', ...accessPayload } })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/lab/admin/pengguna')
+  await page.getByRole('button', { name: 'Atur Peran & Hak Akses' }).click()
+  const drawer = page.getByRole('dialog', { name: 'Atur Peran & Hak Akses · Nadia Mahasiswa' })
+  await expect(drawer).toBeVisible()
+  await drawer.getByLabel('dosen', { exact: true }).check()
+  await drawer.getByLabel(/IF-4A/).check()
+  await drawer.getByLabel('Terbitkan & Kelola Penugasan Kelas').check()
+  await drawer.getByRole('button', { name: 'Simpan Hak Akses' }).click()
+
+  await expect(page.getByText('Peran dan hak akses Nadia Mahasiswa berhasil diperbarui.')).toBeVisible()
+  expect(accessCsrf).toBe('csrf-fixture')
+  expect(accessPayload).toMatchObject({
+    roles: ['mahasiswa', 'dosen'],
+    class_ids: ['IF-3A', 'IF-4A'],
+    permissions: expect.objectContaining({ can_manage_assignments: true }),
+  })
+
+  await page.goto('/lab/admin/kelas')
+  const courseSelect = page.getByLabel('Mata kuliah kelas')
+  await expect(courseSelect).toBeVisible()
+  expect(await courseSelect.locator('option').allInnerTexts()).toEqual(['Keamanan Web', 'IoT'])
+})

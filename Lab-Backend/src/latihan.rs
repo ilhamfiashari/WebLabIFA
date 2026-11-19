@@ -717,7 +717,9 @@ pub async fn import_questions(
         return Err(ApiError(StatusCode::FORBIDDEN));
     }
     let settings = load_platform_settings(&state.pool).await;
-    if !settings.allow_dosen_question_import {
+    let rights =
+        crate::portal::load_user_access_rights(&state.pool, actor.id, &actor.allowed_roles).await;
+    if !settings.allow_dosen_question_import || !rights.can_import_questions {
         return Err(ApiError(StatusCode::FORBIDDEN));
     }
     let fmt = req.format.unwrap_or(moodle::ImportFormat::Auto);
