@@ -19,8 +19,8 @@ export const CLASSES: ClassInfo[] = [
   { id: 'IF-3A', name: 'IF-3A', course: 'Keamanan Aplikasi Web', lecturer: 'Arif Nugraha', students: 38, semester: 'Ganjil 2026/2027', share: 0.22, completion: 72, schedule: 'Senin, 08.00' },
   { id: 'IF-3B', name: 'IF-3B', course: 'Keamanan Aplikasi Web', lecturer: 'Arif Nugraha', students: 36, semester: 'Ganjil 2026/2027', share: 0.2, completion: 64, schedule: 'Selasa, 10.00' },
   { id: 'IF-3C', name: 'IF-3C', course: 'Keamanan Aplikasi Web', lecturer: 'Yoga Pranata', students: 35, semester: 'Ganjil 2026/2027', share: 0.18, completion: 58, schedule: 'Rabu, 13.00' },
-  { id: 'IF-5A', name: 'IF-5A', course: 'Keamanan IoT', lecturer: 'Yoga Pranata', students: 30, semester: 'Ganjil 2026/2027', share: 0.16, completion: 47, schedule: 'Kamis, 08.00' },
-  { id: 'IF-5B', name: 'IF-5B', course: 'Keamanan IoT', lecturer: 'Sari Wulandari', students: 28, semester: 'Ganjil 2026/2027', share: 0.14, completion: 41, schedule: 'Kamis, 13.00' },
+  { id: 'IF-5A', name: 'IF-5A', course: 'IoT', lecturer: 'Yoga Pranata', students: 30, semester: 'Ganjil 2026/2027', share: 0.16, completion: 47, schedule: 'Kamis, 08.00' },
+  { id: 'IF-5B', name: 'IF-5B', course: 'IoT', lecturer: 'Sari Wulandari', students: 28, semester: 'Ganjil 2026/2027', share: 0.14, completion: 41, schedule: 'Kamis, 13.00' },
   { id: 'IF-7A', name: 'IF-7A', course: 'Pengujian Penetrasi', lecturer: 'Sari Wulandari', students: 18, semester: 'Ganjil 2026/2027', share: 0.1, completion: 83, schedule: 'Jumat, 09.00' },
 ]
 

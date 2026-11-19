@@ -125,7 +125,7 @@ test.describe('Dosen', () => {
     await page.getByRole('navigation', { name: 'Navigasi Dosen' }).getByRole('link', { name: 'Bank latihan' }).click()
     await expect(page.locator('.step.is-locked')).toHaveCount(0)
     await expect(page.locator('.xp-pill, .rank-card, .tag-xp')).toHaveCount(0)
-    await page.getByRole('tab', { name: /Keamanan IoT/ }).click()
+    await page.getByRole('tab', { name: /^IoT/ }).click()
     await page.getByRole('link', { name: /Glitch saat boot/ }).click()
     await expect(page.locator('.choices li.is-correct')).toContainText('Fault injection')
     await expect(page.getByRole('heading', { name: 'Pembahasan' })).toBeVisible()

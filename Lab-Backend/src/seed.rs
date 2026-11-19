@@ -207,12 +207,7 @@ pub async fn seed_demo_data(
             "IF3101 Keamanan Web & Jaringan",
             true,
         ),
-        (
-            "IF-4A",
-            "IF-4A · Keamanan IoT",
-            "IF4204 Keamanan Sistem Tertanam",
-            true,
-        ),
+        ("IF-4A", "IF-4A · IoT", "IF4204 Sistem IoT & Tertanam", true),
     ] {
         sqlx::query(
             "INSERT INTO classes (id,name,course,semester,timezone,leaderboard_enabled,active) VALUES($1,$2,$3,'Ganjil 2026/2027','Asia/Jakarta',$4,true) ON CONFLICT (id) DO UPDATE SET leaderboard_enabled=EXCLUDED.leaderboard_enabled,active=true",
@@ -269,7 +264,7 @@ pub async fn seed_demo_data(
         .await?;
     }
 
-    // Penugasan demo idempoten untuk tiap kelas
+    // Penugasan demo idempoten untuk tiap kelas (hanya 2 jalur: Cyber Security = web, IoT = iot)
     let mut assignments_seeded = 0usize;
     let seed_assignments = [
         (
@@ -277,69 +272,100 @@ pub async fn seed_demo_data(
             "IF-3A",
             "Tugas 1 · Audit IDOR Pesanan",
             "a01-idor",
+            "web",
             "medium",
             7,
+            "Audit kerentanan Broken Access Control pada endpoint profil & pesanan yang mempercayai parameter client tanpa verifikasi kepemilikan sesi.",
+            "1. Jalankan baseline dengan akun pemilik.\n2. Uji eksploitasi IDOR memakai ID akun lain.\n3. Terapkan patch verifikasi ownership sesi.\n4. Jalankan verifikasi penuh dan isi refleksi.",
         ),
         (
             "asg-if3a-sqli",
             "IF-3A",
             "Tugas 2 · SQL Injection & Parameterized Query",
             "a05-sqli",
+            "web",
             "medium",
             14,
+            "Evaluasi form login dan pencarian yang rentan manipulasi string SQL, lalu perbaiki dengan prepared statement.",
+            "1. Rekam respons normal.\n2. Uji payload injeksi autentikasi.\n3. Pilih patch parameterized query.\n4. Lengkapi matriks verifikasi dan refleksi.",
         ),
         (
             "asg-if3a-xss",
             "IF-3A",
             "Tugas 3 · Stored XSS & Output Encoding",
             "a05-xss",
+            "web",
             "easy",
             21,
+            "Identifikasi eksekusi skrip berbahaya pada kolom komentar/profil dan terapkan sanitasi serta Content Security Policy.",
+            "1. Uji input HTML berbahaya.\n2. Terapkan output encoding & CSP.\n3. Verifikasi kasus positif, negatif, dan regresi.",
         ),
         (
             "asg-if3b-sqli",
             "IF-3B",
             "Tugas 1 · SQL Injection Login & Search",
             "a05-sqli",
+            "web",
             "easy",
             10,
+            "Praktikum dasar deteksi dan mitigasi SQL Injection pada halaman autentikasi.",
+            "1. Pahami batas kepercayaan database.\n2. Uji injeksi dasar.\n3. Terapkan patch prepared statement.",
         ),
         (
             "asg-if3b-auth",
             "IF-3B",
             "Tugas 2 · Rate Limit & Enumerasi Akun",
             "a07-auth",
+            "web",
             "easy",
             18,
+            "Analisis kebocoran status akun melalui pesan error login yang berbeda dan terapkan pembatasan laju percobaan.",
+            "1. Bandingkan respons email terdaftar vs tidak.\n2. Pilih kontrol pesan generik dan rate limit.",
         ),
         (
             "asg-if4a-esp32-gpio",
             "IF-4A",
             "Tugas 1 · ESP32-C3 Kontrol GPIO, LED & Proteksi Resistor",
             "iot-esp32-gpio",
+            "iot",
             "easy",
             12,
+            "Rangkai sirkuit LED seri resistor 220 ohm pada pin GPIO ESP32-C3 serta pastikan tidak ada korsleting atau arus berlebih.",
+            "1. Pasang ESP32-C3, LED, dan resistor di kanvas.\n2. Jalankan kode Arduino C++.\n3. Verifikasi log Serial & kelistrikan aman.",
         ),
         (
             "asg-if4a-esp32-mqtt",
             "IF-4A",
             "Tugas 2 · ESP32-C3 Wi-Fi Telemetri & MQTT TLS",
             "iot-esp32-mqtt",
+            "iot",
             "easy",
             20,
+            "Konfigurasikan koneksi Wi-Fi ESP32-C3 agar mengirim paket telemetri sensor melalui broker terenkripsi mqtts://.",
+            "1. Hubungkan ESP32-C3 ke Wi-Fi.\n2. Kirim telemetri lewat mqtts:// dengan validasi sertifikat.",
         ),
     ];
-    for (key, class_id, title, lab_id, level, days) in seed_assignments {
+    let default_rubric = serde_json::json!([
+        { "criterion": "Identifikasi Skenario & Batas Kepercayaan", "weight": 20 },
+        { "criterion": "Bukti Pengujian / Simulasi Akurat", "weight": 25 },
+        { "criterion": "Pemilihan Perbaikan / Patch Tepat", "weight": 30 },
+        { "criterion": "Verifikasi & Refleksi Konsep", "weight": 25 }
+    ]);
+    for (key, class_id, title, lab_id, track, level, days, desc, instr) in seed_assignments {
         let aid = deterministic_uuid(key);
         let res = sqlx::query(
-            "INSERT INTO assignments (id,class_id,title,lab_id,required_level,due_at,pass_threshold,allow_hints) VALUES($1,$2,$3,$4,$5,now()+($6 || ' days')::interval,80,true) ON CONFLICT (id) DO NOTHING",
+            "INSERT INTO assignments (id,class_id,title,lab_id,track,required_level,due_at,pass_threshold,allow_hints,description,instructions,rubric_json) VALUES($1,$2,$3,$4,$5,$6,now()+($7 || ' days')::interval,80,true,$8,$9,$10) ON CONFLICT (id) DO UPDATE SET track=EXCLUDED.track, description=CASE WHEN assignments.description='' THEN EXCLUDED.description ELSE assignments.description END, instructions=CASE WHEN assignments.instructions='' THEN EXCLUDED.instructions ELSE assignments.instructions END, rubric_json=CASE WHEN assignments.rubric_json='[]'::jsonb THEN EXCLUDED.rubric_json ELSE assignments.rubric_json END",
         )
         .bind(aid)
         .bind(class_id)
         .bind(title)
         .bind(lab_id)
+        .bind(track)
         .bind(level)
         .bind(days.to_string())
+        .bind(desc)
+        .bind(instr)
+        .bind(&default_rubric)
         .execute(&mut *tx)
         .await?;
         if res.rows_affected() > 0 {

@@ -1,7 +1,7 @@
 {
   "tracks": [
-    { "id": "web", "title": "Keamanan Web", "description": "Kenali celah aplikasi web dari OWASP Top 10:2025, lalu pilih perbaikan yang tepat." },
-    { "id": "iot", "title": "Keamanan IoT", "description": "Telusuri risiko perangkat ESP32, MQTT, dan pembaruan firmware." }
+    { "id": "web", "title": "Cyber Security", "description": "Kenali celah keamanan aplikasi dari OWASP Top 10:2025, autentikasi, kontrol akses, dan pilih perbaikan yang tepat." },
+    { "id": "iot", "title": "IoT", "description": "Pahami arsitektur perangkat ESP32/Arduino, elektronika, protokol MQTT/CoAP, OTA firmware, dan kendali perangkat." }
   ],
   "levels": [
     { "level": 1, "name": "Mudah", "points": 10 },
