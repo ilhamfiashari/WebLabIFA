@@ -1,4 +1,5 @@
 import { BOARDS, getBoardInstances, getBoardPin, isBreadboardKind, resolveBreadboardPinAlias, resolveNodeBoardId } from './boards'
+import { lintArduinoCpp } from './cppDiagnostics'
 import type {
   BoardId,
   CircuitDiagnosticItem,
@@ -402,6 +403,36 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
       helpers,
       servoPins: [],
       compileError: `Compile Error: File lokal #include "${missingIncludes[0]}" tidak ditemukan di tab file proyek.`,
+    }
+  }
+
+  const mainDiags = lintArduinoCpp(code)
+  if (mainDiags.length > 0) {
+    const first = mainDiags[0]
+    return {
+      defines,
+      setupStmts: [],
+      loopStmts: [],
+      helpers,
+      servoPins: [],
+      compileError: `Compile Error (Main.ino baris ${first.line}): ${first.messageId}`,
+    }
+  }
+
+  for (const extra of extraFiles) {
+    const lower = extra.name.toLowerCase()
+    if (!/\.(ino|h|hpp|cpp|c)$/.test(lower)) continue
+    const extraDiags = lintArduinoCpp(extra.content)
+    if (extraDiags.length > 0) {
+      const first = extraDiags[0]
+      return {
+        defines,
+        setupStmts: [],
+        loopStmts: [],
+        helpers,
+        servoPins: [],
+        compileError: `Compile Error (${extra.name} baris ${first.line}): ${first.messageId}`,
+      }
     }
   }
 

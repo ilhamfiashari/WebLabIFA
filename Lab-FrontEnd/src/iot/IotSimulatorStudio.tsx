@@ -57,7 +57,16 @@ import {
   handleSmartIndent,
   handleSmartPairOrClose,
 } from './cppEditorHelpers'
+import { lintArduinoCpp } from './cppDiagnostics'
 import { tokenizeArduinoCpp } from './cppHighlight'
+import { lintWebDevCode } from '../webdev/webDiagnostics'
+import { detectFileLanguage } from '../webdev/webHighlight'
+import { lineColToOffset, type CodeDiagnostic } from '../shared/editorDiagnostics'
+import {
+  EditorDiagnosticsList,
+  EditorStatusDiagnosticPill,
+  HighlightedCodeLines,
+} from '../shared/EditorDiagnosticsUi'
 import {
   analyzeProjectFileSync,
   compileArduinoSketch,
@@ -553,6 +562,20 @@ export function IotSimulatorStudio({
     const formatted = formatArduinoCpp(displayedCode)
     applyEditorMutation(formatted, Math.min(formatted.length, codeTextareaRef.current?.selectionStart ?? 0))
     setStatusNotice(en ? 'Code auto-indented cleanly.' : 'Kode dirapikan dengan auto-indent.')
+  }
+
+  const jumpToDiagnostic = (diag: CodeDiagnostic) => {
+    const ta = codeTextareaRef.current
+    if (!ta) return
+    const offset = lineColToOffset(displayedCode, diag.line, diag.col)
+    ta.focus()
+    ta.setSelectionRange(offset, offset)
+    setCursorPos({ line: diag.line, col: diag.col })
+    const wrap = ta.closest('.iot-code-wrap')
+    if (wrap) {
+      const targetTop = Math.max(0, (diag.line - 1) * 19.375 - wrap.clientHeight / 3)
+      wrap.scrollTo({ top: targetTop, behavior: 'smooth' })
+    }
   }
 
   const acceptAutocomplete = (item: AcSuggestion) => {
@@ -1411,6 +1434,17 @@ export function IotSimulatorStudio({
   const earnedAchCount = iotAchievements.filter((a) => a.earned).length
   const lineCount = Math.max(18, displayedCode.split('\n').length)
   const highlightedTokens = useMemo(() => tokenizeArduinoCpp(displayedCode), [displayedCode])
+  const activeEditorDiagnostics = useMemo<CodeDiagnostic[]>(() => {
+    if (activeCustomFile && /\.(html?|css|jsx?|tsx?|py|sql|json)$/i.test(activeCustomFile)) {
+      return lintWebDevCode(displayedCode, detectFileLanguage(activeCustomFile))
+    }
+    return lintArduinoCpp(displayedCode)
+  }, [displayedCode, activeCustomFile])
+  const errorLineMap = useMemo(
+    () => new Map(activeEditorDiagnostics.map((d) => [d.line, d])),
+    [activeEditorDiagnostics],
+  )
+  const errorLineSet = useMemo(() => new Set(errorLineMap.keys()), [errorLineMap])
   const activeMcuCompileError = useMemo(() => {
     if (activeEditingNodeId === 'board') {
       if (extraFiles.length > 0) return compileArduinoSketch(activeCode, extraFiles).compileError
@@ -1418,6 +1452,7 @@ export function IotSimulatorStudio({
     }
     return compileArduinoSketch(activeCode, extraFiles).compileError
   }, [activeEditingNodeId, activeCode, extraFiles, simState.compileError])
+  const hasEditorError = activeEditorDiagnostics.length > 0 || Boolean(activeMcuCompileError)
 
   const focusBarControls = (
     <div className="iot-focus-controls">
@@ -2165,8 +2200,8 @@ export function IotSimulatorStudio({
                   >
                     <AlignLeft size={12} /> {en ? 'Format' : 'Rapikan'}
                   </button>
-                  <Badge tone={activeMcuCompileError ? 'bad' : 'good'}>
-                    {activeMcuCompileError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[editingBoardSpec.boardId].shortName} C++`}
+                  <Badge tone={hasEditorError ? 'bad' : 'good'}>
+                    {hasEditorError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[editingBoardSpec.boardId].shortName} C++`}
                   </Badge>
                 </div>
               </div>
@@ -2246,16 +2281,39 @@ export function IotSimulatorStudio({
                   </span>
                 </div>
               ) : null}
-              {activeMcuCompileError ? (
-                <div className="iot-compile-error">{activeMcuCompileError}</div>
+              {hasEditorError ? (
+                <div className="iot-compile-error" role="alert">
+                  <EditorDiagnosticsList
+                    diagnostics={activeEditorDiagnostics}
+                    extraError={activeMcuCompileError}
+                    en={en}
+                    onJump={jumpToDiagnostic}
+                  />
+                </div>
               ) : null}
               <div className="iot-code-wrap">
                 <div className="iot-line-gutter" aria-hidden="true">
-                  {Array.from({ length: lineCount }, (_, idx) => (
-                    <div key={idx} className={cursorPos.line === idx + 1 ? 'is-active-line' : undefined}>
-                      {idx + 1}
-                    </div>
-                  ))}
+                  {Array.from({ length: lineCount }, (_, idx) => {
+                    const lineNo = idx + 1
+                    const err = errorLineMap.get(lineNo)
+                    const cls = [
+                      cursorPos.line === lineNo ? 'is-active-line' : '',
+                      err ? 'is-error-line' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                    return (
+                      <div
+                        key={idx}
+                        className={cls || undefined}
+                        data-error-line={err ? lineNo : undefined}
+                        title={err ? (en ? err.messageEn : err.messageId) : undefined}
+                        onClick={err ? () => jumpToDiagnostic(err) : undefined}
+                      >
+                        {lineNo}
+                      </div>
+                    )
+                  })}
                 </div>
                 <div className="iot-code-stage">
                   <div
@@ -2263,14 +2321,22 @@ export function IotSimulatorStudio({
                     style={{ top: (cursorPos.line - 1) * 19.375 + 12 }}
                     aria-hidden="true"
                   />
+                  {activeEditorDiagnostics.map((d) => (
+                    <div
+                      key={`err-bg-${d.line}`}
+                      className="iot-error-line-bg"
+                      data-error-line={d.line}
+                      style={{ top: (d.line - 1) * 19.375 + 12 }}
+                      aria-hidden="true"
+                    />
+                  ))}
                   <pre className="iot-code-highlight" aria-hidden="true">
                     <code>
-                      {highlightedTokens.map((tok, i) => (
-                        <span key={i} className={`tok-${tok.type}`}>
-                          {tok.text}
-                        </span>
-                      ))}
-                      {'\n '}
+                      <HighlightedCodeLines
+                        tokens={highlightedTokens}
+                        classPrefix="tok-"
+                        errorLines={errorLineSet}
+                      />
                     </code>
                   </pre>
                   <textarea
@@ -2524,7 +2590,14 @@ export function IotSimulatorStudio({
                 </div>
               </div>
               <div className="iot-editor-statusbar">
-                <span>Ln {cursorPos.line}, Kol {cursorPos.col}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span>Ln {cursorPos.line}, Kol {cursorPos.col}</span>
+                  <EditorStatusDiagnosticPill
+                    diagnostics={activeEditorDiagnostics}
+                    en={en}
+                    onJump={jumpToDiagnostic}
+                  />
+                </span>
                 <span>Spaces: 2 · Tab indent · Ctrl+Space saran · Shift+Alt+F rapikan</span>
               </div>
             </div>

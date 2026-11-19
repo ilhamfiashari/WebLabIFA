@@ -436,3 +436,77 @@
 .session-active i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 .load-state { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--ink-2); font-size: 14px; }
 @media (max-width: 1100px) { .hide-lg { display: block; } }
+
+/* Code Editor Live Error Diagnostics (IoT & Web Dev IDE) */
+.ed-code-error-squiggle {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 1.4px;
+  text-underline-offset: 2px;
+  text-decoration-skip-ink: none;
+}
+
+:root[data-theme="dark"] .ed-code-error-squiggle {
+  text-decoration-color: #f87171;
+}
+
+.ed-diag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ed-diag-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-diag-item:hover {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.ed-diag-line-badge {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ed-status-err-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 999px;
+  background: var(--bad-bg);
+  color: var(--bad-ink);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ed-status-err-btn:hover {
+  filter: brightness(0.96);
+}
+
+.ed-status-ok-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--good-bg);
+  color: var(--good-ink);
+  font-size: 11px;
+  font-weight: 600;
+}

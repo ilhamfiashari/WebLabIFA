@@ -1519,3 +1519,57 @@ test('komponen Web Browser IoT menyajikan HTML index.html, sensor DHT22 live, AP
   await page.getByRole('tab', { name: 'Components' }).click()
   await expect(page.getByRole('button', { name: /Tambah Web Browser/ })).toBeVisible()
 })
+
+test('editor IoT menandai baris dengan red error seketika ketika kurang ; atau terjadi kesalahan syntax C++', async ({ page }) => {
+  await page.route('**/api/me', (r) => r.fulfill({ json: student }))
+  await buildMockSimulatorRoutes(page)()
+  await page.route('**/api/iot/projects', (r) =>
+    r.fulfill({
+      json: {
+        projects: [],
+        completed_missions: [],
+        achievements: [],
+        mission_states: [],
+        access: {
+          can_access_iot_studio: true,
+          can_submit_assignments: true,
+          iot_track_enabled: true,
+          is_instructor: false,
+        },
+      },
+    }),
+  )
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab/iot')
+
+  const editor = page.getByLabel('Kode program mikrokontroler')
+  await expect(editor).toBeVisible()
+  const original = await editor.inputValue()
+
+  // Sketch bawaan bebas error
+  await expect(page.locator('.iot-editor-statusbar')).toContainText('0 Error')
+  await expect(page.locator('.iot-error-line-bg')).toHaveCount(0)
+
+  // Hapus tanda `;` pada baris pinMode(LED_PIN, OUTPUT); -> red error muncul tepat pada baris 8
+  await editor.fill(original.replace('pinMode(LED_PIN, OUTPUT);', 'pinMode(LED_PIN, OUTPUT)'))
+  await expect(page.locator('.iot-line-gutter .is-error-line[data-error-line="8"]')).toBeVisible()
+  await expect(page.locator('.iot-error-line-bg[data-error-line="8"]')).toBeVisible()
+  const squiggle = page.locator('.iot-code-highlight .ed-code-error-squiggle[data-error-line="8"]')
+  await expect(squiggle).toBeVisible()
+  const decoStyle = await squiggle.evaluate((el) => getComputedStyle(el).textDecorationStyle)
+  expect(decoStyle).toBe('wavy')
+  await expect(page.locator('.iot-compile-error')).toContainText('Baris 8')
+  await expect(page.locator('.iot-compile-error')).toContainText("titik koma (';')")
+  await expect(page.locator('.iot-editor-statusbar')).toContainText('1 Error · Ln 8')
+
+  // Error syntax argumen tanpa koma pada pinMode(LED_PIN OUTPUT); -> juga ditandai merah pada baris 8
+  await editor.fill(original.replace('pinMode(LED_PIN, OUTPUT);', 'pinMode(LED_PIN OUTPUT);'))
+  await expect(page.locator('.iot-error-line-bg[data-error-line="8"]')).toBeVisible()
+  await expect(page.locator('.iot-compile-error')).toContainText('Kurang koma')
+
+  // Perbaiki kembali -> seluruh tanda red error hilang otomatis
+  await editor.fill(original)
+  await expect(page.locator('.iot-error-line-bg')).toHaveCount(0)
+  await expect(page.locator('.iot-editor-statusbar')).toContainText('0 Error')
+})
