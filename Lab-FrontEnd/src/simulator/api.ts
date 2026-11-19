@@ -448,6 +448,16 @@ export interface InstructorDashboardResponse {
   }>
 }
 
+export interface UserAccessPermissions {
+  can_access_web_labs: boolean
+  can_access_iot_studio: boolean
+  can_submit_assignments: boolean
+  can_import_questions: boolean
+  can_manage_assignments: boolean
+  can_view_class_analytics: boolean
+  can_export_reports: boolean
+}
+
 export interface AdminDashboardResponse {
   kpis: {
     active_accounts: number
@@ -469,6 +479,8 @@ export interface AdminDashboardResponse {
     email: string
     active: boolean
     roles: string[]
+    class_ids?: string[]
+    permissions?: UserAccessPermissions
     created_at: string
   }>
   classes: Array<{
@@ -814,6 +826,22 @@ export const simApi = {
       csrf,
       { active },
     )
+  },
+  updateUserAccess(
+    csrf: string,
+    userId: string,
+    body: {
+      roles: Array<'mahasiswa' | 'dosen' | 'admin'>
+      class_ids: string[]
+      permissions: UserAccessPermissions
+    },
+  ) {
+    return postJson<{
+      user_id: string
+      roles: string[]
+      class_ids: string[]
+      permissions: UserAccessPermissions
+    }>(`/api/admin/users/${encodeURIComponent(userId)}/access`, csrf, body)
   },
   saveClass(csrf: string, body: { id: string; name: string; course: string; semester: string }) {
     return postJson<{ id: string; name: string }>('/api/admin/classes', csrf, body)

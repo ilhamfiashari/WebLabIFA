@@ -144,6 +144,10 @@ pub fn router(state: AppState) -> Router {
             "/api/admin/users/{user_id}/status",
             post(portal::admin_set_user_status),
         )
+        .route(
+            "/api/admin/users/{user_id}/access",
+            post(portal::admin_update_user_access),
+        )
         .route("/api/admin/classes", post(portal::admin_create_class))
         .route(
             "/api/admin/catalog/{lab_id}/status",

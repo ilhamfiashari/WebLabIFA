@@ -10,6 +10,7 @@ import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { simApi, type AdminDashboardResponse } from '../simulator/api'
 import { AdminSecurityMonitorPanel } from './SecurityMonitorPanel'
 import { PlatformPolicySettings } from './PlatformPolicySettings'
+import { UserAccessModal } from './UserAccessModal'
 import {
   AUDIT, AUDIT_DAILY, CLASSES, HEAT, HEAT_DAYS, HEAT_SLOTS, MODULES, NOTIFICATIONS, OWASP, RANGES, ROLE_TOTALS, STATUS_TOTALS, USERS,
   activitySeries, kpis, owaspCoverage, type AccessStatus, type AuditKind, type PubStatus, type RangeKey, type Role, type Track, type User,
@@ -140,6 +141,8 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
   const [role, setRole] = useState<'all' | Role>('all')
   const [status, setStatus] = useState<'all' | AccessStatus>('all')
   const [detail, setDetail] = useState<User | null>(null)
+  const [editingAccessUser, setEditingAccessUser] = useState<AdminDashboardResponse['users'][number] | null>(null)
+  const [accessNotice, setAccessNotice] = useState<string | null>(null)
   const [policy, setPolicy] = useState(false)
   const [liveUserPage, setLiveUserPage] = useState(1)
   const [userPage, setUserPage] = useState(1)
@@ -150,33 +153,81 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
     },
   })
   const q = query.trim().toLowerCase()
+  const liveFilteredUsers = live
+    ? live.users.filter(
+        (u) =>
+          (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) &&
+          (role === 'all' || u.roles.includes(role.toLowerCase())),
+      )
+    : []
   const list = USERS.filter(u => (role === 'all' || u.role === role) && (status === 'all' || u.status === status) && (!q || u.name.toLowerCase().includes(q) || (u.nim ?? '').includes(q)))
-  const pagedLiveUsers = live ? live.users.slice((liveUserPage - 1) * 10, liveUserPage * 10) : []
+  const pagedLiveUsers = liveFilteredUsers.slice((liveUserPage - 1) * 10, liveUserPage * 10)
   const pagedUsers = list.slice((userPage - 1) * 10, userPage * 10)
   return <>
-    <PageHead page="pengguna" live={Boolean(live)} actions={<button type="button" className="btn-primary" onClick={() => setPolicy(true)}><KeyRound size={17} aria-hidden="true" />Kelola akses</button>} />
+    <PageHead page="pengguna" live={Boolean(live)} actions={<button type="button" className="btn-primary" onClick={() => setPolicy(true)}><KeyRound size={17} aria-hidden="true" />Kebijakan &amp; Hak Akses</button>} />
+    {accessNotice && <p className="status-ok" role="status">{accessNotice}</p>}
     {live ? (
       <section className="card table-card" aria-labelledby="live-users-title">
         <header className="table-head">
-          <h2 id="live-users-title">Akun Pengguna Basis Data ({live.users.length})</h2>
+          <h2 id="live-users-title">Akun Pengguna &amp; Assignment Role ({liveFilteredUsers.length})</h2>
         </header>
         <div className="sim-table-wrap"><table className="sim-table">
-          <thead><tr><th scope="col">Nama</th><th scope="col">Email</th><th scope="col">Peran</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead>
-          <tbody>{pagedLiveUsers.map(u => <tr key={u.id}>
-            <td><strong>{u.name}</strong></td>
-            <td>{u.email}</td>
-            <td>{u.roles.join(', ') || 'mahasiswa'}</td>
-            <td><Badge tone={u.active ? 'good' : 'muted'}>{u.active ? 'Aktif' : 'Nonaktif'}</Badge></td>
-            <td>
-              <button type="button" className="btn-outline" style={{ minHeight: 30, fontSize: 12.5 }} disabled={toggleMut.isPending} onClick={() => toggleMut.mutate({ userId: u.id, active: !u.active })}>
-                {u.active ? 'Nonaktifkan' : 'Aktifkan'}
-              </button>
-            </td>
-          </tr>)}</tbody>
+          <thead><tr><th scope="col">Nama &amp; Email</th><th scope="col">Peran</th><th scope="col">Kelas</th><th scope="col">Hak Akses</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead>
+          <tbody>{pagedLiveUsers.map(u => {
+            const p = u.permissions
+            const caps = p
+              ? [
+                  p.can_access_web_labs && 'Web',
+                  p.can_access_iot_studio && 'IoT',
+                  p.can_manage_assignments && 'Kelola Tugas',
+                  p.can_import_questions && 'Impor Soal',
+                  p.can_export_reports && 'Ekspor CSV',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'Standar peran'
+            return <tr key={u.id}>
+              <td>
+                <strong>{u.name}</strong>
+                <div className="subtle-note" style={{ fontSize: 12 }}>{u.email}</div>
+              </td>
+              <td>{u.roles.join(', ') || 'mahasiswa'}</td>
+              <td>{u.class_ids?.length ? u.class_ids.join(', ') : '—'}</td>
+              <td style={{ fontSize: 12 }}>{caps || 'Terbatas'}</td>
+              <td><Badge tone={u.active ? 'good' : 'muted'}>{u.active ? 'Aktif' : 'Nonaktif'}</Badge></td>
+              <td>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ minHeight: 30, fontSize: 12.5 }}
+                    onClick={() => {
+                      setAccessNotice(null)
+                      setEditingAccessUser(u)
+                    }}
+                  >
+                    <UserCog size={13} aria-hidden="true" /> Atur Peran &amp; Hak Akses
+                  </button>
+                  <button type="button" className="btn-outline" style={{ minHeight: 30, fontSize: 12.5 }} disabled={toggleMut.isPending} onClick={() => toggleMut.mutate({ userId: u.id, active: !u.active })}>
+                    {u.active ? 'Nonaktifkan' : 'Aktifkan'}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          })}</tbody>
         </table></div>
-        <Pagination totalItems={live.users.length} page={liveUserPage} pageSize={10} onPageChange={setLiveUserPage} />
+        <Pagination totalItems={liveFilteredUsers.length} page={liveUserPage} pageSize={10} onPageChange={setLiveUserPage} />
       </section>
     ) : null}
+    {editingAccessUser && live && (
+      <UserAccessModal
+        user={editingAccessUser}
+        classes={live.classes}
+        csrf={csrf}
+        onClose={() => setEditingAccessUser(null)}
+        onSaved={(msg) => setAccessNotice(msg)}
+      />
+    )}
     <div className="kpi-grid">
       <Kpi label="Total akun" value="128" icon={Users} note="Terdaftar di portal" />
       <Kpi label="Akun aktif" value="118" icon={ShieldCheck} note="92% dari total" />
