@@ -1449,3 +1449,73 @@ test('halaman simulator web bersih dari label DVWA dan WebGoat', async ({ page }
   const detailBody = await page.locator('main').innerText()
   expect(detailBody).not.toMatch(/dvwa|webgoat/i)
 })
+
+test('komponen Web Browser IoT menyajikan HTML index.html, sensor DHT22 live, API JSON dan kontrol LED dua arah', async ({ page }) => {
+  await page.route('**/api/me', r => r.fulfill({ json: student }))
+  await buildMockSimulatorRoutes(page)()
+  await page.route('**/api/iot/projects', r =>
+    r.fulfill({
+      json: {
+        projects: [],
+        completed_missions: [],
+        achievements: [],
+        mission_states: [],
+        access: {
+          can_access_iot_studio: true,
+          can_submit_assignments: true,
+          iot_track_enabled: true,
+          is_instructor: false,
+        },
+      },
+    }),
+  )
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab/iot')
+
+  // 1. Pilih preset ESP32-C3 WebServer IoT & Web Browser
+  await page.getByLabel('Pilih template atau misi').selectOption('esp32-c3-webserver-browser')
+  await expect(page.getByRole('tab', { name: 'index.html' })).toBeVisible()
+  await expect(page.getByText('Web Browser Siap', { exact: true })).toBeVisible()
+
+  // 2. Jalankan simulasi dan cek komponen Web Browser mini di kanvas menyala LIVE
+  await page.getByRole('button', { name: 'Jalankan' }).click()
+  await expect(page.getByText('WebServer HTTP Live', { exact: true })).toBeVisible()
+  await expect(page.getByText('T:28.5C  H:62%', { exact: true })).toBeVisible()
+
+  // 3. Klik komponen Web Browser Client di kanvas lalu buka Panel Web Browser lengkap
+  await page.getByText('Web Browser Client', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('Web Browser Client', { exact: true }).dispatchEvent('pointerup')
+  await expect(page.getByRole('button', { name: 'Buka Web Browser Lengkap' })).toBeVisible()
+  await page.getByRole('button', { name: 'Buka Web Browser Lengkap' }).click()
+
+  const browserPanel = page.getByTestId('iot-web-browser-panel')
+  await expect(browserPanel).toBeVisible()
+  await expect(browserPanel.getByText('LIVE · 192.168.4.42')).toBeVisible()
+  const renderedWeb = page.getByTestId('iot-browser-rendered-body')
+  await expect(renderedWeb).toContainText('Monitor Ruang Lab ESP32-C3')
+  await expect(renderedWeb).toContainText('28.5 °C')
+  await expect(renderedWeb).toContainText('62 %')
+  await expect(renderedWeb).toContainText('LED: OFF')
+
+  // 4. Ubah suhu DHT22 pada kanvas dan pastikan pembacaan pada Web Browser ikut berubah real-time
+  await page.getByText('DHT22 Ruangan', { exact: true }).dispatchEvent('pointerdown')
+  await page.getByText('DHT22 Ruangan', { exact: true }).dispatchEvent('pointerup')
+  await page.getByLabel(/Suhu:/).fill('35')
+  await expect(renderedWeb).toContainText('35 °C')
+
+  // 5. Klik tombol kontrol HTTP /led/on di dalam halaman Web -> LED menyala & log HTTP 200 tercatat
+  await renderedWeb.getByRole('button', { name: /Nyalakan LED/ }).click()
+  await expect(renderedWeb).toContainText('LED: ON')
+  await expect(browserPanel.locator('.iot-browser-log-list')).toContainText('/led/on')
+  await expect(browserPanel.locator('.iot-browser-log-list')).toContainText('200')
+
+  // 6. Uji endpoint API JSON /api/sensors langsung dari Quick Route Web Browser
+  await browserPanel.locator('.iot-browser-route-chip', { hasText: '/api/sensors' }).click()
+  await expect(renderedWeb).toContainText('"temp": 35')
+  await expect(renderedWeb).toContainText('"led": "ON"')
+
+  // 7. Pastikan komponen Web Browser juga tersedia di katalog Components untuk ditambahkan ke kanvas lain
+  await page.getByRole('tab', { name: 'Components' }).click()
+  await expect(page.getByRole('button', { name: /Tambah Web Browser/ })).toBeVisible()
+})

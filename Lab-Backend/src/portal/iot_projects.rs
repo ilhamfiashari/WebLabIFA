@@ -338,11 +338,15 @@ fn normalize_and_validate_files(
         if lower == "main.ino" {
             continue;
         }
-        let allowed_ext = [".h", ".hpp", ".c", ".cpp", ".ino", ".txt", ".json"]
-            .iter()
-            .any(|ext| lower.ends_with(ext));
+        let allowed_ext = [
+            ".h", ".hpp", ".c", ".cpp", ".ino", ".txt", ".json", ".html", ".css", ".js",
+        ]
+        .iter()
+        .any(|ext| lower.ends_with(ext));
         if !allowed_ext {
-            return Err("Ekstensi file harus .h, .hpp, .c, .cpp, .ino, .txt, atau .json.");
+            return Err(
+                "Ekstensi file harus .h, .hpp, .c, .cpp, .ino, .html, .css, .js, .txt, atau .json.",
+            );
         }
         if f.content.len() > 24_576 {
             return Err("Ukuran satu file melebihi batas 24KB.");
@@ -1211,5 +1215,30 @@ mod tests {
             let (doc_ok, _) = evaluate_mission_access("dosen", rule.id, &empty, true, true);
             assert!(doc_ok, "Dosen harus bisa mengakses semua misi {}", rule.id);
         }
+    }
+
+    #[test]
+    fn validates_web_template_extensions_for_iot_browser_projects() {
+        let valid = vec![
+            SketchFileEntry {
+                name: "index.html".into(),
+                content: "<h1>Temp: {{TEMP}}</h1>".into(),
+            },
+            SketchFileEntry {
+                name: "style.css".into(),
+                content: ".wb-card { padding: 8px; }".into(),
+            },
+            SketchFileEntry {
+                name: "app.js".into(),
+                content: "// iot".into(),
+            },
+        ];
+        assert_eq!(normalize_and_validate_files(&valid).unwrap().len(), 3);
+
+        let blocked = vec![SketchFileEntry {
+            name: "shell.php".into(),
+            content: "<?php ?>".into(),
+        }];
+        assert!(normalize_and_validate_files(&blocked).is_err());
     }
 }

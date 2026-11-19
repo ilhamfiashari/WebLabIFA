@@ -64,14 +64,16 @@ import {
   createInitialSimulation,
   createVmContext,
   defaultMcuSketch,
+  invokeVirtualWebRoute,
   stepLoop,
   stepSetup,
+  syncWebServerState,
   verifyCircuitAndCode,
   type SketchFile,
   type VmContext,
 } from './firmwareVm'
 import { IOT_MISSIONS, IOT_PRESETS } from './presets'
-import { TelemetryDock } from './TelemetryDock'
+import { TelemetryDock, type TelemetryDockTab } from './TelemetryDock'
 import {
   WOKWI_LIBRARY_REGISTRY,
   lintWokwiDiagram,
@@ -165,6 +167,7 @@ export function IotSimulatorStudio({
   }, [initialLabId])
 
   const [leftTab, setLeftTab] = useState<'code' | 'diagram' | 'libraries' | 'components' | 'terminal'>('code')
+  const [dockTab, setDockTab] = useState<TelemetryDockTab>('serial')
   const [boardId, setBoardId] = useState<BoardId>(initialPreset.board)
   const [activePresetId, setActivePresetId] = useState<string>(initialPreset.id)
   const [activeMissionId, setActiveMissionId] = useState<string | null>(initialPreset.missionId ?? null)
@@ -345,7 +348,7 @@ export function IotSimulatorStudio({
   const fileMenuRef = useRef<HTMLDivElement | null>(null)
   const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
   const [editingNodeId, setEditingNodeId] = useState<string>('board')
-  const [extraFiles, setExtraFiles] = useState<SketchFile[]>([])
+  const [extraFiles, setExtraFiles] = useState<SketchFile[]>(() => initialPreset.files ?? [])
   const [activeCustomFile, setActiveCustomFile] = useState<string | null>(null)
   const [showFileMenu, setShowFileMenu] = useState(false)
   const [fileActionMode, setFileActionMode] = useState<'new' | 'rename' | null>(null)
@@ -572,6 +575,15 @@ export function IotSimulatorStudio({
     if (lower.endsWith('.cpp') || lower.endsWith('.c')) {
       return `#include <Arduino.h>\n\n`
     }
+    if (lower.endsWith('.html')) {
+      return `<main class="wb-page">\n  <section class="wb-card">\n    <h1>Dashboard IoT</h1>\n    <p class="wb-muted">Suhu: {{TEMP}} °C · Kelembapan: {{HUMIDITY}} % · LED: {{LED_STATE}}</p>\n    <div class="wb-actions">\n      <button type="button" class="wb-btn wb-btn-primary" data-iot-action="/led/on">Nyalakan LED</button>\n      <button type="button" class="wb-btn wb-btn-danger" data-iot-action="/led/off">Matikan LED</button>\n    </div>\n  </section>\n</main>\n`
+    }
+    if (lower.endsWith('.css')) {
+      return `/* ${fileName} */\n.wb-card { border-radius: 10px; }\n`
+    }
+    if (lower.endsWith('.js')) {
+      return `// ${fileName}\n// Helper script halaman Web IoT\n`
+    }
     return `// ${fileName}\n`
   }
 
@@ -664,6 +676,15 @@ export function IotSimulatorStudio({
   useEffect(() => {
     wiresRef.current = wires
   }, [wires])
+  useEffect(() => {
+    if (vmRef.current) {
+      vmRef.current.extraFiles = extraFiles
+      if (vmRef.current.sim.running) {
+        syncWebServerState(vmRef.current, componentsRef.current)
+        setSimState({ ...vmRef.current.sim })
+      }
+    }
+  }, [extraFiles])
 
   const isInstructor = mode === 'dosen'
 
@@ -1005,7 +1026,7 @@ export function IotSimulatorStudio({
     codeHistoryRef.current = {}
     setBoardId(preset.board)
     setEditingNodeId('board')
-    setExtraFiles([])
+    setExtraFiles(preset.files ?? [])
     setActiveCustomFile(null)
     setFileActionMode(null)
     setAcState(null)
@@ -1195,6 +1216,24 @@ export function IotSimulatorStudio({
     setSimState({ ...ctx.sim })
   }
 
+  const handleBrowserRequest = (method: 'GET' | 'POST', rawUrl: string) => {
+    if (!vmRef.current) {
+      return {
+        status: 503,
+        contentType: 'text/plain',
+        body: en
+          ? '503 Service Unavailable — Click Run first to start the ESP32 WebServer.'
+          : '503 Service Unavailable — Klik Jalankan terlebih dahulu untuk mengaktifkan WebServer ESP32.',
+        path: rawUrl,
+      }
+    }
+    const cur = liveCircuitRef.current
+    const res = invokeVirtualWebRoute(vmRef.current, cur.components, cur.wires, method, rawUrl)
+    syncBuzzerAudio(vmRef.current.sim.buzzerActive, vmRef.current.sim.running, audioOnRef.current)
+    setSimState({ ...vmRef.current.sim })
+    return res
+  }
+
   const toggleStartStop = () => {
     if (simState.running) setSimState((prev) => ({ ...prev, running: false }))
     else startSimulation()
@@ -1253,6 +1292,7 @@ export function IotSimulatorStudio({
         relayTransistor: kind === 'relay' ? 'npn' : undefined,
         hxType: kind === 'hx711' ? '50kg' : undefined,
         matrixLayout: kind === 'max7219-matrix' ? 'parola' : undefined,
+        browserUrl: kind === 'web-browser' ? 'http://10.13.37.2/' : undefined,
       },
     }
     const cur = liveCircuitRef.current
@@ -2006,7 +2046,7 @@ export function IotSimulatorStudio({
                 ref={uploadFilesInputRef}
                 type="file"
                 multiple
-                accept=".h,.hpp,.c,.cpp,.ino,.txt,.json"
+                accept=".h,.hpp,.c,.cpp,.ino,.html,.css,.js,.txt,.json"
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   void handleUploadExtraFiles(e.target.files)
@@ -2128,7 +2168,7 @@ export function IotSimulatorStudio({
                 <div className="iot-file-prompt" role="region" aria-label={fileActionMode === 'new' ? 'Create new sketch file' : 'Rename sketch file'}>
                   <label htmlFor="iot-file-name-input" className="iot-file-prompt-label">
                     {fileActionMode === 'new'
-                      ? en ? 'New filename (.h / .cpp / .ino):' : 'Nama file baru (.h / .cpp / .ino):'
+                      ? en ? 'New filename (.h / .cpp / .html):' : 'Nama file baru (.h / .cpp / .html):'
                       : en ? 'Rename file:' : 'Ubah nama file:'}
                   </label>
                   <input
@@ -2729,6 +2769,11 @@ export function IotSimulatorStudio({
                 sim={simState}
                 hasWifi={BOARDS[boardId].hasWifi}
                 lang={lang}
+                components={components}
+                extraFiles={extraFiles}
+                activeTab={dockTab}
+                onTabChange={setDockTab}
+                onBrowserRequest={handleBrowserRequest}
                 onClearSerial={() => setSimState((prev) => ({ ...prev, serialLog: [], plotHistory: [] }))}
                 onSendSerial={(text) => {
                   if (vmRef.current) vmRef.current.serialRxQueue.push(text)
@@ -2873,6 +2918,11 @@ export function IotSimulatorStudio({
               setEditingNodeId(nodeId)
               setLeftTab('code')
               setAcState(null)
+            }}
+            onOpenWebBrowser={() => {
+              if (focusMode === 'canvas') setFocusMode('normal')
+              setLeftTab('terminal')
+              setDockTab('browser')
             }}
             focusMode={focusMode}
             onChangeFocusMode={setFocusMode}

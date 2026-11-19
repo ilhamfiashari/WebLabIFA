@@ -922,6 +922,22 @@ export const COMPONENT_CATALOG: ComponentSpec[] = [
       { id: 'MOSI', label: 'SDA', dx: 98, dy: 96, role: 'signal' },
     ],
   },
+  {
+    kind: 'web-browser',
+    category: 'displays',
+    nameId: 'Web Browser (Dashboard HTTP IoT)',
+    nameEn: 'Web Browser (IoT HTTP Dashboard)',
+    subtitleId: 'Displays · Uji Web & Sensor Live',
+    subtitleEn: 'Displays · Live Web & API Tester',
+    width: 184,
+    height: 122,
+    pinned: true,
+    pins: [
+      { id: 'NET', label: 'NET/TX', dx: 44, dy: 116, role: 'signal' },
+      { id: 'RX', label: 'RX/HTTP', dx: 92, dy: 116, role: 'signal' },
+      { id: 'GND', label: 'GND', dx: 140, dy: 116, role: 'gnd' },
+    ],
+  },
   // Actuators
   {
     kind: 'servo',

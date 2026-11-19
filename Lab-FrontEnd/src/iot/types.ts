@@ -96,6 +96,7 @@ export type ComponentKind =
   | 'lcd-nokia5110'
   | 'neopixel-single'
   | 'clock-gen'
+  | 'web-browser'
 
 export interface ComponentPinDef {
   id: string
@@ -176,6 +177,8 @@ export interface PlacedComponent {
     ldrThreshold?: number
     ldrRl10?: number
     ldrGamma?: number
+    /** Active URL shown in canvas Web Browser component */
+    browserUrl?: string
     /** Per-MCU sketch source code when extra MCUs (kind === 'mcu') are placed on canvas */
     sketchCode?: string
   }
@@ -248,6 +251,25 @@ export interface MqttMessage {
   tls: boolean
 }
 
+export interface WebServerRoute {
+  path: string
+  method: 'GET' | 'POST'
+  contentType: 'text/html' | 'application/json' | 'text/plain'
+  body: string
+  status: number
+  updatedAtMs: number
+}
+
+export interface HttpRequestLog {
+  id: string
+  timeMs: number
+  method: 'GET' | 'POST'
+  url: string
+  status: number
+  contentType: string
+  body: string
+}
+
 export interface LogicSample {
   timeMs: number
   channels: Record<number, 0 | 1>
@@ -272,6 +294,10 @@ export interface SimulationState {
   mqttMessages: MqttMessage[]
   wifiConnected: boolean
   wifiIp: string
+  webServerActive: boolean
+  webRoutes: Record<string, WebServerRoute>
+  httpLogs: HttpRequestLog[]
+  webSensorReadings: Record<string, string | number | boolean>
   alerts: HardwareAlert[]
 }
 
@@ -286,6 +312,7 @@ export interface IotPresetTemplate {
   summaryId: string
   summaryEn: string
   code: string
+  files?: SketchFileEntry[]
   components: PlacedComponent[]
   wires: Wire[]
 }
