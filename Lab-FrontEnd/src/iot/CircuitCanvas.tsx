@@ -4,6 +4,7 @@ import {
   Copy,
   Expand,
   Focus,
+  Globe,
   Hand,
   Maximize2,
   Minimize2,
@@ -305,6 +306,7 @@ export function CircuitCanvas({
   onDuplicateNode,
   onSelectPrimaryBoard,
   onSelectMcuCode,
+  onOpenWebBrowser,
   canUndo = false,
   canRedo = false,
   onUndo,
@@ -336,6 +338,7 @@ export function CircuitCanvas({
   onDuplicateNode?: (nodeId: string) => void
   onSelectPrimaryBoard?: (boardId: BoardId) => void
   onSelectMcuCode?: (nodeId: string) => void
+  onOpenWebBrowser?: () => void
   canUndo?: boolean
   canRedo?: boolean
   onUndo?: () => void
@@ -1750,6 +1753,51 @@ export function CircuitCanvas({
                   ))}
                 </div>
               </div>
+            </div>
+          ) : null}
+
+          {inspectedComp?.kind === 'web-browser' ? (
+            <div className="iot-popover-body">
+              <label className="iot-pop-field">
+                <span>{en ? 'Target URL' : 'Alamat URL Tujuan'}</span>
+                <input
+                  type="text"
+                  value={inspectedComp.props.browserUrl ?? 'http://10.13.37.2/'}
+                  onChange={(e) => onUpdateProps(inspectedComp.id, { browserUrl: e.target.value })}
+                  placeholder="http://10.13.37.2/"
+                />
+              </label>
+              <div className="iot-pop-field">
+                <span>{en ? 'Quick Routes' : 'Rute Cepat'}</span>
+                <div className="iot-pop-quick-vals">
+                  {(['/', '/api/sensors', '/led/on', '/led/off'] as const).map((routePath) => {
+                    const host = sim.wifiIp && sim.wifiIp !== '0.0.0.0' ? sim.wifiIp : '10.13.37.2'
+                    const full = `http://${host}${routePath}`
+                    return (
+                      <button
+                        key={routePath}
+                        type="button"
+                        className={`iot-quick-val ${(inspectedComp.props.browserUrl ?? '').endsWith(routePath) ? 'is-active' : ''}`}
+                        onClick={() => onUpdateProps(inspectedComp.id, { browserUrl: full })}
+                      >
+                        {routePath}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {onOpenWebBrowser ? (
+                <button
+                  type="button"
+                  className="iot-btn primary small"
+                  onClick={() => {
+                    onOpenWebBrowser()
+                    setInspectedNodeId(null)
+                  }}
+                >
+                  <Globe size={13} /> {en ? 'Open Live Web Browser' : 'Buka Web Browser Lengkap'}
+                </button>
+              ) : null}
             </div>
           ) : null}
 

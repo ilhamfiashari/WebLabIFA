@@ -4,10 +4,12 @@ import type {
   CircuitDiagnosticItem,
   GpioRuntime,
   HardwareAlert,
+  HttpRequestLog,
   MqttMessage,
   PlacedComponent,
   SerialEntry,
   SimulationState,
+  WebServerRoute,
   Wire,
   WireEndpoint,
 } from './types'
@@ -243,6 +245,23 @@ export function analyzeProjectFileSync(
   }
 }
 
+function countBracesDeltaOutsideStrings(line: string): number {
+  let delta = 0
+  let inStr = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"' && line[i - 1] !== '\\') {
+      inStr = !inStr
+      continue
+    }
+    if (!inStr) {
+      if (ch === '{') delta += 1
+      else if (ch === '}') delta -= 1
+    }
+  }
+  return delta
+}
+
 export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []): CompiledSketch {
   const { combinedSource: expanded, missingIncludes } = analyzeProjectFileSync(code, extraFiles)
   const rawLines = expanded.split('\n')
@@ -280,7 +299,7 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
       braceDepth = 0
       return
     }
-    const delta = (cleanLine.match(/\{/g) ?? []).length - (cleanLine.match(/\}/g) ?? []).length
+    const delta = countBracesDeltaOutsideStrings(cleanLine)
     let afterOpen = cleanLine.slice(openIdx + 1).trim()
     if (delta <= 0) {
       if (afterOpen.endsWith('}')) afterOpen = afterOpen.slice(0, -1).trim()
@@ -358,9 +377,8 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
       continue
     }
 
-    const opens = (clean.match(/\{/g) ?? []).length
-    const closes = (clean.match(/\}/g) ?? []).length
-    braceDepth += opens - closes
+    const stepDelta = countBracesDeltaOutsideStrings(clean)
+    braceDepth += stepDelta
     if (braceDepth <= 0) {
       const beforeClose = clean.replace(/\}\s*$/, '').trim()
       if (beforeClose) pushModeLine(mode, beforeClose, idx + 1)
@@ -588,6 +606,145 @@ export interface VmContext {
   graph: NetGraph
   peers: VmContext[]
   allNodes?: Map<string, VmContext>
+  httpHandlers: Record<string, string>
+  activeHttpPath: string
+  extraFiles: SketchFile[]
+}
+
+export function normalizeWebPath(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return '/'
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed)
+      return parsed.pathname || '/'
+    } catch {
+      const idx = trimmed.indexOf('/', trimmed.indexOf('://') + 3)
+      const tail = idx >= 0 ? trimmed.slice(idx) : '/'
+      return tail.split(/[?#]/)[0] || '/'
+    }
+  }
+  const clean = trimmed.split(/[?#]/)[0] || '/'
+  return clean.startsWith('/') ? clean : `/${clean}`
+}
+
+export function normalizeContentType(raw: string): 'text/html' | 'application/json' | 'text/plain' {
+  const lower = raw.toLowerCase()
+  if (lower.includes('html')) return 'text/html'
+  if (lower.includes('json')) return 'application/json'
+  return 'text/plain'
+}
+
+export function buildLiveWebReadings(
+  sim: SimulationState,
+  components: PlacedComponent[],
+): Record<string, string | number | boolean> {
+  const dht = components.find((c) => c.kind === 'dht22')
+  const ultra = components.find((c) => c.kind === 'hc-sr04')
+  const ldr = components.find((c) => c.kind === 'ldr')
+  const mq2 = components.find((c) => c.kind === 'mq2')
+  const pir = components.find((c) => c.kind === 'pir')
+  const pot = components.find((c) => c.kind === 'potentiometer' || c.kind === 'slide-pot')
+  const ntc = components.find((c) => c.kind === 'ntc')
+  const bmp = components.find((c) => c.kind === 'bmp180')
+  const hx = components.find((c) => c.kind === 'hx711')
+  const mpu = components.find((c) => c.kind === 'mpu6050')
+
+  const hasLedPart = components.some((c) => c.kind === 'led' || c.kind === 'rgb-led')
+  const ledOn = hasLedPart
+    ? Object.values(sim.ledBrightness).some((v) => !v.burned && (v.r > 0.05 || v.g > 0.05 || v.b > 0.05))
+    : Object.values(sim.gpioStates).some((g) => g.mode === 'OUTPUT' && g.digital === 1)
+  const relayOn = Object.values(sim.relayClosed).some(Boolean)
+  const servoEntry = Object.values(sim.servoAngles)[0]
+  const buzzerOn = Object.values(sim.buzzerActive).some((b) => b.active)
+
+  const out: Record<string, string | number | boolean> = {
+    WIFI_IP: sim.wifiIp || '0.0.0.0',
+    WIFI_CONNECTED: sim.wifiConnected,
+    UPTIME_SEC: Math.round((sim.elapsedMs || 0) / 100) / 10,
+    LED_STATE: ledOn ? 'ON' : 'OFF',
+    ledOn,
+    RELAY_STATE: relayOn ? 'ON' : 'OFF',
+    relayOn,
+    BUZZER_STATE: buzzerOn ? 'ON' : 'OFF',
+    buzzerOn,
+  }
+
+  if (dht) {
+    const temp = Math.round((dht.props.tempC ?? 27.5) * 10) / 10
+    const hum = Math.round((dht.props.humidity ?? 60) * 10) / 10
+    out.TEMP = temp
+    out.temp = temp
+    out.HUMIDITY = hum
+    out.humidity = hum
+  }
+  if (ultra) {
+    const dist = Math.round((ultra.props.distanceCm ?? 42) * 10) / 10
+    out.DISTANCE = dist
+    out.DISTANCE_CM = dist
+    out.distance = dist
+  }
+  if (ldr) {
+    const lux = Math.round(ldr.props.lux ?? 500)
+    out.LUX = lux
+    out.lux = lux
+  }
+  if (mq2) {
+    const gas = Math.round(mq2.props.gasPpm ?? 280)
+    out.GAS = gas
+    out.GAS_PPM = gas
+    out.gas = gas
+  }
+  if (pir) {
+    const motion = Boolean(pir.props.motion)
+    out.MOTION = motion ? 'DETECTED' : 'CLEAR'
+    out.motion = motion
+  }
+  if (pot) {
+    const pct = Math.round(pot.props.potPct ?? 50)
+    out.POT = pct
+    out.POT_PCT = pct
+    out.pot = pct
+  }
+  if (ntc) {
+    const ntcT = Math.round((ntc.props.tempC ?? 25) * 10) / 10
+    out.NTC_TEMP = ntcT
+    out.ntcTemp = ntcT
+  }
+  if (bmp) {
+    const press = Math.round(bmp.props.pressureHpa ?? 1013)
+    out.PRESSURE = press
+    out.pressure = press
+  }
+  if (hx) {
+    const weight = Math.round((hx.props.weightKg ?? 1.2) * 100) / 100
+    out.WEIGHT = weight
+    out.weight = weight
+  }
+  if (mpu) {
+    const tilt = Math.round(mpu.props.tiltDeg ?? 0)
+    out.TILT = tilt
+    out.tilt = tilt
+  }
+  if (servoEntry !== undefined) {
+    out.SERVO_ANGLE = Math.round(servoEntry)
+    out.servoAngle = Math.round(servoEntry)
+  }
+  return out
+}
+
+export function interpolateWebTemplate(
+  raw: string,
+  sim: SimulationState,
+  readings?: Record<string, string | number | boolean>,
+): string {
+  const source = readings ?? sim.webSensorReadings
+  return raw.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, rawKey: string) => {
+    const upper = rawKey.toUpperCase()
+    const val = source[rawKey] ?? source[upper] ?? source[rawKey.toLowerCase()]
+    if (val === undefined) return '—'
+    return String(val)
+  })
 }
 
 export function defaultMcuSketch(boardId: BoardId, label?: string): string {
@@ -648,6 +805,37 @@ export function createInitialSimulation(
     mqttMessages: [],
     wifiConnected: false,
     wifiIp: '0.0.0.0',
+    webServerActive: false,
+    webRoutes: {},
+    httpLogs: [],
+    webSensorReadings: buildLiveWebReadings(
+      {
+        running: false,
+        elapsedMs: 0,
+        compileError: null,
+        gpioStates,
+        ledBrightness: {},
+        servoAngles: {},
+        buzzerActive: {},
+        relayClosed: {},
+        oledLines: {},
+        lcdRows: {},
+        sevenSegText: {},
+        matrixRows: {},
+        serialLog: [],
+        plotHistory: [],
+        logicHistory: [],
+        mqttMessages: [],
+        wifiConnected: false,
+        wifiIp: '0.0.0.0',
+        webServerActive: false,
+        webRoutes: {},
+        httpLogs: [],
+        webSensorReadings: {},
+        alerts: [],
+      },
+      components,
+    ),
     alerts: analyzeCircuitSafety(boardId, components, wires),
   }
 }
@@ -685,6 +873,9 @@ export function createVmContext(
     graph,
     peers: [],
     allNodes,
+    httpHandlers: {},
+    activeHttpPath: '/',
+    extraFiles,
   }
   allNodes.set('board', root)
 
@@ -713,6 +904,9 @@ export function createVmContext(
       graph,
       peers: [],
       allNodes,
+      httpHandlers: {},
+      activeHttpPath: '/',
+      extraFiles,
     }
     root.peers.push(peerCtx)
     allNodes.set(mcu.id, peerCtx)
@@ -911,6 +1105,9 @@ function evalExpr(
       const ss = String(totalSec % 60).padStart(2, '0')
       return `${mm}:${ss}`
     }
+    if (fn === 'WiFi.localIP') {
+      return ctx.sim.wifiIp || '0.0.0.0'
+    }
   }
 
   // Strip balanced outer parentheses cleanly
@@ -932,9 +1129,16 @@ function evalExpr(
   for (const op of [' + ', ' - ', ' * ', ' / ', ' % '] as const) {
     if (s.includes(op)) {
       const idx = s.lastIndexOf(op)
-      const a = Number(evalExpr(s.slice(0, idx), ctx, components))
-      const b = Number(evalExpr(s.slice(idx + op.length), ctx, components))
-      if (op === ' + ') return a + b
+      const rawA = evalExpr(s.slice(0, idx), ctx, components)
+      const rawB = evalExpr(s.slice(idx + op.length), ctx, components)
+      if (op === ' + ') {
+        if (typeof rawA === 'string' || typeof rawB === 'string') {
+          return String(rawA) + String(rawB)
+        }
+        return Number(rawA) + Number(rawB)
+      }
+      const a = Number(rawA)
+      const b = Number(rawB)
       if (op === ' - ') return a - b
       if (op === ' * ') return a * b
       if (op === ' % ') return b === 0 ? 0 : a % b
@@ -1200,6 +1404,60 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
       const ssid = String(args[0] ?? 'Wokwi-GUEST')
       ctx.sim.wifiConnected = true
       ctx.sim.wifiIp = ssid.toLowerCase().includes('wokwi') ? '10.13.37.2' : '192.168.4.42'
+    } else if (fn === 'server.begin' || fn === 'web.begin') {
+      ctx.sim.webServerActive = true
+      if (!ctx.sim.wifiConnected && BOARDS[ctx.boardId].hasWifi) {
+        ctx.sim.wifiConnected = true
+        ctx.sim.wifiIp = '10.13.37.2'
+      }
+    } else if (fn === 'server.on' || fn === 'web.on') {
+      const path = normalizeWebPath(String(args[0] ?? '/'))
+      const handlerName = (argsRaw[1] ?? '').trim()
+      if (handlerName) {
+        ctx.httpHandlers[path] = handlerName
+      }
+    } else if (fn === 'server.send' || fn === 'web.send') {
+      const status = Number(args[0] ?? 200)
+      const contentType = normalizeContentType(String(args[1] ?? 'text/html'))
+      const body = String(args[2] ?? '')
+      const routePath = ctx.activeHttpPath || '/'
+      const route: WebServerRoute = {
+        path: routePath,
+        method: 'GET',
+        status,
+        contentType,
+        body,
+        updatedAtMs: ctx.sim.elapsedMs,
+      }
+      ctx.sim.webRoutes = {
+        ...ctx.sim.webRoutes,
+        [routePath]: route,
+      }
+      ctx.sim.webServerActive = true
+    } else if (fn === 'server.sendRoute' || fn === 'web.sendRoute') {
+      const routePath = normalizeWebPath(String(args[0] ?? '/'))
+      const status = Number(args[1] ?? 200)
+      const contentType = normalizeContentType(String(args[2] ?? 'text/html'))
+      const body = String(args[3] ?? '')
+      ctx.sim.webRoutes = {
+        ...ctx.sim.webRoutes,
+        [routePath]: {
+          path: routePath,
+          method: 'GET',
+          status,
+          contentType,
+          body,
+          updatedAtMs: ctx.sim.elapsedMs,
+        },
+      }
+      ctx.sim.webServerActive = true
+    } else if (fn === 'server.handleClient' || fn === 'web.handleClient') {
+      ctx.sim.webServerActive = true
+      if (!ctx.sim.wifiConnected && BOARDS[ctx.boardId].hasWifi) {
+        ctx.sim.wifiConnected = true
+        ctx.sim.wifiIp = '10.13.37.2'
+      }
+      refreshPassiveWebRoutes(ctx, components)
     } else if (fn === 'mqtt.begin') {
       const url = String(args[0] ?? 'mqtt://broker.weblab.local:1883')
       ctx.vars.__mqttBroker = url
@@ -1366,6 +1624,161 @@ function emitBootBanner(ctx: VmContext) {
   }
 }
 
+function isPassiveGetRoute(path: string): boolean {
+  return !/\/(on|off|toggle|open|close|set|reset|unlock|lock|buzz)(\/|$)/i.test(path)
+}
+
+function refreshPassiveWebRoutes(ctx: VmContext, components: PlacedComponent[]) {
+  if (ctx.vars.__inPassiveRefresh) return
+  ctx.vars.__inPassiveRefresh = 1
+  try {
+    for (const [routePath, handlerName] of Object.entries(ctx.httpHandlers)) {
+      if (!isPassiveGetRoute(routePath)) continue
+      const body = ctx.sketch.helpers[handlerName]
+      if (!body) continue
+      ctx.activeHttpPath = routePath
+      runStatements(body, ctx, components)
+    }
+  } finally {
+    ctx.activeHttpPath = '/'
+    delete ctx.vars.__inPassiveRefresh
+  }
+}
+
+export function syncWebServerState(ctx: VmContext, components: PlacedComponent[]) {
+  const readings = buildLiveWebReadings(ctx.sim, components)
+  ctx.sim.webSensorReadings = readings
+
+  const htmlFile =
+    ctx.extraFiles.find((f) => f.name.toLowerCase() === 'index.html') ??
+    ctx.extraFiles.find((f) => f.name.toLowerCase().endsWith('.html'))
+
+  const hasBrowser = components.some((c) => c.kind === 'web-browser')
+  if (htmlFile && (BOARDS[ctx.boardId].hasWifi || hasBrowser)) {
+    ctx.sim.webServerActive = true
+    if (!ctx.sim.wifiConnected && BOARDS[ctx.boardId].hasWifi) {
+      ctx.sim.wifiConnected = true
+      ctx.sim.wifiIp = ctx.sim.wifiIp === '0.0.0.0' ? '10.13.37.2' : ctx.sim.wifiIp
+    } else if (ctx.sim.wifiIp === '0.0.0.0') {
+      ctx.sim.wifiIp = '10.13.37.2'
+    }
+    if (!ctx.httpHandlers['/']) {
+      ctx.sim.webRoutes = {
+        ...ctx.sim.webRoutes,
+        '/': {
+          path: '/',
+          method: 'GET',
+          status: 200,
+          contentType: 'text/html',
+          body: interpolateWebTemplate(htmlFile.content, ctx.sim, readings),
+          updatedAtMs: ctx.sim.elapsedMs,
+        },
+      }
+    }
+  }
+
+  const cssFile = ctx.extraFiles.find((f) => f.name.toLowerCase().endsWith('.css'))
+  if (ctx.sim.webServerActive && cssFile) {
+    const cssPath = normalizeWebPath(cssFile.name)
+    ctx.sim.webRoutes = {
+      ...ctx.sim.webRoutes,
+      [cssPath]: {
+        path: cssPath,
+        method: 'GET',
+        status: 200,
+        contentType: 'text/plain',
+        body: cssFile.content,
+        updatedAtMs: ctx.sim.elapsedMs,
+      },
+    }
+  }
+}
+
+export function invokeVirtualWebRoute(
+  ctx: VmContext,
+  components: PlacedComponent[],
+  wires: Wire[],
+  method: 'GET' | 'POST',
+  rawUrl: string,
+): { status: number; contentType: string; body: string; path: string } {
+  const path = normalizeWebPath(rawUrl)
+  ctx.graph = buildNetGraph(wires, components)
+
+  const candidates = [ctx, ...ctx.peers]
+  let handled = false
+  for (const node of candidates) {
+    const handlerName = node.httpHandlers[path]
+    if (handlerName && node.sketch.helpers[handlerName]) {
+      node.activeHttpPath = path
+      runStatements(node.sketch.helpers[handlerName], node, components)
+      node.activeHttpPath = '/'
+      handled = true
+      break
+    }
+  }
+
+  if (handled) {
+    syncCircuitActuators(ctx, components, wires)
+    syncWebServerState(ctx, components)
+  } else {
+    syncWebServerState(ctx, components)
+  }
+
+  let route = ctx.sim.webRoutes[path]
+  let status = route?.status ?? 404
+  let contentType = route?.contentType ?? 'text/plain'
+  let body = route?.body ?? ''
+
+  if (!route) {
+    if (!ctx.sim.webServerActive) {
+      status = 503
+      contentType = 'text/plain'
+      body = '503 Service Unavailable — Jalankan simulasi dengan server.begin() atau tambahkan file index.html.'
+    } else if (path === '/api/sensors') {
+      status = 200
+      contentType = 'application/json'
+      body = JSON.stringify(
+        {
+          ok: true,
+          wifiIp: ctx.sim.wifiIp,
+          uptimeSec: Math.round((ctx.sim.elapsedMs || 0) / 100) / 10,
+          readings: ctx.sim.webSensorReadings,
+        },
+        null,
+        2,
+      )
+      route = {
+        path,
+        method,
+        status,
+        contentType: 'application/json',
+        body,
+        updatedAtMs: ctx.sim.elapsedMs,
+      }
+      ctx.sim.webRoutes = { ...ctx.sim.webRoutes, [path]: route }
+    } else {
+      status = 404
+      contentType = 'text/plain'
+      body = `404 Not Found: ${path}`
+    }
+  } else if (contentType.includes('html')) {
+    body = interpolateWebTemplate(body, ctx.sim, ctx.sim.webSensorReadings)
+  }
+
+  const entry: HttpRequestLog = {
+    id: `http-${ctx.sim.httpLogs.length + 1}-${Date.now()}`,
+    timeMs: ctx.sim.elapsedMs,
+    method,
+    url: path,
+    status,
+    contentType,
+    body: body.slice(0, 500),
+  }
+  ctx.sim.httpLogs = [...ctx.sim.httpLogs.slice(-29), entry]
+
+  return { status, contentType, body, path }
+}
+
 export function stepSetup(ctx: VmContext, components: PlacedComponent[], wires: Wire[]) {
   ctx.graph = buildNetGraph(wires, components)
   emitBootBanner(ctx)
@@ -1378,6 +1791,7 @@ export function stepSetup(ctx: VmContext, components: PlacedComponent[], wires: 
     }
   }
   syncCircuitActuators(ctx, components, wires)
+  syncWebServerState(ctx, components)
 }
 
 function advanceMcuSlice(mcu: VmContext, components: PlacedComponent[]): number {
@@ -1424,6 +1838,7 @@ export function stepLoop(ctx: VmContext, components: PlacedComponent[], wires: W
   }
   ctx.sim.elapsedMs += delayMs
   syncCircuitActuators(ctx, components, wires)
+  syncWebServerState(ctx, components)
   return delayMs
 }
 
@@ -1524,7 +1939,9 @@ export function verifyCircuitAndCode(
   }
 
   const graph = buildNetGraph(wires, components)
-  const unwiredParts = activeParts.filter((c) => !wires.some((w) => w.from.nodeId === c.id || w.to.nodeId === c.id))
+  const unwiredParts = activeParts.filter(
+    (c) => c.kind !== 'web-browser' && !wires.some((w) => w.from.nodeId === c.id || w.to.nodeId === c.id),
+  )
   if (unwiredParts.length > 0) {
     items.push({
       id: 'diag-unwired',

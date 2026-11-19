@@ -248,6 +248,21 @@ export function PartThumbnail({ kind }: { kind: ComponentKind }) {
           <rect x={6} y={6} width={44} height={40} rx={5} fill="#0f766e" />
           <circle cx={28} cy={26} r={15} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={1.5} />
         </g>
+      ) : kind === 'web-browser' ? (
+        <g transform="translate(14, 7)">
+          <rect x={2} y={4} width={78} height={48} rx={5} fill="#0f172a" stroke="#38bdf8" strokeWidth={1.5} />
+          <rect x={2} y={4} width={78} height={12} rx={4} fill="#1e293b" />
+          <circle cx={9} cy={10} r={2} fill="#ef4444" />
+          <circle cx={15} cy={10} r={2} fill="#f59e0b" />
+          <circle cx={21} cy={10} r={2} fill="#22c55e" />
+          <rect x={27} y={7} width={48} height={6} rx={2} fill="#334155" />
+          <rect x={8} y={21} width={30} height={11} rx={2} fill="#0284c7" opacity={0.85} />
+          <rect x={42} y={21} width={32} height={11} rx={2} fill="#16a34a" opacity={0.85} />
+          <text x={23} y={29} textAnchor="middle" fontSize="6" fill="#f8fafc" fontWeight={700}>27.5C</text>
+          <text x={58} y={29} textAnchor="middle" fontSize="6" fill="#f8fafc" fontWeight={700}>HTTP</text>
+          <rect x={8} y={36} width={66} height={10} rx={2} fill="#1e293b" />
+          <text x={41} y={43.5} textAnchor="middle" fontSize="6" fill="#38bdf8" fontWeight={700}>WEB BROWSER</text>
+        </g>
       ) : (
         <g transform="translate(22, 8)">
           <rect x={6} y={6} width={54} height={38} rx={4} fill="#0284c7" stroke="#38bdf8" strokeWidth={1.4} />
@@ -1002,6 +1017,71 @@ export function ComponentHardwareView({
             {(comp.props.relayTransistor ?? 'npn').toUpperCase()}
           </text>
         </g>
+      ) : comp.kind === 'web-browser' ? (
+        (() => {
+          const isOnline = sim.webServerActive
+          const readings = sim.webSensorReadings || {}
+          const host = sim.wifiIp && sim.wifiIp !== '0.0.0.0' ? sim.wifiIp : '10.13.37.2'
+          const addr = (comp.props.browserUrl || `http://${host}/`).slice(0, 26)
+          const line1 =
+            readings.TEMP !== undefined
+              ? `T:${readings.TEMP}C  H:${readings.HUMIDITY ?? '-'}%`
+              : readings.DISTANCE !== undefined
+                ? `Jarak:${readings.DISTANCE}cm`
+                : readings.LUX !== undefined
+                  ? `Cahaya:${readings.LUX} lx`
+                  : readings.GAS !== undefined
+                    ? `Gas:${readings.GAS} ppm`
+                    : `IP:${host}`
+          const line2 = `LED:${readings.LED_STATE ?? 'OFF'}  LOG:${sim.httpLogs.length}`
+          return (
+            <g>
+              <rect
+                x={4}
+                y={4}
+                width={176}
+                height={106}
+                rx={7}
+                fill="#0f172a"
+                stroke={isOnline ? '#22c55e' : '#38bdf8'}
+                strokeWidth={1.8}
+              />
+              <rect x={4} y={4} width={176} height={20} rx={6} fill="#1e293b" />
+              <circle cx={14} cy={14} r={2.8} fill="#ef4444" />
+              <circle cx={23} cy={14} r={2.8} fill="#f59e0b" />
+              <circle cx={32} cy={14} r={2.8} fill="#22c55e" />
+              <rect x={40} y={8} width={104} height={12} rx={3} fill="#0f172a" />
+              <text x={44} y={16.5} fontSize="6.3" fill="#e2e8f0" fontFamily="monospace">
+                {addr}
+              </text>
+              <rect x={148} y={8} width={28} height={12} rx={3} fill={isOnline ? '#166534' : '#334155'} />
+              <text
+                x={162}
+                y={16.5}
+                textAnchor="middle"
+                fontSize="5.8"
+                fontWeight={700}
+                fill={isOnline ? '#bbf7d0' : '#cbd5e1'}
+              >
+                {isOnline ? '200' : 'IDLE'}
+              </text>
+              <rect x={10} y={29} width={164} height={46} rx={4} fill="#111827" stroke="#1e293b" strokeWidth={1} />
+              <text x={16} y={42} fontSize="8" fontWeight={700} fill="#38bdf8" fontFamily="monospace">
+                {isOnline ? 'WebServer HTTP Live' : 'Web Browser Siap'}
+              </text>
+              <text x={16} y={55} fontSize="8.5" fontWeight={700} fill="#f8fafc" fontFamily="monospace">
+                {line1}
+              </text>
+              <text x={16} y={67} fontSize="7.2" fill="#94a3b8" fontFamily="monospace">
+                {line2}
+              </text>
+              <rect x={10} y={80} width={164} height={22} rx={4} fill={isOnline ? '#0369a1' : '#1e293b'} />
+              <text x={92} y={94} textAnchor="middle" fontSize="7.4" fontWeight={700} fill="#f8fafc">
+                Klik -&gt; Buka Panel Web Browser
+              </text>
+            </g>
+          )
+        })()
       ) : (
         <WokwiExtendedPartSvg comp={comp} sim={sim} onUpdateProps={onUpdateProps} />
       )}

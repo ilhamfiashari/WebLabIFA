@@ -1,25 +1,47 @@
 import { useState } from 'react'
-import { Activity, Cpu, Download, Lock, Send, ShieldAlert, Terminal, Trash2, Waves, Wifi } from 'lucide-react'
+import { Activity, Cpu, Download, Globe, Lock, Send, ShieldAlert, Terminal, Trash2, Waves, Wifi } from 'lucide-react'
 import { Badge } from '../portal/ui'
 import { buildVcdExport } from './wokwiFormat'
-import type { SimulationState } from './types'
+import type { SketchFile } from './firmwareVm'
+import type { PlacedComponent, SimulationState } from './types'
+import { WebBrowserPanel } from './WebBrowserPanel'
 
 const PLOT_COLORS = ['#22c55e', '#38bdf8', '#f59e0b', '#f472b6']
+
+export type TelemetryDockTab = 'serial' | 'plotter' | 'logic' | 'gpio' | 'mqtt' | 'browser'
 
 export function TelemetryDock({
   sim,
   hasWifi,
   lang,
+  components = [],
+  extraFiles = [],
+  activeTab,
+  onTabChange,
   onClearSerial,
   onSendSerial,
+  onBrowserRequest,
 }: {
   sim: SimulationState
   hasWifi: boolean
   lang: 'id' | 'en'
+  components?: PlacedComponent[]
+  extraFiles?: SketchFile[]
+  activeTab?: TelemetryDockTab
+  onTabChange?: (tab: TelemetryDockTab) => void
   onClearSerial: () => void
   onSendSerial: (text: string) => void
+  onBrowserRequest?: (
+    method: 'GET' | 'POST',
+    rawUrl: string,
+  ) => { status: number; contentType: string; body: string; path: string } | void
 }) {
-  const [tab, setTab] = useState<'serial' | 'plotter' | 'logic' | 'gpio' | 'mqtt'>('serial')
+  const [internalTab, setInternalTab] = useState<TelemetryDockTab>('serial')
+  const tab = activeTab ?? internalTab
+  const setTab = (next: TelemetryDockTab) => {
+    setInternalTab(next)
+    onTabChange?.(next)
+  }
   const [txInput, setTxInput] = useState('')
   const logicChannels = Object.keys(sim.gpioStates).map(Number).slice(0, 8)
 
@@ -60,6 +82,10 @@ export function TelemetryDock({
           <button type="button" role="tab" aria-selected={tab === 'mqtt'} className={`iot-tab ${tab === 'mqtt' ? 'is-active' : ''}`} onClick={() => setTab('mqtt')}>
             <Wifi size={14} /> Wi-Fi &amp; MQTT
             {sim.mqttMessages.length > 0 ? <span className="iot-count-pill">{sim.mqttMessages.length}</span> : null}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'browser'} className={`iot-tab ${tab === 'browser' ? 'is-active' : ''}`} onClick={() => setTab('browser')}>
+            <Globe size={14} /> Web Browser
+            {sim.webServerActive ? <span className="iot-count-pill">LIVE</span> : null}
           </button>
         </div>
 
@@ -233,7 +259,7 @@ export function TelemetryDock({
             ))}
           </div>
         </div>
-      ) : (
+      ) : tab === 'mqtt' ? (
         <div className="iot-mqtt-pane">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 13 }}>
@@ -283,6 +309,15 @@ export function TelemetryDock({
             </div>
           )}
         </div>
+      ) : (
+        <WebBrowserPanel
+          key={components.find((c) => c.kind === 'web-browser')?.props.browserUrl ?? 'wb-default'}
+          sim={sim}
+          components={components}
+          extraFiles={extraFiles}
+          lang={lang}
+          onRequestRoute={onBrowserRequest}
+        />
       )}
     </section>
   )

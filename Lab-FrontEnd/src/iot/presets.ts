@@ -1239,6 +1239,106 @@ void loop() {
       { id: 'wpn18', from: { nodeId: 'board', pinId: 'A5' }, to: { nodeId: 'oled-pn', pinId: 'SCL' }, color: '#3b82f6' },
     ],
   },
+  {
+    id: 'esp32-c3-webserver-browser',
+    board: 'esp32-c3',
+    titleId: 'ESP32-C3 · WebServer IoT & Web Browser Live',
+    titleEn: 'ESP32-C3 · IoT WebServer & Live Web Browser',
+    badge: 'ESP32-C3 · Web/HTTP',
+    summaryId: 'Bangun web dashboard HTML & endpoint API JSON di ESP32-C3 untuk membaca DHT22 dan mengontrol LED lewat Web Browser simulasi.',
+    summaryEn: 'Build an HTML dashboard and JSON API routes on ESP32-C3 to inspect live DHT22 telemetry and toggle LED from the simulated Web Browser.',
+    code: `#include <WiFi.h>
+#include <WebServer.h>
+#define DHT_PIN 4
+#define LED_PIN 2
+
+void handleSensors() {
+  float temp = dht.readTemperature(DHT_PIN);
+  float hum = dht.readHumidity(DHT_PIN);
+  String ledStatus = digitalRead(LED_PIN) ? "ON" : "OFF";
+  server.send(200, "application/json", "{\\"temp\\":" + String(temp) + ",\\"humidity\\":" + String(hum) + ",\\"led\\":\\"" + ledStatus + "\\"}");
+}
+
+void handleLedOn() {
+  digitalWrite(LED_PIN, HIGH);
+  server.send(200, "application/json", "{\\"led\\":\\"ON\\"}");
+}
+
+void handleLedOff() {
+  digitalWrite(LED_PIN, LOW);
+  server.send(200, "application/json", "{\\"led\\":\\"OFF\\"}");
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  WiFi.begin("WebLab-GUEST", "");
+  server.on("/api/sensors", handleSensors);
+  server.on("/led/on", handleLedOn);
+  server.on("/led/off", handleLedOff);
+  server.begin();
+  Serial.println("WebServer HTTP aktif di http://" + WiFi.localIP() + "/");
+}
+
+void loop() {
+  server.handleClient();
+  float temp = dht.readTemperature(DHT_PIN);
+  float hum = dht.readHumidity(DHT_PIN);
+  Serial.println("temp:" + String(temp) + ",hum:" + String(hum));
+  delay(450);
+}`,
+    files: [
+      {
+        name: 'index.html',
+        content: `<main class="wb-page">
+  <header class="wb-card">
+    <h1>Monitor Ruang Lab ESP32-C3</h1>
+    <p class="wb-muted">Halaman Web ini menyajikan pembacaan sensor live dari rangkaian kanvas melalui HTTP WebServer.</p>
+    <span class="wb-badge">IP Perangkat: {{WIFI_IP}} · LED: {{LED_STATE}}</span>
+  </header>
+
+  <section class="wb-grid">
+    <div class="wb-card">
+      <div class="wb-muted">Suhu Udara (DHT22)</div>
+      <div class="wb-value">{{TEMP}} °C</div>
+    </div>
+    <div class="wb-card">
+      <div class="wb-muted">Kelembapan Relatif</div>
+      <div class="wb-value">{{HUMIDITY}} %</div>
+    </div>
+    <div class="wb-card">
+      <div class="wb-muted">Status Aktuator LED</div>
+      <div class="wb-value">{{LED_STATE}}</div>
+    </div>
+  </section>
+
+  <section class="wb-card">
+    <h2>Kontrol HTTP Aktuator</h2>
+    <p class="wb-muted">Klik tombol di bawah untuk memanggil endpoint C++ WebServer (server.on):</p>
+    <div class="wb-actions">
+      <button type="button" class="wb-btn wb-btn-primary" data-iot-action="/led/on">Nyalakan LED (/led/on)</button>
+      <button type="button" class="wb-btn wb-btn-danger" data-iot-action="/led/off">Matikan LED (/led/off)</button>
+      <a class="wb-btn" href="/api/sensors">Buka JSON /api/sensors</a>
+    </div>
+  </section>
+</main>`,
+      },
+    ],
+    components: [
+      { id: 'dht-web', kind: 'dht22', x: 315, y: 75, label: 'DHT22 Ruangan', props: { tempC: 28.5, humidity: 62 } },
+      { id: 'res-web', kind: 'resistor', x: 325, y: 225, label: 'R1 (220Ω)', ohms: 220, props: {} },
+      { id: 'led-web', kind: 'led', x: 465, y: 205, label: 'LED Status', color: 'green', props: {} },
+      { id: 'browser-1', kind: 'web-browser', x: 540, y: 70, label: 'Web Browser Client', props: { browserUrl: 'http://192.168.4.42/' } },
+    ],
+    wires: [
+      { id: 'wwb1', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'dht-web', pinId: 'VCC' }, color: '#ef4444' },
+      { id: 'wwb2', from: { nodeId: 'board', pinId: 'GPIO4' }, to: { nodeId: 'dht-web', pinId: 'DATA' }, color: '#06b6d4' },
+      { id: 'wwb3', from: { nodeId: 'dht-web', pinId: 'GND' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+      { id: 'wwb4', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'res-web', pinId: 'P1' }, color: '#22c55e' },
+      { id: 'wwb5', from: { nodeId: 'res-web', pinId: 'P2' }, to: { nodeId: 'led-web', pinId: 'A' }, color: '#f59e0b' },
+      { id: 'wwb6', from: { nodeId: 'led-web', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND2' }, color: '#1e293b' },
+    ],
+  },
 ]
 
 export const IOT_MISSIONS: IotMissionSpec[] = [

@@ -61,6 +61,7 @@ export const WOKWI_PART_TYPE_MAP: Record<Exclude<ComponentKind, 'mcu'>, string> 
   'lcd-nokia5110': 'wokwi-nokia-5110-screen',
   'neopixel-single': 'wokwi-neopixel',
   'clock-gen': 'wokwi-clock-generator',
+  'web-browser': 'weblab-web-browser',
 }
 
 export interface WokwiDiagramPart {
@@ -143,6 +144,9 @@ function buildWokwiAttrs(c: PlacedComponent): Record<string, string> {
   if (c.kind === 'max7219-matrix') {
     if (p.matrixChain) attrs.chain = String(p.matrixChain)
     if (p.matrixLayout) attrs.layout = p.matrixLayout
+  }
+  if (c.kind === 'web-browser' && p.browserUrl) {
+    attrs.url = p.browserUrl
   }
   return attrs
 }
@@ -347,6 +351,7 @@ export function parseWokwiDiagramJson(rawText: string): {
         ldrThreshold: attrs.threshold ? Number(attrs.threshold) : undefined,
         ldrRl10: attrs.rl10 ? Number(attrs.rl10) : undefined,
         ldrGamma: attrs.gamma ? Number(attrs.gamma) : undefined,
+        browserUrl: attrs.url || undefined,
       },
     })
   }
