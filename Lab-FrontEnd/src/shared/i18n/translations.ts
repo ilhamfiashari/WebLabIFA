@@ -44,6 +44,7 @@ export const TRANSLATIONS = {
       student: {
         beranda: 'Beranda',
         web: 'Keamanan Web',
+        webdev: 'Pengembangan Web',
         iot: 'IoT Simulator',
         tugas: 'Tugas & Nilai',
         progres: 'Pencapaian',
@@ -56,6 +57,7 @@ export const TRANSLATIONS = {
       lecturer: {
         beranda: 'Beranda',
         web: 'Simulasi OWASP Web',
+        webdev: 'Pengembangan Web',
         iot: 'IoT Simulator',
         kelas: 'Kelas & Ekspor',
         leaderboard: 'Leaderboard',
@@ -292,6 +294,7 @@ export const TRANSLATIONS = {
       student: {
         beranda: 'Home',
         web: 'Web Security',
+        webdev: 'Web Dev Lab',
         iot: 'IoT Simulator',
         tugas: 'Assignments',
         progres: 'Achievements',
@@ -304,6 +307,7 @@ export const TRANSLATIONS = {
       lecturer: {
         beranda: 'Home',
         web: 'OWASP Web Sim',
+        webdev: 'Web Dev Lab',
         iot: 'IoT Simulator',
         kelas: 'Classes & Export',
         leaderboard: 'Leaderboard',

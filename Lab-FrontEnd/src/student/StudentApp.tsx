@@ -7,6 +7,7 @@ import {
   BookOpenCheck,
   Check,
   ClipboardList,
+  Code2,
   Cpu,
   Flame,
   History,
@@ -32,6 +33,7 @@ import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
+import { WebDevStudio } from '../webdev/WebDevStudio'
 import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
 import { LeaderboardSection } from '../lecturer/LeaderboardSection'
 import { LabWorkspace } from '../simulator/LabWorkspace'
@@ -40,6 +42,7 @@ import { simApi, type LevelId, type StudentDashboardResponse, type StudentLeader
 const PAGES: NavPage[] = [
   { key: 'beranda', path: '/lab', label: 'Beranda', icon: House },
   { key: 'web', path: '/lab/web', label: 'Keamanan Web', icon: ShieldAlert },
+  { key: 'webdev', path: '/lab/web-dev', label: 'Pengembangan Web', icon: Code2 },
   { key: 'iot', path: '/lab/iot', label: 'IoT Simulator', icon: Cpu },
   { key: 'tugas', path: '/lab/tugas', label: 'Tugas & Nilai', icon: ClipboardList },
   { key: 'progres', path: '/lab/pencapaian', label: 'Pencapaian', icon: Award },
@@ -68,6 +71,7 @@ export function StudentApp(props: Props) {
     const labelMap: Record<string, string> = {
       beranda: tr.nav.student.beranda,
       web: tr.nav.student.web,
+      webdev: tr.nav.student.webdev,
       iot: tr.nav.student.iot,
       tugas: tr.nav.student.tugas,
       progres: tr.nav.student.progres,
@@ -82,16 +86,19 @@ export function StudentApp(props: Props) {
 
   const sessionMatch = path.startsWith('/lab/sesi/') ? path.slice('/lab/sesi/'.length).split('/')[0] : null
   const webParts = path.startsWith('/lab/web/') ? path.slice('/lab/web/'.length).split('/').filter(Boolean) : []
+  const webDevLabId = path.startsWith('/lab/web-dev/') ? path.slice('/lab/web-dev/'.length).split('/')[0] : null
   const iotLabId = path.startsWith('/lab/iot/') ? path.slice('/lab/iot/'.length).split('/')[0] : null
   const legacyDetailId = path.startsWith('/lab/latihan/') ? path.slice('/lab/latihan/'.length) : null
 
   const active =
     path === '/lab'
       ? 'beranda'
-      : path.startsWith('/lab/web')
-        ? 'web'
-        : path.startsWith('/lab/iot')
-          ? 'iot'
+      : path.startsWith('/lab/web-dev')
+        ? 'webdev'
+        : path.startsWith('/lab/web')
+          ? 'web'
+          : path.startsWith('/lab/iot')
+            ? 'iot'
           : path === '/lab/tugas'
             ? 'tugas'
             : path === '/lab/progres' || path === '/lab/pencapaian'
@@ -152,6 +159,8 @@ export function StudentApp(props: Props) {
     >
       {sessionMatch ? (
         <LabWorkspace sessionId={sessionMatch} csrf={props.user.csrf_token} theme={theme} go={go} />
+      ) : path.startsWith('/lab/web-dev') ? (
+        <WebDevStudio csrf={props.user.csrf_token} initialLabId={webDevLabId} mode="mahasiswa" />
       ) : path.startsWith('/lab/web') ? (
         webParts.length >= 2 ? (
           <LabDetailPage labId={webParts[1]} csrf={props.user.csrf_token} theme={theme} go={go} />

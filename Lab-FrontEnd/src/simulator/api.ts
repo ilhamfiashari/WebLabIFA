@@ -1052,4 +1052,69 @@ export const simApi = {
       mission_states?: import('../iot/types').IotMissionAccessState[]
     }>('/api/iot/missions/submit', csrf, body)
   },
+  listWebDevProjects() {
+    return getJson<{
+      projects: import('../webdev/types').SavedWebDevProject[]
+      completed_missions: Array<{ mission_id: string; score: number; completed_at: string }>
+      mission_states?: import('../webdev/types').WebDevMissionAccessState[]
+      achievements?: import('../webdev/types').WebDevAchievementBadge[]
+      portal_xp?: number
+      webdev_xp?: number
+      access?: import('../webdev/types').WebDevStudioAccess
+    }>('/api/webdev/projects')
+  },
+  listDosenStudentWebDevProjects(params?: { class_id?: string; q?: string }) {
+    const qs = new URLSearchParams()
+    if (params?.class_id) qs.set('class_id', params.class_id)
+    if (params?.q) qs.set('q', params.q)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return getJson<{
+      projects: import('../webdev/types').SavedWebDevProject[]
+    }>(`/api/dosen/webdev-projects${suffix}`)
+  },
+  saveWebDevProject(
+    csrf: string,
+    body: {
+      id?: string
+      title: string
+      mission_id?: string | null
+      files: import('../webdev/types').WebDevFile[]
+    },
+  ) {
+    return postJson<{
+      id: string
+      title: string
+      mission_id?: string | null
+      files: import('../webdev/types').WebDevFile[]
+      saved: boolean
+    }>('/api/webdev/projects', csrf, body)
+  },
+  deleteWebDevProject(csrf: string, projectId: string) {
+    return deleteJson<{ deleted: boolean; id: string }>(
+      `/api/webdev/projects/${encodeURIComponent(projectId)}`,
+      csrf,
+    )
+  },
+  submitWebDevMission(
+    csrf: string,
+    body: {
+      mission_id: string
+      files: import('../webdev/types').WebDevFile[]
+      checks_passed: number
+      checks_total: number
+      render_ready: boolean
+      api_tested: boolean
+      sql_executed: boolean
+    },
+  ) {
+    return postJson<{
+      mission_id: string
+      score: number
+      passed: boolean
+      xp_awarded: number
+      portal_xp: number
+      newly_unlocked?: string[]
+      mission_states?: import('../webdev/types').WebDevMissionAccessState[]
+    }>('/api/webdev/missions/submit', csrf, body)
+  },
 }

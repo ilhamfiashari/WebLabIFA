@@ -6,6 +6,7 @@ import {
   BookOpen,
   BookOpenCheck,
   ClipboardPlus,
+  Code2,
   Cpu,
   Database,
   Download,
@@ -36,6 +37,7 @@ import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
+import { WebDevStudio } from '../webdev/WebDevStudio'
 import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
 import { LabWorkspace } from '../simulator/LabWorkspace'
 import { simApi, type InstructorDashboardResponse, type LevelId } from '../simulator/api'
@@ -45,6 +47,7 @@ const PAGES: NavPage[] = [
   { key: 'beranda', path: '/lab/dosen', label: 'Beranda', icon: House },
   { key: 'leaderboard', path: '/lab/dosen/leaderboard', label: 'Leaderboard', icon: Trophy },
   { key: 'web', path: '/lab/dosen/web', label: 'Simulasi OWASP Web', icon: ShieldAlert },
+  { key: 'webdev', path: '/lab/dosen/web-dev', label: 'Pengembangan Web', icon: Code2 },
   { key: 'iot', path: '/lab/dosen/iot', label: 'IoT Simulator', icon: Cpu },
   { key: 'kelas', path: '/lab/dosen/kelas', label: 'Kelas & Ekspor', icon: Users },
   { key: 'penugasan', path: '/lab/dosen/penugasan', label: 'Penugasan', icon: ClipboardPlus },
@@ -81,6 +84,7 @@ export function LecturerApp(props: Props) {
       beranda: tr.nav.lecturer.beranda,
       leaderboard: tr.nav.lecturer.leaderboard,
       web: tr.nav.lecturer.web,
+      webdev: tr.nav.lecturer.webdev,
       iot: tr.nav.lecturer.iot,
       kelas: tr.nav.lecturer.kelas,
       penugasan: tr.nav.lecturer.penugasan,
@@ -94,6 +98,7 @@ export function LecturerApp(props: Props) {
 
   const simSessionId = path.startsWith('/lab/dosen/sesi/') ? path.slice('/lab/dosen/sesi/'.length).split('/')[0] : null
   const webParts = path.startsWith('/lab/dosen/web/') ? path.slice('/lab/dosen/web/'.length).split('/').filter(Boolean) : []
+  const webDevLabId = path.startsWith('/lab/dosen/web-dev/') ? path.slice('/lab/dosen/web-dev/'.length).split('/')[0] : null
   const iotLabId = path.startsWith('/lab/dosen/iot/') ? path.slice('/lab/dosen/iot/'.length).split('/')[0] : null
 
   const dashQ = useQuery({
@@ -110,10 +115,12 @@ export function LecturerApp(props: Props) {
   })
 
   const detailId = path.startsWith('/lab/dosen/latihan/') ? path.slice('/lab/dosen/latihan/'.length) : null
-  const active = path.startsWith('/lab/dosen/web') || Boolean(simSessionId)
-    ? 'web'
-    : path.startsWith('/lab/dosen/iot')
-      ? 'iot'
+  const active = path.startsWith('/lab/dosen/web-dev')
+    ? 'webdev'
+    : path.startsWith('/lab/dosen/web') || Boolean(simSessionId)
+      ? 'web'
+      : path.startsWith('/lab/dosen/iot')
+        ? 'iot'
       : path.startsWith('/lab/dosen/leaderboard')
         ? 'leaderboard'
         : path.startsWith('/lab/dosen/latihan')
@@ -187,6 +194,8 @@ export function LecturerApp(props: Props) {
             presentationToggle={presentation}
           />
         )
+      ) : active === 'webdev' ? (
+        <WebDevStudio csrf={props.user.csrf_token} initialLabId={webDevLabId} mode="dosen" />
       ) : active === 'iot' ? (
         <IotSimulatorStudio csrf={props.user.csrf_token} initialLabId={iotLabId} mode="dosen" />
       ) : active === 'panduan' ? (

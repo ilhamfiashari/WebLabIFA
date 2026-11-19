@@ -123,6 +123,18 @@ pub fn router(state: AppState) -> Router {
             post(portal::submit_iot_mission),
         )
         .route(
+            "/api/webdev/projects",
+            get(portal::list_webdev_projects).post(portal::save_webdev_project),
+        )
+        .route(
+            "/api/webdev/projects/{project_id}",
+            delete(portal::delete_webdev_project),
+        )
+        .route(
+            "/api/webdev/missions/submit",
+            post(portal::submit_webdev_mission),
+        )
+        .route(
             "/api/dashboard/instructor",
             get(portal::instructor_dashboard),
         )
@@ -140,6 +152,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/dosen/iot-projects",
             get(portal::list_student_iot_projects),
+        )
+        .route(
+            "/api/dosen/webdev-projects",
+            get(portal::list_student_webdev_projects),
         )
         .route("/api/dosen/seed", post(portal::dosen_trigger_seed))
         .route("/api/dashboard/admin", get(portal::admin_dashboard))

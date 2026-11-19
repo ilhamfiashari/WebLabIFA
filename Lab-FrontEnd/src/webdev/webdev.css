@@ -1,0 +1,712 @@
+.wd-studio {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wd-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.wd-topbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wd-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wd-title-row h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.wd-topbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wd-select {
+  max-width: 250px;
+  font-size: 12.5px;
+  padding: 5px 8px;
+}
+
+.wd-project-input {
+  min-width: 165px;
+  max-width: 220px;
+  font-size: 12.5px;
+  padding: 5px 9px;
+}
+
+/* Minimalist Single-Row Mission Strip */
+.wd-mission-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.wd-mission-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wd-mission-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.wd-mission-active-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.wd-mission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.wd-mission-objective {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.wd-mission-drawer {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.wd-mission-card-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.wd-mission-card-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+}
+
+.wd-mission-card-btn.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.wd-mission-card-btn.is-done {
+  border-color: var(--good);
+}
+
+.wd-mission-card-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.wd-mission-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.wd-mission-card-sub {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.wd-badges-drawer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.wd-checks-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.wd-check-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.wd-check-chip.is-pass {
+  border-color: rgba(22, 163, 74, 0.4);
+  color: var(--good-ink);
+  background: var(--good-bg);
+}
+
+/* Workbench Split Pane */
+.wd-workbench {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 600px;
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .wd-workbench {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.wd-editor-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.wd-file-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.wd-file-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wd-file-tab.is-active {
+  background: var(--surface);
+  color: var(--brand);
+  border-color: var(--line);
+}
+
+.wd-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.wd-code-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 490px;
+  max-height: 660px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 19.5px;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.wd-code-shell.theme-dark {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.wd-line-gutter {
+  user-select: none;
+  padding: 12px 10px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 19.5px;
+  color: #94a3b8;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  min-width: 38px;
+}
+
+.wd-code-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.wd-code-highlight,
+.wd-code-textarea {
+  margin: 0;
+  padding: 12px;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 19.5px;
+  tab-size: 2;
+  white-space: pre;
+  word-wrap: normal;
+  border: 0;
+  width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.wd-code-highlight {
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.wd-code-textarea {
+  position: absolute;
+  inset: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: #0284c7;
+  overflow: auto;
+}
+
+.wd-code-shell.theme-dark .wd-code-textarea {
+  caret-color: #38bdf8;
+}
+
+.wd-tok-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.wd-tok-preproc {
+  color: #d97706;
+}
+
+.wd-tok-keyword {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.wd-tok-type {
+  color: #0284c7;
+}
+
+.wd-tok-builtin {
+  color: #059669;
+  font-weight: 600;
+}
+
+.wd-tok-string {
+  color: #16a34a;
+}
+
+.wd-tok-number {
+  color: #ea580c;
+}
+
+.wd-code-shell.theme-dark .wd-tok-keyword {
+  color: #c084fc;
+}
+
+.wd-code-shell.theme-dark .wd-tok-preproc {
+  color: #fbbf24;
+}
+
+.wd-code-shell.theme-dark .wd-tok-type {
+  color: #38bdf8;
+}
+
+.wd-code-shell.theme-dark .wd-tok-string {
+  color: #4ade80;
+}
+
+/* Autocomplete Dropdown */
+.wd-ac-box {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  z-index: 25;
+  width: min(360px, calc(100% - 32px));
+  max-height: 190px;
+  overflow: auto;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
+  padding: 4px;
+}
+
+.wd-ac-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.wd-ac-item.is-active,
+.wd-ac-item:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* Right Preview Pane */
+.wd-preview-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.wd-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.wd-viewport-btns {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.wd-vp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.wd-vp-btn.is-active {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.wd-url-bar {
+  display: flex;
+  flex: 1 1 210px;
+  align-items: center;
+  gap: 6px;
+}
+
+.wd-method-sel {
+  padding: 5px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.wd-url-input-wrap {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.wd-url-input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  padding: 5px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.wd-preview-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.wd-preview-stage {
+  flex: 1;
+  min-height: 460px;
+  max-height: 640px;
+  overflow: auto;
+  padding: 14px;
+  background: var(--surface-2);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.wd-browser-frame {
+  max-width: 100%;
+  min-height: 360px;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  transition: width 0.2s ease;
+}
+
+.wd-rendered-dom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wd-rendered-dom h1,
+.wd-rendered-dom h2,
+.wd-rendered-dom h3 {
+  margin: 0 0 4px;
+}
+
+.wd-rendered-dom p {
+  margin: 0 0 6px;
+}
+
+.wd-rendered-dom table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wd-rendered-dom th,
+.wd-rendered-dom td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.wd-rendered-dom input {
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid #94a3b8;
+  font-size: 13px;
+}
+
+.wd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: 1px solid #0284c7;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wd-btn:hover {
+  background: #0369a1;
+}
+
+.wd-link {
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+  color: #0284c7;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
+
+.wd-last-http-banner {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+
+.wd-inspector-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wd-inspector-block {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  padding: 10px 12px;
+}
+
+.wd-inspector-block h4 {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+}
+
+.wd-log-pre,
+.wd-json-response pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow: auto;
+}
+
+.wd-json-response {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.wd-json-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wd-routes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wd-route-card,
+.wd-sql-table-card {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.wd-route-head,
+.wd-sql-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.wd-ai-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wd-ai-prompt-row input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.wd-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.wd-muted {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.wd-http-log-list {
+  display: grid;
+  gap: 6px;
+}
+
+.wd-http-log-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
