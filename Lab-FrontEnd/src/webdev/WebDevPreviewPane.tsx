@@ -74,59 +74,277 @@ const ALLOWED_WEB_TAGS = new Set([
 
 const VOID_TAGS = new Set(['br', 'hr', 'input'])
 
-function renderDomTree(
-  nodes: NodeListOf<ChildNode>,
+interface MarkupAstNode {
+  kind: 'text' | 'element'
+  text?: string
+  tag?: string
+  attrs?: Record<string, string>
+  hasReactClick?: boolean
+  children?: MarkupAstNode[]
+}
+
+function parseTagAttrs(rawAttrs: string): { attrs: Record<string, string>; hasReactClick: boolean } {
+  const attrs: Record<string, string> = {}
+  let hasReactClick = false
+  let i = 0
+  const len = rawAttrs.length
+  while (i < len) {
+    while (i < len && /\s/.test(rawAttrs[i])) i++
+    if (i >= len) break
+    let name = ''
+    while (i < len && /[a-zA-Z0-9_:-]/.test(rawAttrs[i])) {
+      name += rawAttrs[i]
+      i++
+    }
+    if (!name) {
+      i++
+      continue
+    }
+    while (i < len && /\s/.test(rawAttrs[i])) i++
+    if (rawAttrs[i] !== '=') {
+      attrs[name.toLowerCase()] = ''
+      continue
+    }
+    i++
+    while (i < len && /\s/.test(rawAttrs[i])) i++
+    if (i >= len) break
+    const ch = rawAttrs[i]
+    if (ch === '"' || ch === "'") {
+      const q = ch
+      i++
+      let val = ''
+      while (i < len && rawAttrs[i] !== q) {
+        val += rawAttrs[i]
+        i++
+      }
+      if (rawAttrs[i] === q) i++
+      attrs[name.toLowerCase()] = val
+    } else if (ch === '{') {
+      let depth = 1
+      i++
+      while (i < len && depth > 0) {
+        if (rawAttrs[i] === '{') depth++
+        else if (rawAttrs[i] === '}') depth--
+        i++
+      }
+      if (name === 'onClick' || name === 'onclick') hasReactClick = true
+    } else {
+      let val = ''
+      while (i < len && !/\s/.test(rawAttrs[i])) {
+        val += rawAttrs[i]
+        i++
+      }
+      attrs[name.toLowerCase()] = val
+    }
+  }
+  return { attrs, hasReactClick }
+}
+
+/**
+ * Pure TypeScript HTML/JSX tokenizer into an immutable AST without DOMParser/innerHTML,
+ * ensuring DOM text is never reinterpreted as browser HTML.
+ */
+function parseMarkupToAst(markup: string): MarkupAstNode[] {
+  const root: MarkupAstNode[] = []
+  const stack: Array<{ tag: string; children: MarkupAstNode[] }> = [{ tag: '__root__', children: root }]
+  let i = 0
+  const len = markup.length
+
+  const pushNode = (node: MarkupAstNode) => {
+    stack[stack.length - 1].children.push(node)
+  }
+
+  while (i < len) {
+    if (markup.startsWith('<!--', i)) {
+      const endComment = markup.indexOf('-->', i + 4)
+      i = endComment === -1 ? len : endComment + 3
+      continue
+    }
+    if (markup[i] === '<') {
+      if (markup[i + 1] === '/') {
+        const closeEnd = markup.indexOf('>', i + 2)
+        if (closeEnd === -1) break
+        const closeTag = markup.slice(i + 2, closeEnd).trim().toLowerCase()
+        for (let s = stack.length - 1; s >= 1; s--) {
+          if (stack[s].tag === closeTag) {
+            stack.length = s
+            break
+          }
+        }
+        i = closeEnd + 1
+        continue
+      }
+      if (/[a-zA-Z]/.test(markup[i + 1] ?? '')) {
+        let j = i + 1
+        let quote: string | null = null
+        let braceDepth = 0
+        while (j < len) {
+          const ch = markup[j]
+          if (quote) {
+            if (ch === quote && markup[j - 1] !== '\\') quote = null
+          } else {
+            if (ch === '"' || ch === "'") quote = ch
+            else if (ch === '{') braceDepth++
+            else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1)
+            else if (ch === '>' && braceDepth === 0) break
+          }
+          j++
+        }
+        if (j >= len) break
+        let tagHeader = markup.slice(i + 1, j).trim()
+        const selfClosing = tagHeader.endsWith('/')
+        if (selfClosing) tagHeader = tagHeader.slice(0, -1).trim()
+        const spaceIdx = tagHeader.search(/\s/)
+        const tag = (spaceIdx === -1 ? tagHeader : tagHeader.slice(0, spaceIdx)).toLowerCase()
+        const rawAttrs = spaceIdx === -1 ? '' : tagHeader.slice(spaceIdx + 1)
+        const { attrs, hasReactClick } = parseTagAttrs(rawAttrs)
+        const children: MarkupAstNode[] = []
+        if (ALLOWED_WEB_TAGS.has(tag)) {
+          pushNode({ kind: 'element', tag, attrs, hasReactClick, children })
+          if (!selfClosing && !VOID_TAGS.has(tag)) {
+            stack.push({ tag, children })
+          }
+        }
+        i = j + 1
+        continue
+      }
+    }
+
+    const nextLt = markup.indexOf('<', i + 1)
+    const cut = nextLt === -1 ? len : nextLt
+    const txt = markup.slice(i, cut)
+    if (txt) pushNode({ kind: 'text', text: txt })
+    i = cut
+  }
+
+  return root
+}
+
+function extractReactArrays(fullSource: string): Record<string, string[]> {
+  const arrMatch = /const\s+([a-zA-Z_]\w*)\s*=\s*\[([^\]]+)\]/g
+  const arrayVars: Record<string, string[]> = {}
+  let am: RegExpExecArray | null
+  while ((am = arrMatch.exec(fullSource)) !== null) {
+    arrayVars[am[1]] = am[2]
+      .split(',')
+      .map((item) => item.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean)
+  }
+  return arrayVars
+}
+
+function renderReactTextChunks(
+  rawText: string,
+  keyPrefix: string,
+  arrayVars: Record<string, string[]>,
+  stateVal: string | number | boolean | unknown[],
+  cssRules: ParsedCssRule[],
+): ReactNode {
+  if (!rawText.includes('{')) return rawText
+  const parts: ReactNode[] = []
+  const exprRe = /\{([^{}]+(?:\{[^{}]*\}[^{}]*)*)\}/g
+  let lastIdx = 0
+  let match: RegExpExecArray | null
+  let chunkIdx = 0
+  while ((match = exprRe.exec(rawText)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(<Fragment key={`${keyPrefix}-t-${chunkIdx++}`}>{rawText.slice(lastIdx, match.index)}</Fragment>)
+    }
+    const expr = match[1].trim()
+    const mapM = /^([a-zA-Z_]\w*)\.map\(\(\s*([a-zA-Z_]\w*)\s*\)\s*=>\s*<([a-zA-Z0-9-]+)([^>]*)>\{\s*\2\s*\}<\/\3>\)$/.exec(expr)
+    if (mapM) {
+      const [, arrName, , tag, rawAttrs] = mapM
+      const items = arrayVars[arrName] ?? []
+      const safeTag = ALLOWED_WEB_TAGS.has(tag.toLowerCase()) ? tag.toLowerCase() : 'span'
+      const { attrs } = parseTagAttrs(rawAttrs)
+      const cls = attrs.class || attrs.classname
+      const style = matchElementCss(cssRules, safeTag, cls || null, attrs.id || null)
+      items.forEach((item, idx) => {
+        parts.push(
+          createElement(
+            safeTag,
+            { key: `${keyPrefix}-m-${chunkIdx}-${idx}`, className: cls ? `wd-el ${cls}` : 'wd-el', style },
+            item,
+          ),
+        )
+      })
+    } else if (expr.endsWith('.length') && expr.slice(0, -7) in arrayVars) {
+      parts.push(<Fragment key={`${keyPrefix}-len-${chunkIdx++}`}>{arrayVars[expr.slice(0, -7)].length}</Fragment>)
+    } else if (expr in arrayVars) {
+      parts.push(<Fragment key={`${keyPrefix}-arr-${chunkIdx++}`}>{arrayVars[expr].join(', ')}</Fragment>)
+    } else {
+      parts.push(<Fragment key={`${keyPrefix}-s-${chunkIdx++}`}>{String(stateVal)}</Fragment>)
+    }
+    lastIdx = match.index + match[0].length
+  }
+  if (lastIdx < rawText.length) {
+    parts.push(<Fragment key={`${keyPrefix}-tail-${chunkIdx}`}>{rawText.slice(lastIdx)}</Fragment>)
+  }
+  return parts
+}
+
+function renderAstNodes(
+  nodes: MarkupAstNode[],
   keyPrefix: string,
   cssRules: ParsedCssRule[],
   domOverrides: Record<string, string>,
   bindings: JsDomBinding[],
   onInvokeBinding: (binding: JsDomBinding) => void,
   onNavigatePath: (path: string) => void,
+  reactOpts?: {
+    arrayVars: Record<string, string[]>
+    stateVal: string | number | boolean | unknown[]
+    onReactClick: () => void
+  },
 ): ReactNode[] {
-  const out: ReactNode[] = []
-  nodes.forEach((node, idx) => {
+  return nodes.map((node, idx) => {
     const key = `${keyPrefix}-${idx}`
-    if (node.nodeType === Node.TEXT_NODE) {
-      const txt = node.textContent ?? ''
-      if (txt) out.push(<Fragment key={key}>{txt}</Fragment>)
-      return
+    if (node.kind === 'text') {
+      const rawText = node.text ?? ''
+      if (reactOpts) {
+        return <Fragment key={key}>{renderReactTextChunks(rawText, key, reactOpts.arrayVars, reactOpts.stateVal, cssRules)}</Fragment>
+      }
+      return <Fragment key={key}>{rawText}</Fragment>
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return
-    const el = node as Element
-    const tag = el.tagName.toLowerCase()
-    if (!ALLOWED_WEB_TAGS.has(tag)) return
 
-    const idAttr = el.getAttribute('id')
-    const classAttr = el.getAttribute('class')
+    const tag = node.tag ?? 'div'
+    const attrs = node.attrs ?? {}
+    const idAttr = attrs.id || null
+    const classAttr = attrs.class || attrs.classname || null
     const computedStyle = matchElementCss(cssRules, tag, classAttr, idAttr)
 
     if (VOID_TAGS.has(tag)) {
       if (tag === 'input') {
-        out.push(
-          createElement('input', {
-            key,
-            id: idAttr || undefined,
-            className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
-            style: computedStyle,
-            type: el.getAttribute('type') || 'text',
-            placeholder: el.getAttribute('placeholder') || undefined,
-          }),
-        )
-      } else {
-        out.push(createElement(tag, { key, style: computedStyle }))
+        return createElement('input', {
+          key,
+          id: idAttr || undefined,
+          className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
+          style: computedStyle,
+          type: attrs.type || 'text',
+          placeholder: attrs.placeholder || undefined,
+        })
       }
-      return
+      return createElement(tag, { key, style: computedStyle })
     }
 
     const overrideText = idAttr && idAttr in domOverrides ? domOverrides[idAttr] : null
     const children =
       overrideText !== null
         ? overrideText
-        : renderDomTree(el.childNodes, key, cssRules, domOverrides, bindings, onInvokeBinding, onNavigatePath)
+        : renderAstNodes(
+            node.children ?? [],
+            key,
+            cssRules,
+            domOverrides,
+            bindings,
+            onInvokeBinding,
+            onNavigatePath,
+            reactOpts,
+          )
 
     if (tag === 'button') {
       const bound = idAttr ? bindings.find((b) => b.targetId === idAttr && b.event === 'click') : undefined
-      out.push(
+      return (
         <button
           key={key}
           id={idAttr || undefined}
@@ -134,18 +352,21 @@ function renderDomTree(
           className={classAttr ? `wd-btn ${classAttr}` : 'wd-btn'}
           style={computedStyle}
           onClick={() => {
-            if (bound) onInvokeBinding(bound)
+            if (node.hasReactClick && reactOpts) {
+              reactOpts.onReactClick()
+            } else if (bound) {
+              onInvokeBinding(bound)
+            }
           }}
         >
           {children}
-        </button>,
+        </button>
       )
-      return
     }
 
     if (tag === 'a') {
-      const href = el.getAttribute('href') || '/'
-      out.push(
+      const href = attrs.href || '/'
+      return (
         <button
           key={key}
           type="button"
@@ -156,14 +377,13 @@ function renderDomTree(
           }}
         >
           {children}
-        </button>,
+        </button>
       )
-      return
     }
 
     if (tag === 'form') {
       const bound = idAttr ? bindings.find((b) => b.targetId === idAttr && b.event === 'submit') : undefined
-      out.push(
+      return (
         <form
           key={key}
           id={idAttr || undefined}
@@ -175,72 +395,21 @@ function renderDomTree(
           }}
         >
           {children}
-        </form>,
+        </form>
       )
-      return
     }
 
-    out.push(
-      createElement(
-        tag,
-        {
-          key,
-          id: idAttr || undefined,
-          className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
-          style: computedStyle,
-        },
-        children,
-      ),
+    return createElement(
+      tag,
+      {
+        key,
+        id: idAttr || undefined,
+        className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
+        style: computedStyle,
+      },
+      children,
     )
   })
-  return out
-}
-
-function interpolateReactJsx(
-  jsxTemplate: string,
-  stateVal: string | number | boolean | unknown[],
-  fullSource: string,
-): { html: string; buttonActions: Array<{ label: string; kind: 'inc' | 'dec' | 'toggle' }> } {
-  const arrMatch = /const\s+([a-zA-Z_]\w*)\s*=\s*\[([^\]]+)\]/g
-  const arrayVars: Record<string, string[]> = {}
-  let am: RegExpExecArray | null
-  while ((am = arrMatch.exec(fullSource)) !== null) {
-    arrayVars[am[1]] = am[2]
-      .split(',')
-      .map((item) => item.trim().replace(/^['"]|['"]$/g, ''))
-      .filter(Boolean)
-  }
-
-  let out = jsxTemplate
-  const mapRe = /\{([a-zA-Z_]\w*)\.map\(\(\s*([a-zA-Z_]\w*)\s*\)\s*=>\s*(<[^>]+>)\{?\2\}?(<\/[^>]+>)\)\}/g
-  out = out.replace(mapRe, (_m, arrName: string, _param: string, openTag: string, closeTag: string) => {
-    const items = arrayVars[arrName] ?? []
-    return items.map((item) => `${openTag}${item}${closeTag}`).join('')
-  })
-
-  for (const [k, items] of Object.entries(arrayVars)) {
-    out = out.replace(new RegExp(`\\{\\s*${k}\\.length\\s*\\}`, 'g'), String(items.length))
-  }
-
-  out = out.replace(/\{([a-zA-Z_]\w*)\}/g, (_m, expr: string) => {
-    if (expr in arrayVars) return arrayVars[expr].join(', ')
-    return String(stateVal)
-  })
-
-  const buttonActions: Array<{ label: string; kind: 'inc' | 'dec' | 'toggle' }> = []
-  out = out.replace(
-    /<button([^>]*)onClick=\{[^}]+\}([^>]*)>([^<]+)<\/button>/g,
-    (_m, before: string, after: string, label: string) => {
-      const idx = buttonActions.length
-      buttonActions.push({
-        label: label.trim(),
-        kind: label.toLowerCase().includes('-') ? 'dec' : 'inc',
-      })
-      return `<button${before}id="__react-btn-${idx}"${after}>${label}</button>`
-    },
-  )
-
-  return { html: out, buttonActions }
 }
 
 export interface WebDevPreviewPaneProps {
@@ -361,32 +530,15 @@ export function WebDevPreviewPane({
     if (!renderReady) return null
 
     if (jsxFile && reactModel) {
-      const { html, buttonActions } = interpolateReactJsx(
-        reactModel.jsxTemplate,
-        reactCounter,
-        jsxFile.content,
-      )
-      const reactBindings: JsDomBinding[] = buttonActions.map((act, idx) => ({
-        targetId: `__react-btn-${idx}`,
-        event: 'click',
-        domUpdates: {},
-        logMessage: `React setState clicked -> ${act.label}`,
-      }))
-      const doc = new DOMParser().parseFromString(html, 'text/html')
-      return renderDomTree(
-        doc.body.childNodes,
+      const ast = parseMarkupToAst(reactModel.jsxTemplate)
+      const arrayVars = extractReactArrays(jsxFile.content)
+      return renderAstNodes(
+        ast,
         'wd-react',
         cssRules,
         combinedDom,
-        reactBindings,
-        (b) => {
-          onConsoleLogAdded(b.logMessage ?? 'React state updated')
-          setReactCounter((cur) => {
-            if (typeof cur === 'number') return cur + 1
-            if (typeof cur === 'boolean') return !cur
-            return cur
-          })
-        },
+        bindings,
+        handleInvokeBinding,
         (p) => {
           if (p === '/') {
             setActivePath('/')
@@ -396,13 +548,25 @@ export function WebDevPreviewPane({
             handleTestRoute('GET', p, false)
           }
         },
+        {
+          arrayVars,
+          stateVal: reactCounter,
+          onReactClick: () => {
+            onConsoleLogAdded('React setState updated')
+            setReactCounter((cur) => {
+              if (typeof cur === 'number') return cur + 1
+              if (typeof cur === 'boolean') return !cur
+              return cur
+            })
+          },
+        },
       )
     }
 
     if (!htmlFile) return null
-    const doc = new DOMParser().parseFromString(htmlFile.content, 'text/html')
-    return renderDomTree(
-      doc.body.childNodes,
+    const ast = parseMarkupToAst(htmlFile.content)
+    return renderAstNodes(
+      ast,
       'wd-html',
       cssRules,
       combinedDom,
