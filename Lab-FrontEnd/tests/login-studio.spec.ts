@@ -65,6 +65,8 @@ test('responsive studio and reduced motion', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Masuk dengan Google', exact: true })).toBeVisible()
     if (width < 768) await expect(page.getByRole('button', { name: 'Pratinjau studio', exact: true })).toBeHidden()
   }
+  await page.getByRole('button', { name: 'Laptop: IoT simulation', exact: true }).click()
+  await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'iot')
 })
 
 test('green board LED pulses and rear instrument pixels move, then freeze on pause', async ({ page }) => {

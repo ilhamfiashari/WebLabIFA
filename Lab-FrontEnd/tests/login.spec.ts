@@ -23,21 +23,32 @@ for (const width of [360, 390, 768, 1440]) {
   test(`login responsif ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/login')
-    await expect(page.getByRole('heading', { name: 'Eksperimen. Pahami. Kuasai.', exact: true })).toBeVisible()
+    const title = page.getByRole('heading', { name: 'Lab Virtual', exact: true })
+    const hero = page.locator('.hero-image')
+    await expect(title).toBeVisible()
+    await expect(hero).toBeVisible()
+    await expect(page.getByText('Cybersec · IoT · Web', { exact: true })).toBeVisible()
     const button = page.getByRole('button', { name: 'Masuk dengan Google', exact: true })
     await expect(button).toBeVisible()
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44)
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await expect.poll(() => page.evaluate(() => document.fonts.check('16px Inter'))).toBe(true)
     expect(await page.locator('img[src="/assets/google-g.svg"]').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
-    if (width >= 768) {
-      await expect(page.locator('.hero-image')).toBeVisible()
+    if (width >= 900) {
       await expect(page.getByTestId('login-atmosphere')).toBeVisible()
     } else {
-      await expect(page.locator('.hero-image')).toBeVisible()
-      await expect(page.getByText('Pratinjau laboratorium', { exact: true })).toBeVisible()
+      const photo = (await hero.boundingBox())!
+      expect(photo.x).toBe(0)
+      expect(photo.width).toBe(width)
+      expect(photo.y + photo.height).toBeLessThan((await title.boundingBox())!.y)
+      const panelOwnsOverlap = await page.locator('.login-v2-left').evaluate(panel => {
+        const { x, y, width } = panel.getBoundingClientRect()
+        return panel.contains(document.elementFromPoint(x + width / 2, y + 1))
+      })
+      expect(panelOwnsOverlap).toBe(true)
+      await expect(button).toBeInViewport()
       await expect(page.getByText('Gunakan akun Google yang terdaftar.', { exact: true })).toBeVisible()
-      await expect(page.locator('.login-v2-features')).toBeHidden()
+      await expect(page.getByTestId('login-atmosphere')).toBeHidden()
     }
     await page.screenshot({ path: `../docs/screenshots/login-${width}.png`, fullPage: true })
   })
@@ -50,7 +61,7 @@ test('toggle bahasa ID/EN dan pergantian background waktu serta cuaca realtime b
   await expect(page.locator('.hero-image')).toHaveAttribute('src', '/assets/login/lab-day.webp')
 
   await page.getByRole('button', { name: 'EN', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Experiment. Understand. Master.', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Virtual Lab', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sign in with Google', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'ID', exact: true }).click()
 
@@ -107,7 +118,7 @@ test('navigasi keyboard dan tautan informasi', async ({ page }) => {
   await page.goto('/')
   await page.keyboard.press('Tab')
   await expect(page.getByText('Lewati ke konten utama')).toBeFocused()
-  await page.getByRole('link', { name: 'Kebijakan Privasi' }).click()
+  await page.getByRole('link', { name: 'Privasi', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Kebijakan Privasi', exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'halaman Bantuan' }).click()
   await expect(page.getByRole('link', { name: 'lab@example.test' })).toHaveAttribute('href', 'mailto:lab@example.test')
