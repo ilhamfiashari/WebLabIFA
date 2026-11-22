@@ -18,6 +18,7 @@ export interface PublicWeatherResponse {
 export interface SceneDescriptor {
   key: LoginSceneKey
   src: string
+  mobileSrc: string
   labelId: string
   labelEn: string
 }
@@ -26,36 +27,42 @@ export const LOGIN_SCENES: Record<LoginSceneKey, SceneDescriptor> = {
   sunrise: {
     key: 'sunrise',
     src: '/assets/login/lab-sunrise.webp',
+    mobileSrc: '/assets/login/lab-sunrise-mobile.webp',
     labelId: 'Matahari Terbit',
     labelEn: 'Sunrise',
   },
   day: {
     key: 'day',
     src: '/assets/login/lab-day.webp',
+    mobileSrc: '/assets/login/lab-day-mobile.webp',
     labelId: 'Siang Cerah',
     labelEn: 'Daylight',
   },
   sunset: {
     key: 'sunset',
     src: '/assets/login/lab-sunset.webp',
+    mobileSrc: '/assets/login/lab-sunset-mobile.webp',
     labelId: 'Senja',
     labelEn: 'Sunset',
   },
   night: {
     key: 'night',
     src: '/assets/login/lab-night.webp',
+    mobileSrc: '/assets/login/lab-night-mobile.webp',
     labelId: 'Malam',
     labelEn: 'Night',
   },
   rainy: {
     key: 'rainy',
     src: '/assets/login/lab-rainy.webp',
+    mobileSrc: '/assets/login/lab-rainy-mobile.webp',
     labelId: 'Hujan',
     labelEn: 'Rainy',
   },
   snowy: {
     key: 'snowy',
     src: '/assets/login/lab-snowy.webp',
+    mobileSrc: '/assets/login/lab-snowy-mobile.webp',
     labelId: 'Salju',
     labelEn: 'Snowy',
   },

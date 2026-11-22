@@ -35,8 +35,11 @@ for (const width of [360, 390, 768, 1440]) {
     await expect.poll(() => page.evaluate(() => document.fonts.check('16px Inter'))).toBe(true)
     expect(await page.locator('img[src="/assets/google-g.svg"]').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
     if (width >= 900) {
+      await expect(page.locator('.login-v2-divider')).toBeVisible()
+      expect(await hero.evaluate((image: HTMLImageElement) => image.currentSrc)).not.toContain('-mobile.webp')
       await expect(page.getByTestId('login-atmosphere')).toBeVisible()
     } else {
+      await expect(page.locator('.login-v2-divider')).toBeHidden()
       const expectedPhotoHeight = await hero.evaluate(async (image: HTMLImageElement) => {
         await image.decode()
         return image.clientWidth * image.naturalHeight / image.naturalWidth
@@ -48,6 +51,7 @@ for (const width of [360, 390, 768, 1440]) {
       expect(Math.abs(photo.height - expectedPhotoHeight)).toBeLessThan(2)
       expect(photo.y).toBeGreaterThanOrEqual(header.y + header.height)
       await expect(page.locator('.login-lab-stage')).toHaveCSS('mask-image', 'none')
+      expect(await hero.evaluate((image: HTMLImageElement) => image.currentSrc)).toContain('-mobile.webp')
       expect(photo.y + photo.height).toBeLessThan((await title.boundingBox())!.y)
       const panelOwnsOverlap = await page.locator('.login-v2-left').evaluate(panel => {
         const { x, y, width } = panel.getBoundingClientRect()

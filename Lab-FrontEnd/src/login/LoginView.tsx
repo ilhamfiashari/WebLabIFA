@@ -212,15 +212,21 @@ export function LoginView() {
       </section>
 
       <aside className="login-v2-right" aria-label={tr.brand.heroTop} data-scene={scene.key}>
+        <svg className="login-v2-divider" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 0 H64 C88 24 98 52 72 80 C62 90 62 95.5 68 100 H0 Z" />
+        </svg>
         <div className="login-lab-stage">
-          <img
-            className="hero-image"
-            src={scene.src}
-            width="1446"
-            height="1087"
-            alt=""
-            fetchPriority="high"
-          />
+          <picture>
+            <source media="(width < 900px)" srcSet={scene.mobileSrc} />
+            <img
+              className="hero-image"
+              src={scene.src}
+              width="1446"
+              height="1087"
+              alt=""
+              fetchPriority="high"
+            />
+          </picture>
           <LabScene scene={scene} weather={activeWeather} settings={settings} en={lang === 'en'} onSample={setSeconds} />
           <LaptopMenu time={scene.key} selected={laptopSceneAt(seconds, settings.program).mode} onSelect={program => setSettings(s => ({ ...s, program }))} />
         </div>

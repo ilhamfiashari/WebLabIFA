@@ -213,6 +213,21 @@
   background: #071c13;
 }
 
+.login-v2-divider { display: none; }
+
+@media (min-width: 900px) {
+  .login-v2-shell:not([data-preview="true"]) .login-v2-divider {
+    display: block;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 1;
+    width: clamp(44px, 4vw, 64px);
+    height: 100%;
+    fill: var(--login-ground);
+    pointer-events: none;
+  }
+}
+
 /* Keep the image, canvas and clickable laptop menu on the same plane. */
 .login-lab-stage {
   position: absolute;
@@ -224,6 +239,10 @@
   overflow: hidden;
   pointer-events: none;
   mask-image: linear-gradient(#000 0 78%, transparent 100%);
+}
+
+.login-lab-stage picture {
+  display: contents;
 }
 
 .login-lab-stage .hero-image {
