@@ -392,21 +392,17 @@
 @media (width < 900px) {
   .login-v2-shell {
     --login-gutter: clamp(16px, 5vw, 32px);
-    grid-template-areas: "scene" "form";
+    grid-template-areas: "header" "scene" "form";
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
     background: #071c13;
   }
 
   .login-v2-header {
-    grid-area: scene;
-    z-index: 1;
-    align-self: start;
-    padding-top: max(clamp(18px, 5.8vw, 32px), env(safe-area-inset-top));
+    padding-block: max(clamp(12px, 3vw, 20px), env(safe-area-inset-top)) clamp(12px, 3vw, 20px);
     color: #fafbf9;
-    pointer-events: none;
   }
 
-  .login-v2-header > * { pointer-events: auto; }
   .login-v2-header :is(a, button):focus-visible { outline-color: #bfd2b7; }
 
   .login-v2-header .brand {
@@ -427,40 +423,18 @@
 
   .login-v2-right {
     min-height: 0;
-    height: min(clamp(83vw, 60svh, 127vw), 40rem);
     padding: 0;
   }
 
-  /* The original portrait room adds space above the animated workbench. */
-  .login-v2-right::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto;
-    height: calc(100% - 55vw);
-    background: url("/assets/lab-720.webp") left top / 136% auto no-repeat;
-    filter: brightness(.85) saturate(.85);
-    mask-image: linear-gradient(#000 74%, transparent);
-  }
-
-  .login-v2-right:is([data-scene="night"], [data-scene="sunset"])::before {
-    filter: brightness(.5) saturate(.7);
-  }
-
-  .login-v2-right::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, #040d09ed, #07120c8c 25%, transparent 58%);
-    pointer-events: none;
-  }
-
   .login-v2-right .login-lab-stage {
-    inset: auto 0 0;
+    position: relative;
+    inset: auto;
     z-index: 0;
     height: auto;
     min-height: 0;
+    max-height: none;
     aspect-ratio: 1446 / 1087;
-    mask-image: linear-gradient(transparent, #000 20%);
+    mask-image: none;
   }
 
   .login-lab-stage .hero-image { object-position: center top; }
@@ -512,8 +486,6 @@
 @media (768px <= width < 900px) {
   .login-v2-shell { --login-gutter: 40px; }
   .login-v2-main { width: min(100%, 460px); margin-inline: auto; }
-  .login-v2-shell[data-preview="true"] .login-v2-right::before,
-  .login-v2-shell[data-preview="true"] .login-v2-right::after { display: none; }
   .login-v2-shell[data-preview="true"] .login-lab-stage .hero-image { object-position: 32% top; }
   .login-v2-shell[data-preview="true"] .login-studio-dock {
     position: fixed;

@@ -37,9 +37,17 @@ for (const width of [360, 390, 768, 1440]) {
     if (width >= 900) {
       await expect(page.getByTestId('login-atmosphere')).toBeVisible()
     } else {
+      const expectedPhotoHeight = await hero.evaluate(async (image: HTMLImageElement) => {
+        await image.decode()
+        return image.clientWidth * image.naturalHeight / image.naturalWidth
+      })
       const photo = (await hero.boundingBox())!
+      const header = (await page.locator('.login-v2-header').boundingBox())!
       expect(photo.x).toBe(0)
       expect(photo.width).toBe(width)
+      expect(Math.abs(photo.height - expectedPhotoHeight)).toBeLessThan(2)
+      expect(photo.y).toBeGreaterThanOrEqual(header.y + header.height)
+      await expect(page.locator('.login-lab-stage')).toHaveCSS('mask-image', 'none')
       expect(photo.y + photo.height).toBeLessThan((await title.boundingBox())!.y)
       const panelOwnsOverlap = await page.locator('.login-v2-left').evaluate(panel => {
         const { x, y, width } = panel.getBoundingClientRect()
