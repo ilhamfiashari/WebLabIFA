@@ -24,6 +24,8 @@ import { StudioControls } from './StudioControls'
 import { resolveLabWeather, sensorSample, studioScene, useStudioSettings, WEATHER_LABELS } from './studio-model'
 import './login.css'
 
+const DESKTOP_DIVIDER_EDGE = 'M24 0 C24 20 94 28 94 48 S14 69 14 88 Q14 95 27 100'
+
 const messagesId: Record<string, string> = {
   cancelled: 'Login dibatalkan. Anda bisa mencoba lagi saat siap.',
   expired: 'Waktu login habis atau tautan sudah digunakan. Mulai login kembali.',
@@ -213,7 +215,8 @@ export function LoginView() {
 
       <aside className="login-v2-right" aria-label={tr.brand.heroTop} data-scene={scene.key}>
         <svg className="login-v2-divider" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 0 H64 C88 24 98 52 72 80 C62 90 62 95.5 68 100 H0 Z" />
+          <path d={`${DESKTOP_DIVIDER_EDGE} H0 V0 Z`} />
+          <path d={DESKTOP_DIVIDER_EDGE} fill="none" stroke="var(--login-line)" strokeOpacity={0.65} vectorEffect="non-scaling-stroke" />
         </svg>
         <div className="login-lab-stage">
           <picture>
