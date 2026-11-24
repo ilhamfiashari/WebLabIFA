@@ -24,7 +24,8 @@ import { StudioControls } from './StudioControls'
 import { resolveLabWeather, sensorSample, studioScene, useStudioSettings, WEATHER_LABELS } from './studio-model'
 import './login.css'
 
-const DESKTOP_DIVIDER_EDGE = 'M24 0 C24 20 94 28 94 48 S14 69 14 88 Q14 95 27 100'
+const DESKTOP_DIVIDER_EDGE = 'M56 0 C22 4 6 10 6 28 C6 54 14 64 56 76 C86 84 94 92 60 100'
+const DESKTOP_DIVIDER_RIBBON = 'M66 0 C32 4 14 11 14 28 C14 53 23 63 65 75 C94 83 100 92 70 100'
 
 const messagesId: Record<string, string> = {
   cancelled: 'Login dibatalkan. Anda bisa mencoba lagi saat siap.',
@@ -215,8 +216,9 @@ export function LoginView() {
 
       <aside className="login-v2-right" aria-label={tr.brand.heroTop} data-scene={scene.key}>
         <svg className="login-v2-divider" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d={`${DESKTOP_DIVIDER_EDGE} H0 V0 Z`} />
-          <path d={DESKTOP_DIVIDER_EDGE} fill="none" stroke="var(--login-line)" strokeOpacity={0.65} vectorEffect="non-scaling-stroke" />
+          <path d={`${DESKTOP_DIVIDER_RIBBON} H0 V0 Z`} className="login-v2-divider-ribbon" />
+          <path d={`${DESKTOP_DIVIDER_EDGE} H0 V0 Z`} className="login-v2-divider-fill" />
+          <path d={DESKTOP_DIVIDER_EDGE} fill="none" stroke="var(--login-line)" strokeOpacity={0.7} strokeWidth={1.25} vectorEffect="non-scaling-stroke" />
         </svg>
         <div className="login-lab-stage">
           <picture>

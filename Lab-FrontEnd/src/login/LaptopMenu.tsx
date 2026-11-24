@@ -14,7 +14,7 @@ export function LaptopMenu({ time, selected, onSelect }: { time: LoginSceneKey; 
     const g=(dx3*dy2-dx2*dy3)/det, h=(dx1*dy3-dx3*dy1)/det
     const a=x1-x0+g*x1, b=x3-x0+h*x3, d=y1-y0+g*y1, e=y3-y0+h*y3
     const resize = () => {
-      const { width, height } = host.getBoundingClientRect(), scale = Math.max(width/1446, height/1087), offset=(width-1446*scale)*(innerWidth<=1080 ? .32 : 0)
+      const { width, height } = host.getBoundingClientRect(), scale = Math.max(width/1446, height/1087), offset=(width-1446*scale)*(innerWidth < 900 ? .5 : 0)
       menu.style.transform = `translateX(${offset}px) scale(${scale}) matrix3d(${a/1280},${d/1280},0,${g/1280},${b/720},${e/720},0,${h/720},0,0,1,0,${x0},${y0},0,1)`
     }
     const observer = new ResizeObserver(resize); observer.observe(host); resize()

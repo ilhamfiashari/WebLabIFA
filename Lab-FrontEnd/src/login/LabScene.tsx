@@ -58,8 +58,8 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
       if (loadedSrc !== scene.src) { loadedSrc = scene.src; sourcePixels = null; movingPixels = null; greenDimmer = null; photo.src = scene.src }
       ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0); ctx.clearRect(0, 0, w, h)
       const scale = Math.max(w / 1446, h / 1087)
-      // Same cover crop as the photograph: centered on mobile card, 32% on tablet, left-anchored on desktop.
-      const cropAlign = innerWidth <= 767 ? .5 : innerWidth <= 1080 ? .32 : 0
+      // Same cover crop as the photograph: centered on mobile card, left-anchored on desktop so laptop is never clipped.
+      const cropAlign = innerWidth < 900 ? .5 : 0
       ctx.translate((w - 1446 * scale) * cropAlign, 0); ctx.scale(scale, scale)
       drawLabScreen(screenCtx, t, settings.program, weather, settings.distance, settings.network)
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
