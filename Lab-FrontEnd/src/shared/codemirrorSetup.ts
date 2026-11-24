@@ -3,12 +3,16 @@ import {
   autocompletion,
   closeBrackets,
   closeBracketsKeymap,
+  pickedCompletion,
+  type Completion,
+  type CompletionContext,
+  type CompletionResult,
 } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo } from '@codemirror/commands'
 import { cpp } from '@codemirror/lang-cpp'
-import { css } from '@codemirror/lang-css'
-import { html } from '@codemirror/lang-html'
-import { javascript } from '@codemirror/lang-javascript'
+import { cssCompletionSource, cssLanguage } from '@codemirror/lang-css'
+import { autoCloseTags, html, htmlCompletionSourceWith, htmlLanguage } from '@codemirror/lang-html'
+import { javascript, javascriptLanguage } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
 import { python } from '@codemirror/lang-python'
 import { PostgreSQL, sql } from '@codemirror/lang-sql'
@@ -19,7 +23,9 @@ import {
   HighlightStyle,
   indentOnInput,
   indentUnit,
+  LanguageSupport,
   syntaxHighlighting,
+  syntaxTree,
 } from '@codemirror/language'
 import { linter, lintGutter, lintKeymap, type Diagnostic } from '@codemirror/lint'
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search'
@@ -47,6 +53,18 @@ import {
 } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import type { CodeDiagnostic } from './editorDiagnostics'
+import {
+  ALL_HTML_TAG_NAMES,
+  ALL_SVG_TAG_NAMES,
+  CSS_EXTRA_PSEUDOS,
+  CSS_FUNCTIONS,
+  CSS_GLOBAL_KEYWORDS,
+  CSS_MODERN_PROPERTIES,
+  CSS_PROPERTY_VALUES,
+  HTML_EXTRA_EVENT_ATTRS,
+  HTML_EXTRA_GLOBAL_ATTRIBUTES,
+  HTML_EXTRA_TAGS,
+} from '../webdev/webLanguageSpecs'
 
 export type EditorLanguage = 'cpp' | 'html' | 'css' | 'javascript' | 'jsx' | 'typescript' | 'tsx' | 'python' | 'sql' | 'json' | 'plain'
 export type CompletionConfig = NonNullable<Parameters<typeof autocompletion>[0]>
@@ -126,10 +144,188 @@ export function languageForFileName(name: string | null | undefined): EditorLang
   return 'plain'
 }
 
+function applyPlaceholderSnippet(insertText: string): Completion['apply'] {
+  return (view, completion, from, to) => {
+    const placeholder = insertText.indexOf('$0')
+    const insert = placeholder < 0 ? insertText : insertText.replace('$0', '')
+    view.dispatch({
+      changes: { from, to, insert },
+      annotations: pickedCompletion.of(completion),
+      selection: { anchor: from + (placeholder < 0 ? insert.length : placeholder) },
+      userEvent: 'input.complete',
+      scrollIntoView: true,
+    })
+  }
+}
+
+const ENHANCED_CSS_TAGS: Completion[] = Array.from(new Set([...ALL_HTML_TAG_NAMES, ...ALL_SVG_TAG_NAMES])).map(
+  (tag) => ({ label: tag, type: 'type' }),
+)
+
+const ENHANCED_CSS_PROPS: Completion[] = CSS_MODERN_PROPERTIES.map((prop) => ({
+  label: prop,
+  type: 'property',
+  apply: `${prop}: `,
+}))
+
+const ENHANCED_CSS_PSEUDOS: Completion[] = CSS_EXTRA_PSEUDOS.map((pseudo) =>
+  pseudo.endsWith('()')
+    ? { label: pseudo, type: 'class', apply: applyPlaceholderSnippet(`${pseudo.slice(0, -2)}($0)`) }
+    : { label: pseudo, type: 'class' },
+)
+
+const ENHANCED_CSS_FUNCTIONS: Completion[] = CSS_FUNCTIONS.map((fn) => ({
+  label: fn.label,
+  type: 'function',
+  info: fn.detail,
+  boost: 6,
+  apply: applyPlaceholderSnippet(fn.insertText),
+}))
+
+const ENHANCED_CSS_GLOBALS: Completion[] = CSS_GLOBAL_KEYWORDS.map((kw) => ({
+  label: kw,
+  type: 'keyword',
+  boost: 2,
+}))
+
+function mergeUniqueOptions(primary: readonly Completion[], secondary: readonly Completion[]): Completion[] {
+  const seen = new Set<string>()
+  const merged: Completion[] = []
+  for (const list of [primary, secondary]) {
+    for (const opt of list) {
+      if (seen.has(opt.label)) continue
+      seen.add(opt.label)
+      merged.push(opt)
+    }
+  }
+  return merged
+}
+
+/** Unified CSS3/4 completion source combining `@codemirror/lang-css` with property-aware values, modern functions, pseudos, and all HTML5/SVG selectors without duplicates. */
+function enhancedCssCompletionSource(context: CompletionContext): CompletionResult | null {
+  const { state, pos } = context
+  const node = syntaxTree(state).resolveInner(pos, -1)
+  if (/Comment|StringLiteral/.test(node.name)) return null
+
+  const line = state.doc.lineAt(pos)
+  const beforeOnLine = line.text.slice(0, pos - line.from)
+
+  const findParent = (name: string) => {
+    for (let cur: typeof node | null = node; cur; cur = cur.parent) {
+      if (cur.name === name) return cur
+    }
+    return null
+  }
+
+  // `!important`
+  const bangM = /(![a-z]*)$/i.exec(beforeOnLine)
+  if (bangM && (findParent('Declaration') || findParent('Block') || findParent('Styles'))) {
+    return {
+      from: pos - bangM[1].length,
+      to: pos,
+      options: [{ label: '!important', type: 'keyword', boost: 40 }],
+      validFor: /^![a-z]*$/i,
+    }
+  }
+
+  const rawBase = cssCompletionSource(context)
+  const base = rawBase && !('then' in rawBase) ? rawBase : null
+  const baseOptions = base?.options ?? []
+
+  // Pseudo-classes & pseudo-elements (`:hover`, `:focus-visible`, `:has()`, `::before`, `::backdrop`, ...)
+  if (
+    node.name === 'PseudoClassName' ||
+    (node.name === 'PseudoOp' && findParent('PseudoClassSelector')) ||
+    (node.name === 'PseudoClassSelector' && /:+$/.test(beforeOnLine))
+  ) {
+    return {
+      from: base?.from ?? (node.name === 'PseudoClassName' ? node.from : pos),
+      options: mergeUniqueOptions(ENHANCED_CSS_PSEUDOS, baseOptions),
+      validFor: /^[\w-]*$/,
+    }
+  }
+
+  // Declaration value context (`display: flex`, `width: clamp(...)`, colors, CSS vars)
+  const decl = findParent('Declaration')
+  if (decl) {
+    const colon = decl.getChild(':')
+    if (colon && pos >= colon.to) {
+      const propNode = decl.getChild('PropertyName')
+      const propName = propNode ? state.sliceDoc(propNode.from, propNode.to).trim().toLowerCase() : ''
+      const wordM = /([A-Za-z-]*)$/.exec(beforeOnLine)
+      const prefix = wordM?.[1] ?? ''
+      if (!base && !prefix && !context.explicit && !/:\s*$/.test(beforeOnLine)) return null
+
+      const specific: Completion[] = (CSS_PROPERTY_VALUES[propName] ?? []).map((val, idx) => ({
+        label: val,
+        type: 'keyword',
+        boost: 40 - idx,
+      }))
+      return {
+        from: base?.from ?? pos - prefix.length,
+        options: mergeUniqueOptions([...specific, ...ENHANCED_CSS_FUNCTIONS, ...ENHANCED_CSS_GLOBALS], baseOptions),
+        validFor: base?.validFor ?? /^[A-Za-z0-9_-]*$/,
+      }
+    }
+  }
+
+  // Property name inside `{ ... }` or inline `style="..."`
+  if (findParent('Block') || findParent('Styles')) {
+    if (base) {
+      return {
+        ...base,
+        options: mergeUniqueOptions(baseOptions, ENHANCED_CSS_PROPS),
+      }
+    }
+    const wordM = /([A-Za-z-]*)$/.exec(beforeOnLine)
+    const prefix = wordM?.[1] ?? ''
+    if (!prefix && !context.explicit) return null
+    return {
+      from: pos - prefix.length,
+      options: ENHANCED_CSS_PROPS,
+      validFor: /^[A-Za-z-]*$/,
+    }
+  }
+
+  // Top-level selector: merge all HTML5 + SVG tags with base
+  if (base && node.name === 'TagName') {
+    return {
+      ...base,
+      options: mergeUniqueOptions(baseOptions, ENHANCED_CSS_TAGS),
+    }
+  }
+
+  return base
+}
+
+const enhancedCssSupport = new LanguageSupport(
+  cssLanguage,
+  cssLanguage.data.of({ autocomplete: enhancedCssCompletionSource }),
+)
+
+const htmlConfig = {
+  matchClosingTags: true,
+  autoCloseTags: true,
+  selfClosingTags: true,
+  extraTags: HTML_EXTRA_TAGS,
+  extraGlobalAttributes: HTML_EXTRA_GLOBAL_ATTRIBUTES,
+  nestedAttributes: HTML_EXTRA_EVENT_ATTRS.map((name) => ({
+    name,
+    parser: javascriptLanguage.parser,
+  })),
+}
+
+const enhancedHtmlSupport = new LanguageSupport(html(htmlConfig).language, [
+  htmlLanguage.data.of({ autocomplete: htmlCompletionSourceWith(htmlConfig) }),
+  autoCloseTags,
+  javascript().support,
+  enhancedCssSupport.support,
+])
+
 const languageSupports = {
   cpp: cpp(),
-  html: html({ matchClosingTags: true, autoCloseTags: true, selfClosingTags: true }),
-  css: css(),
+  html: enhancedHtmlSupport,
+  css: enhancedCssSupport,
   javascript: javascript(),
   jsx: javascript({ jsx: true }),
   typescript: javascript({ typescript: true }),
