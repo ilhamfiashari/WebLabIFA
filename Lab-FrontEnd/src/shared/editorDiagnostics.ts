@@ -1,6 +1,7 @@
 export interface CodeDiagnostic {
   line: number
   col: number
+  length?: number
   severity: 'error' | 'warning'
   messageId: string
   messageEn: string

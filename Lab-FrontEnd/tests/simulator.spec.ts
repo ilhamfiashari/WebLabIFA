@@ -1,4 +1,8 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+
+async function readSketch(editor: Locator) {
+  return (await editor.locator('.cm-line').allTextContents()).join('\n')
+}
 
 const student = {
   id: '00000000-0000-0000-0000-000000000011',
@@ -916,35 +920,32 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByRole('button', { name: /Misi 3 · Monitoring DHT22/ })).toBeDisabled()
 
   // Background kode putih pada mode terang + syntax highlighting C++ (.ino)
-  const codeBg = await page.locator('.iot-code-wrap').evaluate((el) => getComputedStyle(el).backgroundColor)
+  const codeBg = await page.locator('.iot-sketch-editor .cm-editor').evaluate((el) => getComputedStyle(el).backgroundColor)
   expect(codeBg).toBe('rgb(255, 255, 255)')
-  await expect(page.locator('.iot-code-highlight .tok-comment').first()).toBeVisible()
-  await expect(page.locator('.iot-code-highlight .tok-preproc').first()).toBeVisible()
-  await expect(page.locator('.iot-code-highlight .tok-type').first()).toBeVisible()
-  await expect(page.locator('.iot-code-highlight .tok-builtin').first()).toBeVisible()
-  await expect(page.locator('.iot-code-highlight .tok-string').first()).toBeVisible()
-  const preprocColor = await page.locator('.iot-code-highlight .tok-preproc').first().evaluate((el) => getComputedStyle(el).color)
-  const commentColor = await page.locator('.iot-code-highlight .tok-comment').first().evaluate((el) => getComputedStyle(el).color)
+  await expect(page.locator('.cm-content .tok-comment').first()).toBeVisible()
+  await expect(page.locator('.cm-content .tok-preproc').first()).toBeVisible()
+  await expect(page.locator('.cm-content .tok-type').first()).toBeVisible()
+  await expect(page.locator('.cm-content .tok-builtin').first()).toBeVisible()
+  await expect(page.locator('.cm-content .tok-string').first()).toBeVisible()
+  const preprocColor = await page.locator('.cm-content .tok-preproc').first().evaluate((el) => getComputedStyle(el).color)
+  const commentColor = await page.locator('.cm-content .tok-comment').first().evaluate((el) => getComputedStyle(el).color)
   expect(preprocColor).not.toBe('rgb(30, 41, 59)')
   expect(commentColor).not.toBe(preprocColor)
 
   // Autocomplete suggestion muncul saat mengetik kode C++/Arduino dan dapat disisipkan via Enter
   const codeEditor = page.getByLabel('Kode program mikrokontroler')
-  const originalCode = await codeEditor.inputValue()
-  await codeEditor.click()
-  await codeEditor.evaluate((el: HTMLTextAreaElement) => {
-    el.selectionStart = el.value.length
-    el.selectionEnd = el.value.length
-  })
-  await page.keyboard.type('\n  dig')
-  const acBox = page.getByRole('listbox', { name: 'Saran kode C++' })
+  const originalCode = await readSketch(codeEditor)
+  await codeEditor.press('ControlOrMeta+End')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('  dig')
+  const acBox = page.getByRole('listbox', { name: 'Saran kode' })
   await expect(acBox).toBeVisible()
   await expect(acBox.getByRole('option', { name: /digitalWrite/ })).toBeVisible()
   await expect(acBox).toContainText('2 parameter')
-  await expect(acBox).toContainText('uint8_t pin')
+  await expect(page.locator('.cm-completionInfo')).toContainText('uint8_t pin')
   await page.keyboard.press('Enter')
   await expect(acBox).toHaveCount(0)
-  await expect(codeEditor).toHaveValue(/digitalWrite\(\)/)
+  await expect(codeEditor).toContainText('digitalWrite()')
   // Signature Help seperti VS Code muncul saat mengetik parameter di dalam (...)
   const sigBox = page.getByRole('status', { name: 'Info parameter fungsi' })
   await expect(sigBox).toBeVisible()
@@ -955,21 +956,27 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   // Uji auto-indentation saat Enter di dalam blok `{` serta tombol Rapikan (Format)
   await codeEditor.fill('void loop() {\ndigitalWrite(2, HIGH);\n}')
   await page.getByRole('button', { name: 'Rapikan' }).click()
-  await expect(codeEditor).toHaveValue('void loop() {\n  digitalWrite(2, HIGH);\n}')
-  await codeEditor.focus()
-  await codeEditor.evaluate((el: HTMLTextAreaElement) => {
-    const idx = el.value.indexOf('{') + 1
-    el.selectionStart = idx
-    el.selectionEnd = idx
-  })
+  await expect.poll(() => readSketch(codeEditor)).toBe('void loop() {\n  digitalWrite(2, HIGH);\n}')
+  await codeEditor.press('ControlOrMeta+Home')
+  await page.keyboard.press('End')
   await page.keyboard.press('Enter')
-  await page.keyboard.type('delay(100);')
-  await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
+  await page.keyboard.insertText('delay(100);')
+  await expect.poll(() => readSketch(codeEditor)).toBe('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
   // Undo & Redo via keyboard di editor kode
   await page.keyboard.press('ControlOrMeta+z')
-  await expect(codeEditor).toHaveValue('void loop() {\n  delay()\n  digitalWrite(2, HIGH);\n}')
+  await expect(codeEditor).not.toContainText('delay(100);')
+  await page.getByRole('tab', { name: 'Components' }).click()
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  await codeEditor.focus()
   await page.keyboard.press('ControlOrMeta+y')
-  await expect(codeEditor).toHaveValue('void loop() {\n  delay(100);\n  digitalWrite(2, HIGH);\n}')
+  await expect(codeEditor).toContainText('delay(100);')
+  await codeEditor.press('ControlOrMeta+f')
+  await page.getByRole('textbox', { name: 'Cari', exact: true }).pressSequentially('digitalWrite')
+  await expect(page.locator('.cm-searchMatch').first()).toHaveText('digitalWrite')
+  await page.getByRole('textbox', { name: 'Ganti', exact: true }).pressSequentially('analogWrite')
+  await page.getByRole('button', { name: 'ganti semua', exact: true }).click()
+  await expect(codeEditor).toContainText('analogWrite(2, HIGH);')
+  await page.keyboard.press('Escape')
   await codeEditor.fill(originalCode)
 
   // Cek tab Components lengkap dengan Microcontrollers, Sensors, Input Devices, Displays, Actuators, Passive & 3 ukuran Breadboard
@@ -1059,7 +1066,7 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(mcuGroup.getByRole('button', { name: /Arduino Uno #2/ })).toBeVisible()
   await expect(mcuGroup.getByRole('button', { name: /Pi Pico #3/ })).toBeVisible()
   await mcuGroup.getByRole('button', { name: /Arduino Uno #2/ }).click()
-  await expect(page.getByLabel('Kode program mikrokontroler')).toHaveValue(/Firmware Arduino Uno #2/)
+  await expect(page.getByLabel('Kode program mikrokontroler')).toContainText('Firmware Arduino Uno #2')
   await mcuGroup.getByRole('button', { name: /MCU 1/ }).click()
   await page.getByText('Pi Pico #3', { exact: true }).dispatchEvent('pointerdown')
   await page.getByText('Pi Pico #3', { exact: true }).dispatchEvent('pointerup')
@@ -1107,7 +1114,14 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.getByRole('tab', { name: 'pins.h' })).toBeVisible()
   await page.getByLabel('Kode program mikrokontroler').fill('#define CUSTOM_LED 2\n')
   await page.getByRole('tab', { name: 'Main.ino' }).click()
-  const mainCodeNow = await page.getByLabel('Kode program mikrokontroler').inputValue()
+  const mainCodeNow = await readSketch(page.getByLabel('Kode program mikrokontroler'))
+  await page.getByRole('tab', { name: 'pins.h' }).click()
+  await codeEditor.press('ControlOrMeta+z')
+  await expect(codeEditor).not.toContainText('CUSTOM_LED')
+  await codeEditor.press('ControlOrMeta+y')
+  await expect(codeEditor).toContainText('#define CUSTOM_LED 2')
+  await page.getByRole('tab', { name: 'Main.ino' }).click()
+  await expect.poll(() => readSketch(codeEditor)).toBe(mainCodeNow)
   await page.getByLabel('Kode program mikrokontroler').fill(`#include "pins.h"\n${mainCodeNow}`)
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await page.getByRole('button', { name: 'Jalankan' }).click()
@@ -1545,31 +1559,30 @@ test('editor IoT menandai baris dengan red error seketika ketika kurang ; atau t
 
   const editor = page.getByLabel('Kode program mikrokontroler')
   await expect(editor).toBeVisible()
-  const original = await editor.inputValue()
+  const original = await readSketch(editor)
 
   // Sketch bawaan bebas error
   await expect(page.locator('.iot-editor-statusbar')).toContainText('0 Error')
-  await expect(page.locator('.iot-error-line-bg')).toHaveCount(0)
+  await expect(page.locator('.cm-error-line')).toHaveCount(0)
 
   // Hapus tanda `;` pada baris pinMode(LED_PIN, OUTPUT); -> red error muncul tepat pada baris 8
   await editor.fill(original.replace('pinMode(LED_PIN, OUTPUT);', 'pinMode(LED_PIN, OUTPUT)'))
-  await expect(page.locator('.iot-line-gutter .is-error-line[data-error-line="8"]')).toBeVisible()
-  await expect(page.locator('.iot-error-line-bg[data-error-line="8"]')).toBeVisible()
-  const squiggle = page.locator('.iot-code-highlight .ed-code-error-squiggle[data-error-line="8"]')
+  await expect(page.locator('.cm-gutter-lint .cm-lint-marker-error')).toBeVisible()
+  const errorLine = page.locator('.cm-error-line[data-error-line="8"]')
+  await expect(errorLine).toBeVisible()
+  const squiggle = errorLine.locator('.cm-lintRange-error').first()
   await expect(squiggle).toBeVisible()
-  const decoStyle = await squiggle.evaluate((el) => getComputedStyle(el).textDecorationStyle)
-  expect(decoStyle).toBe('wavy')
   await expect(page.locator('.iot-compile-error')).toContainText('Baris 8')
   await expect(page.locator('.iot-compile-error')).toContainText("titik koma (';')")
   await expect(page.locator('.iot-editor-statusbar')).toContainText('1 Error · Ln 8')
 
   // Error syntax argumen tanpa koma pada pinMode(LED_PIN OUTPUT); -> juga ditandai merah pada baris 8
   await editor.fill(original.replace('pinMode(LED_PIN, OUTPUT);', 'pinMode(LED_PIN OUTPUT);'))
-  await expect(page.locator('.iot-error-line-bg[data-error-line="8"]')).toBeVisible()
+  await expect(errorLine).toBeVisible()
   await expect(page.locator('.iot-compile-error')).toContainText('Kurang koma')
 
   // Perbaiki kembali -> seluruh tanda red error hilang otomatis
   await editor.fill(original)
-  await expect(page.locator('.iot-error-line-bg')).toHaveCount(0)
+  await expect(page.locator('.cm-error-line')).toHaveCount(0)
   await expect(page.locator('.iot-editor-statusbar')).toContainText('0 Error')
 })

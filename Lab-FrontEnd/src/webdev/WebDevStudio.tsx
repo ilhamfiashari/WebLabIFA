@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlignLeft,
@@ -35,36 +35,17 @@ import type {
   WebDevSqlTable,
 } from './types'
 import { WebDevPreviewPane, type PreviewSubTab } from './WebDevPreviewPane'
-import {
-  detectFileLanguage,
-  getWebDevAutocomplete,
-  tokenizeWebDevCode,
-  type WebDevAcSuggestion,
-} from './webHighlight'
-import {
-  formatWebDevCode,
-  getLineCol,
-  handleHtmlAutoCloseTag,
-  handleHtmlClosingSlash,
-  handleSmartBackspace,
-  handleSmartClosingBrace,
-  handleSmartIndent,
-  handleWebSmartEnter,
-  handleWebSmartPairOrClose,
-} from './webEditorHelpers'
+import { formatWebDevCode } from './webEditorHelpers'
+import { webDevSnippets } from './cmWebDev'
 import { lintWebDevCode } from './webDiagnostics'
-import { lineColToOffset, type CodeDiagnostic } from '../shared/editorDiagnostics'
+import type { CodeDiagnostic } from '../shared/editorDiagnostics'
+import { CodeMirrorEditor, type CodeMirrorHandle } from '../shared/CodeMirrorEditor'
+import { editorIndentSize, editorLanguageLabel, languageForFileName } from '../shared/codemirrorSetup'
 import {
   EditorDiagnosticsList,
   EditorStatusDiagnosticPill,
-  HighlightedCodeLines,
 } from '../shared/EditorDiagnosticsUi'
 import './webdev.css'
-
-const EDITOR_LINE_HEIGHT = 19.375
-const EDITOR_PAD_TOP = 12
-const EDITOR_PAD_LEFT = 14
-const EDITOR_CHAR_WIDTH = 7.5
 
 function useDarkTheme(): boolean {
   const [dark, setDark] = useState(
@@ -96,7 +77,7 @@ interface ExecSnapshot {
 
 function runSandboxFiles(files: WebDevFile[], markReady: boolean): ExecSnapshot {
   const jsFiles = files.filter(
-    (f) => f.name.toLowerCase().endsWith('.js') || f.name.toLowerCase().endsWith('.ts'),
+    (f) => /\.(js|mjs|cjs|ts|mts|cts)$/i.test(f.name),
   )
   const jsxFiles = files.filter(
     (f) => f.name.toLowerCase().endsWith('.jsx') || f.name.toLowerCase().endsWith('.tsx'),
@@ -181,21 +162,12 @@ export function WebDevStudio({
   const [focusMode, setFocusMode] = useState<'normal' | 'editor' | 'preview'>('normal')
   const [splitWidth, setSplitWidth] = useState(500)
   const workbenchRef = useRef<HTMLDivElement | null>(null)
-  const codeShellRef = useRef<HTMLDivElement | null>(null)
-  const editorRef = useRef<HTMLTextAreaElement | null>(null)
+  const editorRef = useRef<CodeMirrorHandle | null>(null)
+  const [editorEpoch, setEditorEpoch] = useState(0)
 
   const [newFileMode, setNewFileMode] = useState(false)
   const [newFileDraft, setNewFileDraft] = useState('')
   const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 })
-  const [acState, setAcState] = useState<{
-    replaceStart: number
-    replaceEnd: number
-    items: WebDevAcSuggestion[]
-    activeIndex: number
-    topPx: number
-    leftPx: number
-  } | null>(null)
-
   const projectsQ = useQuery({
     queryKey: ['webdev-projects'],
     queryFn: () => simApi.listWebDevProjects(),
@@ -286,6 +258,7 @@ export function WebDevStudio({
     setActiveMissionId(spec.id)
     setActiveProjectId(null)
     setProjectTitle(en ? spec.titleEn : spec.titleId)
+    setEditorEpoch((epoch) => epoch + 1)
     setFiles(spec.starterFiles)
     setActiveFileName(spec.starterFiles[0]?.name ?? 'index.html')
     setExecState(runSandboxFiles(spec.starterFiles, false))
@@ -300,6 +273,7 @@ export function WebDevStudio({
     setActiveMissionId(null)
     setActiveProjectId(null)
     setProjectTitle(en ? 'Blank Web App' : 'Proyek Web Baru')
+    setEditorEpoch((epoch) => epoch + 1)
     setFiles(BLANK_WEBDEV_FILES)
     setActiveFileName('index.html')
     setExecState(runSandboxFiles(BLANK_WEBDEV_FILES, false))
@@ -314,6 +288,7 @@ export function WebDevStudio({
     setActiveMissionId(p.mission_id ?? null)
     setActiveProjectId(isInstructor && savedTab === 'students' ? null : p.id)
     setProjectTitle(p.title)
+    setEditorEpoch((epoch) => epoch + 1)
     setFiles(nextFiles)
     setActiveFileName(nextFiles[0].name)
     setExecState(runSandboxFiles(nextFiles, false))
@@ -400,78 +375,12 @@ export function WebDevStudio({
     },
   })
 
-  const computeAcPosition = (content: string, offset: number) => {
-    const { line, col } = getLineCol(content, offset)
-    const rawTopBelow = EDITOR_PAD_TOP + line * EDITOR_LINE_HEIGHT + 2
-    const rawLeft = EDITOR_PAD_LEFT + Math.max(0, col - 1) * EDITOR_CHAR_WIDTH
-    const shell = codeShellRef.current
-    if (!shell) {
-      return { topPx: rawTopBelow, leftPx: Math.min(rawLeft, 240) }
-    }
-    const visibleBottom = shell.scrollTop + shell.clientHeight
-    const topPx =
-      rawTopBelow + 220 > visibleBottom && line > 8
-        ? Math.max(4, EDITOR_PAD_TOP + (line - 1) * EDITOR_LINE_HEIGHT - 210)
-        : rawTopBelow
-    const minLeft = shell.scrollLeft + 8
-    const maxLeft = Math.max(minLeft, shell.scrollLeft + shell.clientWidth - 368)
-    const leftPx = Math.max(minLeft, Math.min(rawLeft, maxLeft))
-    return { topPx, leftPx }
-  }
-
-  const refreshAutocomplete = (nextContent: string, offset: number, force = false) => {
-    setCursorPos(getLineCol(nextContent, offset))
-    const ac = getWebDevAutocomplete(nextContent, offset, activeFile.name, force)
-    if (!ac) {
-      setAcState(null)
-      return
-    }
-    const coords = computeAcPosition(nextContent, offset)
-    setAcState({ ...ac, activeIndex: 0, ...coords })
-  }
-
-  const handleCodeChange = (nextContent: string, cursorOffset: number | null, forceAc = false) => {
-    const nextFiles = files.map((f) =>
-      f.name === activeFile.name ? { ...f, content: nextContent } : f,
+  const handleCodeChange = (nextContent: string) => {
+    const nextFiles = files.map((file) =>
+      file.name === activeFile.name ? { ...file, content: nextContent } : file,
     )
     setFiles(nextFiles)
-    if (execState.renderReady) {
-      setExecState(runSandboxFiles(nextFiles, true))
-    }
-    if (cursorOffset !== null) {
-      refreshAutocomplete(nextContent, cursorOffset, forceAc)
-    } else {
-      setAcState(null)
-    }
-  }
-
-  const applyEditorEdit = (
-    nextCode: string,
-    selStart: number,
-    selEnd = selStart,
-    shouldTriggerAc = false,
-  ) => {
-    handleCodeChange(nextCode, shouldTriggerAc ? selStart : null)
-    setCursorPos(getLineCol(nextCode, selStart))
-    requestAnimationFrame(() => {
-      const el = editorRef.current
-      if (!el) return
-      el.focus()
-      el.setSelectionRange(selStart, selEnd)
-    })
-  }
-
-  const insertSuggestion = (item: WebDevAcSuggestion) => {
-    if (!acState) return
-    const cur = activeFile.content
-    const lineStart = cur.lastIndexOf('\n', acState.replaceStart - 1) + 1
-    const lineIndent = (/^[ \t]*/.exec(cur.slice(lineStart, acState.replaceStart))?.[0]) ?? ''
-    const rawInsert = item.insertText.replace(/\n/g, `\n${lineIndent}`)
-    const cleanInsert = rawInsert.replace('$0', '')
-    const caretOffset = rawInsert.includes('$0') ? rawInsert.indexOf('$0') : cleanInsert.length
-    const next = cur.slice(0, acState.replaceStart) + cleanInsert + cur.slice(acState.replaceEnd)
-    const nextPos = acState.replaceStart + caretOffset
-    applyEditorEdit(next, nextPos, nextPos, false)
+    if (execState.renderReady) setExecState(runSandboxFiles(nextFiles, true))
   }
 
   const createNewFile = () => {
@@ -482,22 +391,26 @@ export function WebDevStudio({
       )
       return
     }
-    if (files.some((f) => f.name.toLowerCase() === clean.toLowerCase())) {
-      setActiveFileName(clean)
+    const existing = files.find((file) => file.name.toLowerCase() === clean.toLowerCase())
+    if (existing) {
+      setActiveFileName(existing.name)
       setNewFileMode(false)
       setNewFileDraft('')
       return
     }
-    const starter =
-      clean.endsWith('.py')
-        ? '# Python / FastAPI module\nprint("Module ready")\n'
-        : clean.endsWith('.sql')
-          ? '-- PostgreSQL schema\nSELECT 1;\n'
-          : clean.endsWith('.css')
-            ? '.box { padding: 12px; }\n'
-            : clean.endsWith('.html')
-              ? '<section class="card">\n  <h2>Bagian Baru</h2>\n</section>\n'
-              : '// Modul JavaScript baru\nconsole.log("Loaded");\n'
+    const starter = {
+      html: '<section>\n  <h2>Bagian Baru</h2>\n</section>\n',
+      css: '.box { padding: 12px; }\n',
+      javascript: 'console.log("Loaded");\n',
+      typescript: 'const title: string = "Halaman Web";\n',
+      jsx: 'export default function App() {\n  return <h1>Halaman Web</h1>;\n}\n',
+      tsx: 'export default function App() {\n  return <h1>Halaman Web</h1>;\n}\n',
+      python: 'print("Module ready")\n',
+      sql: 'SELECT 1;\n',
+      json: '{}\n',
+      cpp: '',
+      plain: '',
+    }[languageForFileName(clean)]
     const nextFiles = [...files, { name: clean, content: starter }]
     setFiles(nextFiles)
     setActiveFileName(clean)
@@ -505,40 +418,33 @@ export function WebDevStudio({
     setNewFileDraft('')
   }
 
-  const formatCurrentFile = () => {
-    const formatted = formatWebDevCode(activeFile.content, fileLang)
-    handleCodeChange(formatted, null)
-    setCursorPos({ line: 1, col: 1 })
-    requestAnimationFrame(() => editorRef.current?.focus())
+  const editorLanguage = languageForFileName(activeFile.name)
+  const languageLabel = editorLanguageLabel(editorLanguage, en)
+  const snippets = useMemo(() => webDevSnippets(activeFile.name, en), [activeFile.name, en])
+  const editorDiagnostics = useMemo(
+    () => lintWebDevCode(activeFile.content, editorLanguage),
+    [activeFile.content, editorLanguage],
+  )
+  const editorSnapshot = useRef<{ files: WebDevFile[]; active: string } | null>(null)
+  useLayoutEffect(() => {
+    editorSnapshot.current = { files, active: activeFile.name }
+    return () => { editorSnapshot.current = null }
+  }, [files, activeFile.name, execState.renderReady])
+
+  const formatCurrentFile = async () => {
+    const requested = editorSnapshot.current
+    try {
+      const formatted = await formatWebDevCode(activeFile.content, editorLanguage)
+      if (requested !== editorSnapshot.current) return
+      if (formatted !== activeFile.content) handleCodeChange(formatted)
+    } catch {
+      if (requested !== editorSnapshot.current) return
+      setStatusNotice(en ? 'Check the syntax before formatting this file.' : 'Periksa sintaks sebelum merapikan file ini.')
+    }
   }
 
-  const fileLang = detectFileLanguage(activeFile.name)
-  const tokens = useMemo(() => tokenizeWebDevCode(activeFile.content, fileLang), [activeFile.content, fileLang])
-  const lineCount = Math.max(16, activeFile.content.split('\n').length)
-  const safeCursorLine = Math.min(Math.max(1, cursorPos.line), lineCount)
-  const editorDiagnostics = useMemo(
-    () => lintWebDevCode(activeFile.content, fileLang),
-    [activeFile.content, fileLang],
-  )
-  const errorLineMap = useMemo(
-    () => new Map(editorDiagnostics.map((d) => [d.line, d])),
-    [editorDiagnostics],
-  )
-  const errorLineSet = useMemo(() => new Set(errorLineMap.keys()), [errorLineMap])
-
   const jumpToDiagnostic = (diag: CodeDiagnostic) => {
-    const el = editorRef.current
-    if (!el) return
-    const offset = lineColToOffset(activeFile.content, diag.line, diag.col)
-    el.focus()
-    el.setSelectionRange(offset, offset)
-    setCursorPos({ line: diag.line, col: diag.col })
-    setAcState(null)
-    const shell = codeShellRef.current
-    if (shell) {
-      const targetTop = Math.max(0, (diag.line - 1) * EDITOR_LINE_HEIGHT - shell.clientHeight / 3)
-      shell.scrollTo({ top: targetTop, behavior: 'smooth' })
-    }
+    editorRef.current?.jumpTo(diag.line, diag.col)
   }
 
   const achievements = projectsQ.data?.achievements ?? []
@@ -858,9 +764,9 @@ export function WebDevStudio({
 
       {/* Dual-Pane Interactive IDE + Right Web Preview */}
       <div className="wd-workbench" ref={workbenchRef}>
-        {focusMode !== 'preview' && (
           <section
             className="wd-editor-pane"
+            hidden={focusMode === 'preview'}
             style={focusMode === 'normal' ? { flex: `0 0 ${splitWidth}px` } : { flex: '1 1 100%' }}
             aria-label={en ? 'Web Code Editor' : 'Editor Kode Aplikasi Web'}
           >
@@ -872,11 +778,7 @@ export function WebDevStudio({
                   role="tab"
                   aria-selected={activeFile.name === f.name}
                   className={`wd-file-tab ${activeFile.name === f.name ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setActiveFileName(f.name)
-                    setAcState(null)
-                    setCursorPos({ line: 1, col: 1 })
-                  }}
+                  onClick={() => setActiveFileName(f.name)}
                 >
                   {f.name}
                 </button>
@@ -895,8 +797,17 @@ export function WebDevStudio({
                 <button
                   type="button"
                   className="btn-outline iot-mini-btn"
+                  onClick={() => editorRef.current?.find()}
+                  title={en ? 'Find and replace (Ctrl/⌘+F)' : 'Cari dan ganti (Ctrl/⌘+F)'}
+                >
+                  <Search size={12} /> {en ? 'Find' : 'Cari'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline iot-mini-btn"
                   title={en ? 'Format code (Shift+Alt+F)' : 'Rapikan indentasi kode (Shift+Alt+F)'}
-                  onClick={formatCurrentFile}
+                  onClick={() => void formatCurrentFile()}
+                  disabled={editorLanguage === 'plain' || editorLanguage === 'cpp'}
                 >
                   <AlignLeft size={12} /> {en ? 'Format' : 'Rapikan'}
                 </button>
@@ -920,7 +831,7 @@ export function WebDevStudio({
                     {editorDiagnostics.length} {en ? 'Error' : 'Error'}
                   </Badge>
                 )}
-                <Badge tone="info">{fileLang.toUpperCase()}</Badge>
+                <Badge tone="info">{languageLabel}</Badge>
               </div>
             </div>
 
@@ -950,224 +861,26 @@ export function WebDevStudio({
               </div>
             )}
 
-            <div
-              ref={codeShellRef}
+            <CodeMirrorEditor
+              key={editorEpoch}
+              ref={editorRef}
               className={`wd-code-shell ${isDark ? 'theme-dark' : 'theme-light'}`}
-            >
-              <div className="wd-line-gutter" aria-hidden="true">
-                {Array.from({ length: lineCount }, (_, idx) => {
-                  const lineNo = idx + 1
-                  const err = errorLineMap.get(lineNo)
-                  const cls = [
-                    'wd-line-num',
-                    lineNo === safeCursorLine ? 'is-active-line' : '',
-                    err ? 'is-error-line' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')
-                  return (
-                    <div
-                      key={lineNo}
-                      className={cls}
-                      data-error-line={err ? lineNo : undefined}
-                      title={err ? (en ? err.messageEn : err.messageId) : undefined}
-                      onClick={err ? () => jumpToDiagnostic(err) : undefined}
-                    >
-                      {lineNo}
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="wd-code-stage">
-                <div
-                  className="wd-active-line-bg"
-                  aria-hidden="true"
-                  style={{ top: EDITOR_PAD_TOP + (safeCursorLine - 1) * EDITOR_LINE_HEIGHT }}
-                />
-                {editorDiagnostics.map((d) => (
-                  <div
-                    key={`wd-err-bg-${d.line}`}
-                    className="wd-error-line-bg"
-                    data-error-line={d.line}
-                    style={{ top: EDITOR_PAD_TOP + (d.line - 1) * EDITOR_LINE_HEIGHT }}
-                    aria-hidden="true"
-                  />
-                ))}
-                <pre className="wd-code-highlight" aria-hidden="true">
-                  <code>
-                    <HighlightedCodeLines
-                      tokens={tokens}
-                      classPrefix="wd-tok-"
-                      errorLines={errorLineSet}
-                    />
-                  </code>
-                </pre>
-                <textarea
-                  ref={editorRef}
-                  aria-label={en ? 'Web source code editor' : 'Kode program aplikasi web'}
-                  className="wd-code-textarea"
-                  spellCheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  wrap="off"
-                  value={activeFile.content}
-                  onChange={(e) => handleCodeChange(e.target.value, e.target.selectionStart)}
-                  onClick={(e) => {
-                    setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart))
-                    setAcState(null)
-                  }}
-                  onKeyUp={(e) => {
-                    setCursorPos(getLineCol(e.currentTarget.value, e.currentTarget.selectionStart))
-                  }}
-                  onBlur={() => setAcState(null)}
-                  onKeyDown={(e) => {
-                    const el = e.currentTarget
-                    const start = el.selectionStart
-                    const end = el.selectionEnd
-
-                    if ((e.ctrlKey || e.metaKey) && (e.code === 'Space' || e.key === ' ')) {
-                      e.preventDefault()
-                      refreshAutocomplete(el.value, start, true)
-                      return
-                    }
-
-                    if (e.shiftKey && e.altKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f')) {
-                      e.preventDefault()
-                      formatCurrentFile()
-                      return
-                    }
-
-                    if (e.key === '>') {
-                      const closeRes = handleHtmlAutoCloseTag(el.value, start, end, fileLang)
-                      if (closeRes) {
-                        e.preventDefault()
-                        applyEditorEdit(closeRes.nextCode, closeRes.nextCursor, closeRes.nextCursor, false)
-                        return
-                      }
-                    }
-
-                    if (e.key === '/') {
-                      const slashRes = handleHtmlClosingSlash(el.value, start, end, fileLang)
-                      if (slashRes) {
-                        e.preventDefault()
-                        applyEditorEdit(slashRes.nextCode, slashRes.nextCursor, slashRes.nextCursor, false)
-                        return
-                      }
-                    }
-
-                    if (acState && acState.items.length > 0) {
-                      if (e.key === 'ArrowDown') {
-                        e.preventDefault()
-                        setAcState({ ...acState, activeIndex: (acState.activeIndex + 1) % acState.items.length })
-                        return
-                      }
-                      if (e.key === 'ArrowUp') {
-                        e.preventDefault()
-                        setAcState({
-                          ...acState,
-                          activeIndex: (acState.activeIndex - 1 + acState.items.length) % acState.items.length,
-                        })
-                        return
-                      }
-                      if (e.key === 'Enter' || e.key === 'Tab') {
-                        e.preventDefault()
-                        insertSuggestion(acState.items[acState.activeIndex])
-                        return
-                      }
-                      if (e.key === 'Escape') {
-                        e.preventDefault()
-                        setAcState(null)
-                        return
-                      }
-                      if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
-                        setAcState(null)
-                      }
-                    }
-
-                    if (e.key === 'Tab') {
-                      e.preventDefault()
-                      const indentRes = handleSmartIndent(el.value, start, end, e.shiftKey)
-                      applyEditorEdit(indentRes.nextCode, indentRes.nextSelStart, indentRes.nextSelEnd, false)
-                      return
-                    }
-
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      const enterRes = handleWebSmartEnter(el.value, start, end, fileLang)
-                      applyEditorEdit(enterRes.nextCode, enterRes.nextCursor, enterRes.nextCursor, false)
-                      return
-                    }
-
-                    if (e.key === '}') {
-                      const closeBraceRes = handleSmartClosingBrace(el.value, start, end)
-                      if (closeBraceRes) {
-                        e.preventDefault()
-                        applyEditorEdit(closeBraceRes.nextCode, closeBraceRes.nextCursor, closeBraceRes.nextCursor, false)
-                        return
-                      }
-                    }
-
-                    if (['(', '{', '[', '"', "'", '`', ')', ']'].includes(e.key) || e.key === '}') {
-                      const pairRes = handleWebSmartPairOrClose(el.value, start, end, e.key, fileLang)
-                      if (pairRes) {
-                        e.preventDefault()
-                        applyEditorEdit(pairRes.nextCode, pairRes.nextCursor, pairRes.nextCursor, false)
-                        return
-                      }
-                    }
-
-                    if (e.key === 'Backspace') {
-                      const bsRes = handleSmartBackspace(el.value, start, end)
-                      if (bsRes) {
-                        e.preventDefault()
-                        applyEditorEdit(bsRes.nextCode, bsRes.nextCursor, bsRes.nextCursor, false)
-                        return
-                      }
-                    }
-                  }}
-                />
-                {acState && acState.items.length > 0 && (
-                  <div
-                    className="wd-ac-popup"
-                    style={{ top: acState.topPx, left: acState.leftPx }}
-                    role="listbox"
-                    aria-label={en ? 'Code suggestions' : 'Saran kode'}
-                    onMouseDown={(ev) => ev.preventDefault()}
-                  >
-                    <div className="wd-ac-list">
-                      {acState.items.map((item, idx) => (
-                        <button
-                          key={item.label}
-                          type="button"
-                          role="option"
-                          aria-selected={idx === acState.activeIndex}
-                          className={`wd-ac-item ${idx === acState.activeIndex ? 'is-active' : ''}`}
-                          onMouseDown={(ev) => {
-                            ev.preventDefault()
-                            insertSuggestion(item)
-                          }}
-                        >
-                          <span className="wd-ac-item-row">
-                            <span className="wd-ac-kind">{item.kind}</span>
-                            <span className="wd-ac-label">{item.label}</span>
-                          </span>
-                          <span className="wd-muted">{en ? item.detailEn : item.detailId}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="wd-ac-footer">
-                      <span>{en ? 'Enter/Tab insert · Esc close' : 'Enter/Tab sisip · Esc tutup'}</span>
-                      <span>Ctrl+Space</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+              docKey={activeFile.name}
+              value={activeFile.content}
+              language={editorLanguage}
+              dark={isDark}
+              ariaLabel={en ? 'Web source code editor' : 'Kode program aplikasi web'}
+              diagnostics={editorDiagnostics}
+              en={en}
+              context={snippets}
+              onChange={handleCodeChange}
+              onCursorChange={setCursorPos}
+              onFormat={() => void formatCurrentFile()}
+            />
             <div className="wd-editor-statusbar" aria-label={en ? 'Editor status bar' : 'Status bar editor'}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span>
-                  Ln {cursorPos.line}, Col {cursorPos.col} · {fileLang.toUpperCase()} · UTF-8 · Spaces: 2
+                  Ln {cursorPos.line}, Col {cursorPos.col} · {languageLabel} · UTF-8 · Spaces: {editorIndentSize(editorLanguage)}
                 </span>
                 <EditorStatusDiagnosticPill
                   diagnostics={editorDiagnostics}
@@ -1176,11 +889,10 @@ export function WebDevStudio({
                 />
               </span>
               <span>
-                {en ? 'Auto-Close HTML · Ctrl+Space Suggest · Shift+Alt+F Format' : 'Auto-Close HTML · Ctrl+Space Saran · Shift+Alt+F Rapikan'}
+                {en ? 'Ctrl+Space Suggest · Shift+Alt+F Format' : 'Ctrl+Space Saran · Shift+Alt+F Rapikan'}
               </span>
             </div>
           </section>
-        )}
 
         {focusMode === 'normal' && (
           <div

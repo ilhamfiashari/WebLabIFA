@@ -64,6 +64,11 @@ function classifyWord(word: string, afterDotOrArrow: boolean, isPreprocHeader: b
   return 'plain'
 }
 
+/** Classify a single identifier with the Arduino-aware palette (types, builtins, constants). */
+export function classifyArduinoWord(word: string, afterDotOrArrow = false): CppTokenType {
+  return classifyWord(word, afterDotOrArrow, false)
+}
+
 /** Tokenize an Arduino/C++ sketch into syntax-highlighted segments. */
 export function tokenizeArduinoCpp(code: string): CppToken[] {
   const tokens: CppToken[] = []

@@ -1,5 +1,3 @@
-export type WebDevFileLang = 'html' | 'css' | 'js' | 'jsx' | 'python' | 'sql' | 'json' | 'text'
-
 export interface WebDevFile {
   name: string
   content: string
