@@ -40,33 +40,16 @@ import { simApi } from '../simulator/api'
 import { BOARDS, COMPONENT_CATALOG, WIRE_COLORS, getBoardInstances, getComponentSpec, isBreadboardKind } from './boards'
 import { CircuitCanvas } from './CircuitCanvas'
 import { BoardThumbnail, PartThumbnail } from './CircuitSvgComponents'
-import {
-  applyAutocompleteItem,
-  formatSuggestionSignature,
-  getArduinoAutocomplete,
-  getArduinoSignatureHelp,
-  type AcSuggestion,
-  type SignatureHelpResult,
-} from './cppAutocomplete'
-import {
-  formatArduinoCpp,
-  getLineCol,
-  handleSmartBackspace,
-  handleSmartClosingBrace,
-  handleSmartEnter,
-  handleSmartIndent,
-  handleSmartPairOrClose,
-} from './cppEditorHelpers'
+import { arduinoCompletion, arduinoContext, arduinoSignatureHelp, arduinoSyntaxExtras } from './cmArduino'
+import { formatArduinoCpp } from './cppEditorHelpers'
 import { lintArduinoCpp } from './cppDiagnostics'
-import { tokenizeArduinoCpp } from './cppHighlight'
 import { lintWebDevCode } from '../webdev/webDiagnostics'
-import { detectFileLanguage } from '../webdev/webHighlight'
-import { lineColToOffset, type CodeDiagnostic } from '../shared/editorDiagnostics'
-import {
-  EditorDiagnosticsList,
-  EditorStatusDiagnosticPill,
-  HighlightedCodeLines,
-} from '../shared/EditorDiagnosticsUi'
+import { formatWebDevCode } from '../webdev/webEditorHelpers'
+import { CodeMirrorEditor, type CodeMirrorHandle } from '../shared/CodeMirrorEditor'
+import { editorIndentSize, editorLanguageLabel, languageForFileName } from '../shared/codemirrorSetup'
+import { webDevSnippets } from '../webdev/cmWebDev'
+import type { CodeDiagnostic } from '../shared/editorDiagnostics'
+import { EditorDiagnosticsList, EditorStatusDiagnosticPill } from '../shared/EditorDiagnosticsUi'
 import {
   analyzeProjectFileSync,
   compileArduinoSketch,
@@ -106,17 +89,6 @@ let uidCounter = 1
 function nextUid(prefix: string): string {
   uidCounter += 1
   return `${prefix}-${uidCounter}`
-}
-
-const AC_KIND_GLYPHS: Record<AcSuggestion['kind'], string> = {
-  fn: 'ƒ',
-  method: '𝑚',
-  kw: 'k',
-  type: '𝑡',
-  const: '𝑐',
-  var: '𝑥',
-  hdr: '#',
-  snip: '□',
 }
 
 interface CircuitSnapshot {
@@ -229,16 +201,8 @@ export function IotSimulatorStudio({
   const gestureActiveRef = useRef(false)
   const gestureSnapshotRef = useRef<CircuitSnapshot | null>(null)
   const lastPropUndoRef = useRef<{ nodeId: string; at: number } | null>(null)
-  const codeHistoryRef = useRef<
-    Record<
-      string,
-      {
-        past: Array<{ code: string; cursor: number }>
-        future: Array<{ code: string; cursor: number }>
-        lastTypedAt: number
-      }
-    >
-  >({})
+  const [editorEpoch, setEditorEpoch] = useState(0)
+  const editorHandleRef = useRef<CodeMirrorHandle | null>(null)
 
   useEffect(() => {
     liveCircuitRef.current = { boardId, components, wires }
@@ -342,7 +306,7 @@ export function IotSimulatorStudio({
     if (isFullscreen) {
       setIsFullscreen(false)
       if (document.fullscreenElement) {
-        void document.exitFullscreen?.().catch(() => {})
+        void document.exitFullscreen?.().catch(() => { })
       }
       return
     }
@@ -350,11 +314,10 @@ export function IotSimulatorStudio({
     if (focusMode === 'normal') {
       setFocusMode('focus')
     }
-    void studioRef.current?.requestFullscreen?.().catch(() => {})
+    void studioRef.current?.requestFullscreen?.().catch(() => { })
   }
   const componentsRef = useRef(components)
   const wiresRef = useRef(wires)
-  const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileMenuRef = useRef<HTMLDivElement | null>(null)
   const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
   const [editingNodeId, setEditingNodeId] = useState<string>('board')
@@ -364,15 +327,6 @@ export function IotSimulatorStudio({
   const [fileActionMode, setFileActionMode] = useState<'new' | 'rename' | null>(null)
   const [fileNameDraft, setFileNameDraft] = useState('')
   const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 })
-  const [acState, setAcState] = useState<{
-    replaceStart: number
-    replaceEnd: number
-    items: AcSuggestion[]
-    activeIndex: number
-    topPx: number
-    leftPx: number
-  } | null>(null)
-  const [sigHelp, setSigHelp] = useState<(SignatureHelpResult & { topPx: number; leftPx: number }) | null>(null)
 
   useEffect(() => {
     if (!showFileMenu) return
@@ -420,27 +374,6 @@ export function IotSimulatorStudio({
     setActiveCode(next)
   }
 
-  const refreshSignatureHint = (nextCode: string, cursor: number | null) => {
-    if (cursor === null || cursor < 0) {
-      setSigHelp(null)
-      return
-    }
-    const sig = getArduinoSignatureHelp(nextCode, cursor)
-    if (!sig) {
-      setSigHelp(null)
-      return
-    }
-    const beforeLines = nextCode.slice(0, cursor).split('\n')
-    const lineIdx = beforeLines.length - 1
-    const colIdx = beforeLines[lineIdx]?.length ?? 0
-    const topPx = lineIdx >= 4 ? Math.max(6, lineIdx * 19.375 - 78) : lineIdx * 19.375 + 34
-    setSigHelp({
-      ...sig,
-      topPx,
-      leftPx: Math.min(Math.max(8, colIdx * 7.5 + 10), 96),
-    })
-  }
-
   const autocompleteExtraFiles = useMemo(() => {
     if (activeExtraFileObj) {
       return [
@@ -451,137 +384,39 @@ export function IotSimulatorStudio({
     return extraFiles
   }, [activeExtraFileObj, activeCode, extraFiles])
 
-  const refreshAutocomplete = (nextCode: string, cursor: number | null, force = false) => {
-    refreshSignatureHint(nextCode, cursor)
-    if (cursor === null || cursor < 0) {
-      setAcState(null)
-      return
-    }
-    const res = getArduinoAutocomplete(nextCode, cursor, force, autocompleteExtraFiles)
-    if (!res) {
-      setAcState(null)
-      return
-    }
-    const beforeLines = nextCode.slice(0, cursor).split('\n')
-    const lineIdx = beforeLines.length - 1
-    const colIdx = beforeLines[lineIdx]?.length ?? 0
-    setAcState({
-      ...res,
-      activeIndex: 0,
-      topPx: lineIdx * 19.375 + 34,
-      leftPx: Math.min(Math.max(8, colIdx * 7.5 + 10), 110),
-    })
-  }
-
-  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
-  const codeHistoryKey = activeExtraFileObj ? `file:${activeExtraFileObj.name}` : `mcu:${activeEditingNodeId}`
-
-  const recordCodeHistory = (prevCode: string, prevCursor: number, coalesceTyping = false) => {
-    const bucket = (codeHistoryRef.current[codeHistoryKey] ??= { past: [], future: [], lastTypedAt: 0 })
-    const now = Date.now()
-    if (coalesceTyping && bucket.past.length > 0 && now - bucket.lastTypedAt < 550) {
-      bucket.lastTypedAt = now
-      bucket.future = []
-      return
-    }
-    bucket.past = [...bucket.past.slice(-99), { code: prevCode, cursor: prevCursor }]
-    bucket.future = []
-    bucket.lastTypedAt = coalesceTyping ? now : 0
-  }
-
-  const undoActiveCode = () => {
-    const bucket = codeHistoryRef.current[codeHistoryKey]
-    if (!bucket || bucket.past.length === 0) return
-    const prev = bucket.past[bucket.past.length - 1]
-    bucket.past = bucket.past.slice(0, -1)
-    const curCursor = codeTextareaRef.current?.selectionStart ?? displayedCode.length
-    bucket.future = [...bucket.future.slice(-99), { code: displayedCode, cursor: curCursor }]
-    bucket.lastTypedAt = 0
-    pendingSelectionRef.current = { start: prev.cursor, end: prev.cursor }
-    setCursorPos(getLineCol(prev.code, prev.cursor))
-    setAcState(null)
-    if (codeTextareaRef.current) {
-      codeTextareaRef.current.value = prev.code
-      codeTextareaRef.current.setSelectionRange(prev.cursor, prev.cursor)
-    }
-    setDisplayedCode(prev.code)
-  }
-
-  const redoActiveCode = () => {
-    const bucket = codeHistoryRef.current[codeHistoryKey]
-    if (!bucket || bucket.future.length === 0) return
-    const next = bucket.future[bucket.future.length - 1]
-    bucket.future = bucket.future.slice(0, -1)
-    const curCursor = codeTextareaRef.current?.selectionStart ?? displayedCode.length
-    bucket.past = [...bucket.past.slice(-99), { code: displayedCode, cursor: curCursor }]
-    bucket.lastTypedAt = 0
-    pendingSelectionRef.current = { start: next.cursor, end: next.cursor }
-    setCursorPos(getLineCol(next.code, next.cursor))
-    setAcState(null)
-    if (codeTextareaRef.current) {
-      codeTextareaRef.current.value = next.code
-      codeTextareaRef.current.setSelectionRange(next.cursor, next.cursor)
-    }
-    setDisplayedCode(next.code)
-  }
-
+  const activeEditorFileName = activeExtraFileObj ? activeExtraFileObj.name : 'Main.ino'
+  const activeEditorLanguage = languageForFileName(activeEditorFileName)
+  const editorDocKey = activeExtraFileObj ? `file:${activeExtraFileObj.name}` : `mcu:${activeEditingNodeId}`
+  const languageLabel = editorLanguageLabel(activeEditorLanguage, en)
+  const editorContext = useMemo(
+    () => activeEditorLanguage === 'cpp'
+      ? arduinoContext.of({ files: autocompleteExtraFiles, en })
+      : webDevSnippets(activeEditorFileName, en),
+    [activeEditorLanguage, activeEditorFileName, autocompleteExtraFiles, en],
+  )
+  const formatTarget = useRef<object | null>(null)
   useLayoutEffect(() => {
-    const pending = pendingSelectionRef.current
-    const ta = codeTextareaRef.current
-    if (pending && ta) {
-      ta.setSelectionRange(pending.start, pending.end)
-      pendingSelectionRef.current = null
-    }
-  }, [displayedCode])
+    formatTarget.current = {}
+    return () => { formatTarget.current = null }
+  }, [editorDocKey, displayedCode, editorEpoch])
 
-  const applyEditorMutation = (nextCode: string, selStart: number, selEnd = selStart, runAc = false) => {
-    setCursorPos(getLineCol(nextCode, selStart))
-    if (runAc) refreshAutocomplete(nextCode, selStart, false)
-    else {
-      setAcState(null)
-      refreshSignatureHint(nextCode, selStart)
+  const formatSketchCode = async () => {
+    const target = formatTarget.current
+    try {
+      const formatted = activeEditorLanguage === 'cpp'
+        ? formatArduinoCpp(displayedCode)
+        : await formatWebDevCode(displayedCode, activeEditorLanguage)
+      if (target !== formatTarget.current) return
+      if (formatted !== displayedCode) setDisplayedCode(formatted)
+      setStatusNotice(en ? 'Code formatted.' : 'Kode dirapikan.')
+    } catch {
+      if (target !== formatTarget.current) return
+      setStatusNotice(en ? 'Check the syntax before formatting this file.' : 'Periksa sintaks sebelum merapikan file ini.')
     }
-    const ta = codeTextareaRef.current
-    if (nextCode === displayedCode) {
-      if (ta) {
-        ta.focus()
-        ta.setSelectionRange(selStart, selEnd)
-      }
-      return
-    }
-    recordCodeHistory(displayedCode, ta?.selectionStart ?? selStart, false)
-    pendingSelectionRef.current = { start: selStart, end: selEnd }
-    if (ta) {
-      ta.value = nextCode
-      ta.setSelectionRange(selStart, selEnd)
-    }
-    setDisplayedCode(nextCode)
-  }
-
-  const formatSketchCode = () => {
-    const formatted = formatArduinoCpp(displayedCode)
-    applyEditorMutation(formatted, Math.min(formatted.length, codeTextareaRef.current?.selectionStart ?? 0))
-    setStatusNotice(en ? 'Code auto-indented cleanly.' : 'Kode dirapikan dengan auto-indent.')
   }
 
   const jumpToDiagnostic = (diag: CodeDiagnostic) => {
-    const ta = codeTextareaRef.current
-    if (!ta) return
-    const offset = lineColToOffset(displayedCode, diag.line, diag.col)
-    ta.focus()
-    ta.setSelectionRange(offset, offset)
-    setCursorPos({ line: diag.line, col: diag.col })
-    const wrap = ta.closest('.iot-code-wrap')
-    if (wrap) {
-      const targetTop = Math.max(0, (diag.line - 1) * 19.375 - wrap.clientHeight / 3)
-      wrap.scrollTo({ top: targetTop, behavior: 'smooth' })
-    }
-  }
-
-  const acceptAutocomplete = (item: AcSuggestion) => {
-    if (!acState) return
-    const { nextCode, nextCursor } = applyAutocompleteItem(displayedCode, acState.replaceStart, acState.replaceEnd, item)
-    applyEditorMutation(nextCode, nextCursor)
+    editorHandleRef.current?.jumpTo(diag.line, diag.col)
   }
 
   const normalizeSketchFileName = (raw: string): string => {
@@ -632,7 +467,6 @@ export function IotSimulatorStudio({
       setActiveCustomFile(normalized)
       setFileActionMode(null)
       setFileNameDraft('')
-      setAcState(null)
       setStatusNotice(
         en
           ? `Created ${normalized}. Include it via #include "${normalized}".`
@@ -865,7 +699,7 @@ export function IotSimulatorStudio({
     const ctx = audioCtxRef.current
     if (!ctx || ctx.state === 'closed') return
     if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {})
+      void ctx.resume().catch(() => { })
     }
     const [buzzId, active] = entry
     const comp = componentsRef.current.find((c) => c.id === buzzId)
@@ -915,7 +749,7 @@ export function IotSimulatorStudio({
             const vm = vmRef.current
             if (vm?.sim.running) syncBuzzerAudio(vm.sim.buzzerActive, true, audioOnRef.current)
           })
-          .catch(() => {})
+          .catch(() => { })
       }
       return ctx
     } catch {
@@ -1047,13 +881,12 @@ export function IotSimulatorStudio({
     }
     vmRef.current = null
     clearCircuitHistory({ boardId: preset.board, components: preset.components, wires: preset.wires })
-    codeHistoryRef.current = {}
+    setEditorEpoch((epoch) => epoch + 1)
     setBoardId(preset.board)
     setEditingNodeId('board')
     setExtraFiles(preset.files ?? [])
     setActiveCustomFile(null)
     setFileActionMode(null)
-    setAcState(null)
     setActivePresetId(preset.id)
     setActiveMissionId(preset.missionId ?? null)
     setActiveProjectId(null)
@@ -1072,12 +905,11 @@ export function IotSimulatorStudio({
     const starterCode = `// ${blankTitle}\nvoid setup() {\n  Serial.begin(115200);\n  Serial.println("Blank Canvas Siap!");\n}\n\nvoid loop() {\n  delay(500);\n}`
     vmRef.current = null
     clearCircuitHistory({ boardId, components: [], wires: [] })
-    codeHistoryRef.current = {}
+    setEditorEpoch((epoch) => epoch + 1)
     setEditingNodeId('board')
     setExtraFiles([])
     setActiveCustomFile(null)
     setFileActionMode(null)
-    setAcState(null)
     setLeftTab('code')
     setActivePresetId('esp32-c3-blank')
     setActiveMissionId(null)
@@ -1151,9 +983,9 @@ export function IotSimulatorStudio({
       nextComps = hasPrimary
         ? cur.components.map((c) => (c.kind === 'mcu' && c.id === 'board' ? { ...c, x, y } : c))
         : [
-            ...cur.components,
-            { id: 'board', kind: 'mcu', boardId: cur.boardId, x, y, label: BOARDS[cur.boardId].shortName, props: {} },
-          ]
+          ...cur.components,
+          { id: 'board', kind: 'mcu', boardId: cur.boardId, x, y, label: BOARDS[cur.boardId].shortName, props: {} },
+        ]
     } else {
       nextComps = cur.components.map((c) => (c.id === nodeId ? { ...c, x, y } : c))
     }
@@ -1175,7 +1007,7 @@ export function IotSimulatorStudio({
     const loadedFiles = Array.isArray(p.files) ? p.files : []
     vmRef.current = null
     clearCircuitHistory({ boardId: p.board, components: p.components, wires: p.wires })
-    codeHistoryRef.current = {}
+    setEditorEpoch((epoch) => epoch + 1)
     setBoardId(p.board)
     setEditingNodeId('board')
     setActivePresetId(loadedFiles.length > 0 ? 'esp32-c3-blank' : 'custom')
@@ -1185,7 +1017,6 @@ export function IotSimulatorStudio({
     setCode(p.code)
     setExtraFiles(loadedFiles)
     setFileActionMode(null)
-    setAcState(null)
     if (options?.focusFile === 'diagram.json') {
       setActiveCustomFile(null)
       setDiagramDraft(null)
@@ -1400,9 +1231,6 @@ export function IotSimulatorStudio({
     return c.nameId.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q) || c.kind.includes(q)
   })
 
-  const acActiveItem = acState ? (acState.items[acState.activeIndex] ?? acState.items[0] ?? null) : null
-  const acActiveSig = acActiveItem ? formatSuggestionSignature(acActiveItem) : null
-
   const activeMissionLock = activeMissionId
     ? getMissionUnlockStatus(activeMissionId)
     : { unlocked: true, reason: null }
@@ -1432,19 +1260,12 @@ export function IotSimulatorStudio({
 
   const iotAchievements = projectsQ.data?.achievements ?? []
   const earnedAchCount = iotAchievements.filter((a) => a.earned).length
-  const lineCount = Math.max(18, displayedCode.split('\n').length)
-  const highlightedTokens = useMemo(() => tokenizeArduinoCpp(displayedCode), [displayedCode])
-  const activeEditorDiagnostics = useMemo<CodeDiagnostic[]>(() => {
-    if (activeCustomFile && /\.(html?|css|jsx?|tsx?|py|sql|json)$/i.test(activeCustomFile)) {
-      return lintWebDevCode(displayedCode, detectFileLanguage(activeCustomFile))
-    }
-    return lintArduinoCpp(displayedCode)
-  }, [displayedCode, activeCustomFile])
-  const errorLineMap = useMemo(
-    () => new Map(activeEditorDiagnostics.map((d) => [d.line, d])),
-    [activeEditorDiagnostics],
+  const activeEditorDiagnostics = useMemo<CodeDiagnostic[]>(
+    () => activeEditorLanguage === 'cpp'
+      ? lintArduinoCpp(displayedCode)
+      : lintWebDevCode(displayedCode, activeEditorLanguage),
+    [displayedCode, activeEditorLanguage],
   )
-  const errorLineSet = useMemo(() => new Set(errorLineMap.keys()), [errorLineMap])
   const activeMcuCompileError = useMemo(() => {
     if (activeEditingNodeId === 'board') {
       if (extraFiles.length > 0) return compileArduinoSketch(activeCode, extraFiles).compileError
@@ -1764,237 +1585,237 @@ export function IotSimulatorStudio({
       {/* Top Project / Preset / Speed Controls */}
       {focusMode === 'normal' && !isFullscreen ? (
         <section className="card iot-controls-bar" aria-label={en ? 'Workspace Header' : 'Pengaturan Proyek'}>
-        <div className="iot-ctrl-group">
-          <label className="iot-inline-label">
-            <span>{en ? 'Board' : 'Mikrokontroler'}</span>
-            <select
-              aria-label={en ? 'Select board' : 'Pilih board'}
-              className="sim-select-full"
-              value={boardId}
-              onChange={(e) => switchBoard(e.target.value as BoardId)}
-            >
-              {Object.values(BOARDS).map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </label>
+          <div className="iot-ctrl-group">
+            <label className="iot-inline-label">
+              <span>{en ? 'Board' : 'Mikrokontroler'}</span>
+              <select
+                aria-label={en ? 'Select board' : 'Pilih board'}
+                className="sim-select-full"
+                value={boardId}
+                onChange={(e) => switchBoard(e.target.value as BoardId)}
+              >
+                {Object.values(BOARDS).map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </label>
 
-          <label className="iot-inline-label">
-            <span>{en ? 'Template / Mission' : 'Template & Misi'}</span>
-            <select
-              aria-label={en ? 'Select preset or mission' : 'Pilih template atau misi'}
-              className="sim-select-full"
-              value={activePresetId}
-              onChange={(e) => loadPreset(e.target.value)}
-            >
-              {corePresets.map((p) => {
-                const lock = p.missionId ? getMissionUnlockStatus(p.missionId) : { unlocked: true, reason: null }
-                const label = en ? p.titleEn : p.titleId
-                return (
-                  <option key={p.id} value={p.id} disabled={!lock.unlocked}>
-                    {!lock.unlocked ? `🔒 ${label}` : label}
-                  </option>
-                )
-              })}
-              {mode === 'dosen' && dosenShowcasePresets.length > 0 ? (
-                <optgroup label={en ? 'Instructor · Wokwi Interactive Projects' : 'Dosen · Contoh Proyek Belajar Wokwi'}>
-                  {dosenShowcasePresets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {en ? p.titleEn : p.titleId}
+            <label className="iot-inline-label">
+              <span>{en ? 'Template / Mission' : 'Template & Misi'}</span>
+              <select
+                aria-label={en ? 'Select preset or mission' : 'Pilih template atau misi'}
+                className="sim-select-full"
+                value={activePresetId}
+                onChange={(e) => loadPreset(e.target.value)}
+              >
+                {corePresets.map((p) => {
+                  const lock = p.missionId ? getMissionUnlockStatus(p.missionId) : { unlocked: true, reason: null }
+                  const label = en ? p.titleEn : p.titleId
+                  return (
+                    <option key={p.id} value={p.id} disabled={!lock.unlocked}>
+                      {!lock.unlocked ? `🔒 ${label}` : label}
                     </option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
-          </label>
+                  )
+                })}
+                {mode === 'dosen' && dosenShowcasePresets.length > 0 ? (
+                  <optgroup label={en ? 'Instructor · Wokwi Interactive Projects' : 'Dosen · Contoh Proyek Belajar Wokwi'}>
+                    {dosenShowcasePresets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {en ? p.titleEn : p.titleId}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+            </label>
 
-          <label className="iot-inline-label">
-            <span>{en ? 'Project Title' : 'Nama Proyek'}</span>
-            <input className="input" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} style={{ minWidth: 185 }} />
-          </label>
-        </div>
-
-        <div className="iot-ctrl-actions">
-          <div className="iot-wire-picker" title={en ? 'New wire color' : 'Warna kabel baru'}>
-            {WIRE_COLORS.map((wc) => (
-              <button
-                key={wc.id}
-                type="button"
-                className={`iot-color-dot ${wireColor === wc.id ? 'is-selected' : ''}`}
-                style={{ background: wc.id }}
-                aria-label={en ? wc.nameEn : wc.nameId}
-                onClick={() => setWireColor(wc.id)}
-              />
-            ))}
+            <label className="iot-inline-label">
+              <span>{en ? 'Project Title' : 'Nama Proyek'}</span>
+              <input className="input" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} style={{ minWidth: 185 }} />
+            </label>
           </div>
-          <select
-            aria-label={en ? 'Simulation speed' : 'Kecepatan simulasi'}
-            className="sim-select-full"
-            style={{ width: 'auto', minWidth: 74 }}
-            value={String(speed)}
-            onChange={(e) => setSpeed(Number(e.target.value) as 0.5 | 1 | 2)}
-          >
-            <option value="0.5">0.5×</option>
-            <option value="1">1×</option>
-            <option value="2">2×</option>
-          </select>
-          <button
-            type="button"
-            className="btn-outline iot-mini-btn"
-            onClick={() => {
-              const next = !audioOn
-              setAudioOn(next)
-              if (next) unlockAudio()
-            }}
-            aria-label={audioOn ? (en ? 'Mute buzzer sound' : 'Bisukan suara buzzer') : (en ? 'Unmute buzzer sound' : 'Aktifkan suara buzzer')}
-            title={en ? 'Toggle buzzer sound' : 'Aktifkan/bisukan suara buzzer'}
-          >
-            {audioOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
-          </button>
-        </div>
-      </section>
+
+          <div className="iot-ctrl-actions">
+            <div className="iot-wire-picker" title={en ? 'New wire color' : 'Warna kabel baru'}>
+              {WIRE_COLORS.map((wc) => (
+                <button
+                  key={wc.id}
+                  type="button"
+                  className={`iot-color-dot ${wireColor === wc.id ? 'is-selected' : ''}`}
+                  style={{ background: wc.id }}
+                  aria-label={en ? wc.nameEn : wc.nameId}
+                  onClick={() => setWireColor(wc.id)}
+                />
+              ))}
+            </div>
+            <select
+              aria-label={en ? 'Simulation speed' : 'Kecepatan simulasi'}
+              className="sim-select-full"
+              style={{ width: 'auto', minWidth: 74 }}
+              value={String(speed)}
+              onChange={(e) => setSpeed(Number(e.target.value) as 0.5 | 1 | 2)}
+            >
+              <option value="0.5">0.5×</option>
+              <option value="1">1×</option>
+              <option value="2">2×</option>
+            </select>
+            <button
+              type="button"
+              className="btn-outline iot-mini-btn"
+              onClick={() => {
+                const next = !audioOn
+                setAudioOn(next)
+                if (next) unlockAudio()
+              }}
+              aria-label={audioOn ? (en ? 'Mute buzzer sound' : 'Bisukan suara buzzer') : (en ? 'Unmute buzzer sound' : 'Aktifkan suara buzzer')}
+              title={en ? 'Toggle buzzer sound' : 'Aktifkan/bisukan suara buzzer'}
+            >
+              {audioOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {/* Guided Practicum Missions Strip */}
       {focusMode === 'normal' && !isFullscreen ? (
-      <section className="card iot-missions-strip" aria-label={en ? 'IoT Missions & Achievements' : 'Misi & Pencapaian IoT'}>
-        {!isInstructor && (!canAccessIotStudio || !iotTrackEnabled || !canSubmitIot) ? (
-          <div className="feedback wrong" role="alert" style={{ marginBottom: 4 }}>
-            <Lock size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-            {!iotTrackEnabled
-              ? en
-                ? 'IoT practicum track is disabled by Admin.'
-                : 'Jalur praktikum IoT dinonaktifkan Admin.'
-              : !canAccessIotStudio
+        <section className="card iot-missions-strip" aria-label={en ? 'IoT Missions & Achievements' : 'Misi & Pencapaian IoT'}>
+          {!isInstructor && (!canAccessIotStudio || !iotTrackEnabled || !canSubmitIot) ? (
+            <div className="feedback wrong" role="alert" style={{ marginBottom: 4 }}>
+              <Lock size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              {!iotTrackEnabled
                 ? en
-                  ? 'Your IoT Studio access right has been locked by Admin. Contact an administrator.'
-                  : 'Hak akses IoT Studio Anda dikunci Admin. Hubungi Admin atau Dosen.'
-                : en
-                  ? 'Mission submission permission is restricted for your account by Admin.'
-                  : 'Hak kirim penilaian/misi Anda sedang dikunci Admin (mode baca saja).'}
-          </div>
-        ) : null}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 10,
-            flexWrap: 'wrap',
-            marginBottom: 8,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: 13 }}>
-              {en
-                ? `IoT Missions (${completedSet.size}/${IOT_MISSIONS.length} Completed)`
-                : `Misi Praktikum IoT (${completedSet.size}/${IOT_MISSIONS.length} Tuntas)`}
-            </strong>
-            <Badge tone={isInstructor ? 'info' : 'muted'}>
-              {isInstructor
-                ? en ? 'Lecturer · All 10 Missions Open' : 'Dosen · Semua 10 Misi Terbuka'
-                : en ? 'Sequential · Unlock in Order' : 'Bertahap · Kunci Hak Akses Berurutan'}
-            </Badge>
-            {iotAchievements.length > 0 && (
-              <button
-                type="button"
-                className="btn-outline iot-mini-btn"
-                onClick={() => setShowIotBadgesDrawer((v) => !v)}
-                aria-expanded={showIotBadgesDrawer}
-              >
-                <Award size={12} /> {earnedAchCount}/{iotAchievements.length} Achievement IoT
-              </button>
-            )}
-          </div>
-        </div>
-        {showIotBadgesDrawer && iotAchievements.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} aria-label="Achievement IoT">
-            {iotAchievements.map((ach) => (
-              <span key={ach.id} title={`${ach.detail} (+${ach.xp} XP)`}>
-                <Badge tone={ach.earned ? 'good' : 'muted'}>
-                  {ach.earned ? '★ ' : '○ '}
-                  {ach.title}
-                </Badge>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="iot-mission-tabs">
-          {IOT_MISSIONS.map((m) => {
-            const isSelected = activeMissionId === m.id
-            const isDone = completedSet.has(m.id)
-            const lock = getMissionUnlockStatus(m.id)
-            return (
-              <button
-                key={m.id}
-                type="button"
-                disabled={!lock.unlocked}
-                aria-disabled={!lock.unlocked}
-                title={lock.reason ?? (en ? m.objectiveEn : m.objectiveId)}
-                className={`iot-mission-pill ${isSelected ? 'is-active' : ''} ${isDone ? 'is-done' : ''} ${!lock.unlocked ? 'is-locked' : ''}`}
-                onClick={() => loadPreset(m.presetId)}
-              >
-                {!lock.unlocked ? (
-                  <Lock size={12} />
-                ) : isDone ? (
-                  <CheckCircle2 size={13} />
-                ) : (
-                  <Sparkles size={13} />
-                )}
-                <span>{en ? m.titleEn : m.titleId}</span>
-              </button>
-            )
-          })}
-        </div>
-        {submitMissionMut.isError && (
-          <p className="feedback wrong" role="alert" style={{ marginTop: 8 }}>
-            {submitMissionMut.error instanceof Error
-              ? submitMissionMut.error.message
-              : en
-                ? 'Server rejected mission verification. Check circuit, wiring, and simulation output.'
-                : 'Verifikasi misi ditolak server. Periksa rangkaian, kabel, dan jalankan simulasi terlebih dahulu.'}
-          </p>
-        )}
-        {activeMission ? (
-          <div className="iot-mission-status">
-            <div>
-              <strong>{en ? 'Mission Checklist:' : 'Kriteria Misi:'}</strong>{' '}
-              <span className="muted">{en ? activeMission.objectiveEn : activeMission.objectiveId}</span>
-              <div className="iot-checks-row">
-                {missionChecks.map((ck) => (
-                  <Badge key={ck.id} tone={ck.passed ? 'good' : 'muted'}>
-                    {ck.passed ? '✓ ' : '○ '}
-                    {en ? ck.labelEn : ck.labelId}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={
-                !allMissionPassed ||
-                submitMissionMut.isPending ||
-                (!isInstructor && (!canAccessIotStudio || !canSubmitIot || !iotTrackEnabled || !activeMissionLock.unlocked))
-              }
-              onClick={() => submitMissionMut.mutate()}
-            >
-              {!isInstructor && (!activeMissionLock.unlocked || !canSubmitIot) ? (
-                <Lock size={14} />
-              ) : (
-                <Award size={15} />
-              )}
-              {mode === 'dosen'
-                ? en ? 'Verify Demo Run' : 'Verifikasi Demo'
-                : submitMissionMut.isPending
-                  ? en ? 'Submitting...' : 'Mengirim...'
+                  ? 'IoT practicum track is disabled by Admin.'
+                  : 'Jalur praktikum IoT dinonaktifkan Admin.'
+                : !canAccessIotStudio
+                  ? en
+                    ? 'Your IoT Studio access right has been locked by Admin. Contact an administrator.'
+                    : 'Hak akses IoT Studio Anda dikunci Admin. Hubungi Admin atau Dosen.'
                   : en
-                    ? `Submit Mission (+${activeMission.xp} XP)`
-                    : `Kumpulkan Misi (+${activeMission.xp} XP)`}
-            </button>
+                    ? 'Mission submission permission is restricted for your account by Admin.'
+                    : 'Hak kirim penilaian/misi Anda sedang dikunci Admin (mode baca saja).'}
+            </div>
+          ) : null}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 13 }}>
+                {en
+                  ? `IoT Missions (${completedSet.size}/${IOT_MISSIONS.length} Completed)`
+                  : `Misi Praktikum IoT (${completedSet.size}/${IOT_MISSIONS.length} Tuntas)`}
+              </strong>
+              <Badge tone={isInstructor ? 'info' : 'muted'}>
+                {isInstructor
+                  ? en ? 'Lecturer · All 10 Missions Open' : 'Dosen · Semua 10 Misi Terbuka'
+                  : en ? 'Sequential · Unlock in Order' : 'Bertahap · Kunci Hak Akses Berurutan'}
+              </Badge>
+              {iotAchievements.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-outline iot-mini-btn"
+                  onClick={() => setShowIotBadgesDrawer((v) => !v)}
+                  aria-expanded={showIotBadgesDrawer}
+                >
+                  <Award size={12} /> {earnedAchCount}/{iotAchievements.length} Achievement IoT
+                </button>
+              )}
+            </div>
           </div>
-        ) : null}
-      </section>
+          {showIotBadgesDrawer && iotAchievements.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} aria-label="Achievement IoT">
+              {iotAchievements.map((ach) => (
+                <span key={ach.id} title={`${ach.detail} (+${ach.xp} XP)`}>
+                  <Badge tone={ach.earned ? 'good' : 'muted'}>
+                    {ach.earned ? '★ ' : '○ '}
+                    {ach.title}
+                  </Badge>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="iot-mission-tabs">
+            {IOT_MISSIONS.map((m) => {
+              const isSelected = activeMissionId === m.id
+              const isDone = completedSet.has(m.id)
+              const lock = getMissionUnlockStatus(m.id)
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  disabled={!lock.unlocked}
+                  aria-disabled={!lock.unlocked}
+                  title={lock.reason ?? (en ? m.objectiveEn : m.objectiveId)}
+                  className={`iot-mission-pill ${isSelected ? 'is-active' : ''} ${isDone ? 'is-done' : ''} ${!lock.unlocked ? 'is-locked' : ''}`}
+                  onClick={() => loadPreset(m.presetId)}
+                >
+                  {!lock.unlocked ? (
+                    <Lock size={12} />
+                  ) : isDone ? (
+                    <CheckCircle2 size={13} />
+                  ) : (
+                    <Sparkles size={13} />
+                  )}
+                  <span>{en ? m.titleEn : m.titleId}</span>
+                </button>
+              )
+            })}
+          </div>
+          {submitMissionMut.isError && (
+            <p className="feedback wrong" role="alert" style={{ marginTop: 8 }}>
+              {submitMissionMut.error instanceof Error
+                ? submitMissionMut.error.message
+                : en
+                  ? 'Server rejected mission verification. Check circuit, wiring, and simulation output.'
+                  : 'Verifikasi misi ditolak server. Periksa rangkaian, kabel, dan jalankan simulasi terlebih dahulu.'}
+            </p>
+          )}
+          {activeMission ? (
+            <div className="iot-mission-status">
+              <div>
+                <strong>{en ? 'Mission Checklist:' : 'Kriteria Misi:'}</strong>{' '}
+                <span className="muted">{en ? activeMission.objectiveEn : activeMission.objectiveId}</span>
+                <div className="iot-checks-row">
+                  {missionChecks.map((ck) => (
+                    <Badge key={ck.id} tone={ck.passed ? 'good' : 'muted'}>
+                      {ck.passed ? '✓ ' : '○ '}
+                      {en ? ck.labelEn : ck.labelId}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={
+                  !allMissionPassed ||
+                  submitMissionMut.isPending ||
+                  (!isInstructor && (!canAccessIotStudio || !canSubmitIot || !iotTrackEnabled || !activeMissionLock.unlocked))
+                }
+                onClick={() => submitMissionMut.mutate()}
+              >
+                {!isInstructor && (!activeMissionLock.unlocked || !canSubmitIot) ? (
+                  <Lock size={14} />
+                ) : (
+                  <Award size={15} />
+                )}
+                {mode === 'dosen'
+                  ? en ? 'Verify Demo Run' : 'Verifikasi Demo'
+                  : submitMissionMut.isPending
+                    ? en ? 'Submitting...' : 'Mengirim...'
+                    : en
+                      ? `Submit Mission (+${activeMission.xp} XP)`
+                      : `Kumpulkan Misi (+${activeMission.xp} XP)`}
+              </button>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {/* Split Workbench matching iotsimulator.net: Left Tabbed Panel | Draggable Resizer | Right Circuit Canvas */}
@@ -2005,866 +1826,587 @@ export function IotSimulatorStudio({
       >
         {/* LEFT PANE: Main.ino | Components | Terminal */}
         {focusMode !== 'canvas' ? (
-        <section className="card iot-left-panel">
-          <header className="iot-left-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={leftTab === 'code' && !activeCustomFile}
-              className={`iot-left-tab ${leftTab === 'code' && !activeCustomFile ? 'is-active' : ''}`}
-              onClick={() => {
-                setLeftTab('code')
-                setActiveCustomFile(null)
-                setAcState(null)
-              }}
-            >
-              Main.ino
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={leftTab === 'diagram'}
-              className={`iot-left-tab ${leftTab === 'diagram' ? 'is-active' : ''}`}
-              onClick={openDiagramTab}
-            >
-              diagram.json
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={leftTab === 'libraries'}
-              className={`iot-left-tab ${leftTab === 'libraries' ? 'is-active' : ''}`}
-              onClick={() => setLeftTab('libraries')}
-            >
-              Libraries
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={leftTab === 'components'}
-              className={`iot-left-tab ${leftTab === 'components' ? 'is-active' : ''}`}
-              onClick={() => setLeftTab('components')}
-            >
-              Components
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={leftTab === 'terminal'}
-              className={`iot-left-tab ${leftTab === 'terminal' ? 'is-active' : ''}`}
-              onClick={() => setLeftTab('terminal')}
-            >
-              Terminal
-            </button>
-            {extraFiles.map((f) => (
+          <section className="card iot-left-panel">
+            <header className="iot-left-tabs" role="tablist">
               <button
-                key={f.name}
                 type="button"
                 role="tab"
-                aria-selected={leftTab === 'code' && activeExtraFileObj?.name === f.name}
-                className={`iot-left-tab iot-custom-file-tab ${leftTab === 'code' && activeExtraFileObj?.name === f.name ? 'is-active' : ''}`}
+                aria-selected={leftTab === 'code' && !activeCustomFile}
+                className={`iot-left-tab ${leftTab === 'code' && !activeCustomFile ? 'is-active' : ''}`}
                 onClick={() => {
                   setLeftTab('code')
-                  setActiveCustomFile(f.name)
-                  setAcState(null)
+                  setActiveCustomFile(null)
                 }}
               >
-                {f.name}
+                Main.ino
               </button>
-            ))}
-            <div className="iot-file-menu-wrap" ref={fileMenuRef}>
               <button
                 type="button"
-                className="iot-file-menu-btn"
-                aria-label={en ? 'Sketch file actions' : 'Menu file sketch'}
-                aria-expanded={showFileMenu}
-                title={en ? 'New file, rename, format, or upload' : 'Tambah file, rename, rapikan, atau unggah'}
-                onClick={() => setShowFileMenu((v) => !v)}
+                role="tab"
+                aria-selected={leftTab === 'diagram'}
+                className={`iot-left-tab ${leftTab === 'diagram' ? 'is-active' : ''}`}
+                onClick={openDiagramTab}
               >
-                <ChevronDown size={14} />
+                diagram.json
               </button>
-              <input
-                ref={uploadFilesInputRef}
-                type="file"
-                multiple
-                accept=".h,.hpp,.c,.cpp,.ino,.html,.css,.js,.txt,.json"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  void handleUploadExtraFiles(e.target.files)
-                  e.target.value = ''
-                }}
-              />
-              {showFileMenu ? (
-                <div className="iot-file-dropdown" role="menu" aria-label={en ? 'File menu' : 'Menu file'}>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="iot-file-dropdown-item"
-                    onClick={() => {
-                      setLeftTab('code')
-                      setShowFileMenu(false)
-                      formatSketchCode()
-                    }}
-                  >
-                    <Code2 size={14} />
-                    <span>Format code</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="iot-file-dropdown-item"
-                    disabled={!activeExtraFileObj}
-                    title={!activeExtraFileObj ? (en ? 'Select a custom file tab to rename' : 'Pilih tab file tambahan untuk rename') : undefined}
-                    onClick={() => {
-                      if (!activeExtraFileObj) return
-                      setShowFileMenu(false)
-                      setLeftTab('code')
-                      setFileActionMode('rename')
-                      setFileNameDraft(activeExtraFileObj.name)
-                    }}
-                  >
-                    <Pencil size={14} />
-                    <span>Rename</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="iot-file-dropdown-item"
-                    disabled={!activeExtraFileObj}
-                    title={!activeExtraFileObj ? (en ? 'Main.ino cannot be deleted' : 'Main.ino tidak dapat dihapus') : undefined}
-                    onClick={deleteActiveCustomFile}
-                  >
-                    <Trash2 size={14} />
-                    <span>Delete</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="iot-file-dropdown-item"
-                    onClick={() => {
-                      setShowFileMenu(false)
-                      setLeftTab('code')
-                      setFileActionMode('new')
-                      setFileNameDraft('')
-                    }}
-                  >
-                    <Plus size={14} />
-                    <span>New file...</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="iot-file-dropdown-item"
-                    onClick={() => {
-                      setShowFileMenu(false)
-                      uploadFilesInputRef.current?.click()
-                    }}
-                  >
-                    <Upload size={14} />
-                    <span>Upload file(s)...</span>
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </header>
-
-          {leftTab === 'code' ? (
-            <div className={`iot-editor-shell ${isDark ? 'theme-dark' : 'theme-light'}`}>
-              <div className="iot-panel-head">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
-                  {activeExtraFileObj ? <FileCode2 size={14} /> : <Code2 size={14} />}
-                  &lt;/&gt;{' '}
-                  {activeExtraFileObj
-                    ? activeExtraFileObj.name
-                    : boardInstances.length > 1
-                      ? `${editingBoardSpec.label}.ino`
-                      : 'Main.ino'}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button
-                    type="button"
-                    className="btn-outline iot-mini-btn"
-                    onClick={() => {
-                      setFileActionMode('new')
-                      setFileNameDraft('')
-                    }}
-                    title={en ? 'Add header/module file (.h/.cpp/.ino)' : 'Tambah file header/modul baru (.h/.cpp/.ino)'}
-                  >
-                    <Plus size={12} /> {en ? 'New file' : 'Tambah File'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-outline iot-mini-btn"
-                    onClick={formatSketchCode}
-                    title={en ? 'Auto-indent & format code (Shift+Alt+F)' : 'Rapikan indentasi kode (Shift+Alt+F)'}
-                  >
-                    <AlignLeft size={12} /> {en ? 'Format' : 'Rapikan'}
-                  </button>
-                  <Badge tone={hasEditorError ? 'bad' : 'good'}>
-                    {hasEditorError ? (en ? 'Compile Error' : 'Error Kompilasi') : `${BOARDS[editingBoardSpec.boardId].shortName} C++`}
-                  </Badge>
-                </div>
-              </div>
-              {fileActionMode ? (
-                <div className="iot-file-prompt" role="region" aria-label={fileActionMode === 'new' ? 'Create new sketch file' : 'Rename sketch file'}>
-                  <label htmlFor="iot-file-name-input" className="iot-file-prompt-label">
-                    {fileActionMode === 'new'
-                      ? en ? 'New filename (.h / .cpp / .html):' : 'Nama file baru (.h / .cpp / .html):'
-                      : en ? 'Rename file:' : 'Ubah nama file:'}
-                  </label>
-                  <input
-                    id="iot-file-name-input"
-                    type="text"
-                    autoFocus
-                    className="iot-file-prompt-input"
-                    value={fileNameDraft}
-                    onChange={(e) => setFileNameDraft(e.target.value)}
-                    placeholder="pins.h"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        commitFileAction()
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        setFileActionMode(null)
-                        setFileNameDraft('')
-                      }
-                    }}
-                  />
-                  <button type="button" className="btn-primary iot-mini-btn" onClick={commitFileAction}>
-                    {fileActionMode === 'new' ? (en ? 'Create' : 'Buat') : (en ? 'Save' : 'Simpan')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-outline iot-mini-btn"
-                    onClick={() => {
-                      setFileActionMode(null)
-                      setFileNameDraft('')
-                    }}
-                  >
-                    {en ? 'Cancel' : 'Batal'}
-                  </button>
-                </div>
-              ) : null}
-              {boardInstances.length > 1 ? (
-                <div className="iot-mcu-switcher" role="group" aria-label={en ? 'Select MCU firmware' : 'Pilih firmware MCU'}>
-                  {boardInstances.map((b, idx) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={leftTab === 'libraries'}
+                className={`iot-left-tab ${leftTab === 'libraries' ? 'is-active' : ''}`}
+                onClick={() => setLeftTab('libraries')}
+              >
+                Libraries
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={leftTab === 'components'}
+                className={`iot-left-tab ${leftTab === 'components' ? 'is-active' : ''}`}
+                onClick={() => setLeftTab('components')}
+              >
+                Components
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={leftTab === 'terminal'}
+                className={`iot-left-tab ${leftTab === 'terminal' ? 'is-active' : ''}`}
+                onClick={() => setLeftTab('terminal')}
+              >
+                Terminal
+              </button>
+              {extraFiles.map((f) => (
+                <button
+                  key={f.name}
+                  type="button"
+                  role="tab"
+                  aria-selected={leftTab === 'code' && activeExtraFileObj?.name === f.name}
+                  className={`iot-left-tab iot-custom-file-tab ${leftTab === 'code' && activeExtraFileObj?.name === f.name ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setLeftTab('code')
+                    setActiveCustomFile(f.name)
+                  }}
+                >
+                  {f.name}
+                </button>
+              ))}
+              <div className="iot-file-menu-wrap" ref={fileMenuRef}>
+                <button
+                  type="button"
+                  className="iot-file-menu-btn"
+                  aria-label={en ? 'Sketch file actions' : 'Menu file sketch'}
+                  aria-expanded={showFileMenu}
+                  title={en ? 'New file, rename, format, or upload' : 'Tambah file, rename, rapikan, atau unggah'}
+                  onClick={() => setShowFileMenu((v) => !v)}
+                >
+                  <ChevronDown size={14} />
+                </button>
+                <input
+                  ref={uploadFilesInputRef}
+                  type="file"
+                  multiple
+                  accept=".h,.hpp,.c,.cpp,.ino,.html,.css,.js,.txt,.json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    void handleUploadExtraFiles(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+                {showFileMenu ? (
+                  <div className="iot-file-dropdown" role="menu" aria-label={en ? 'File menu' : 'Menu file'}>
                     <button
-                      key={b.nodeId}
                       type="button"
-                      className={`iot-mcu-tab ${activeEditingNodeId === b.nodeId ? 'is-active' : ''}`}
+                      role="menuitem"
+                      className="iot-file-dropdown-item"
                       onClick={() => {
-                        setEditingNodeId(b.nodeId)
-                        setAcState(null)
+                        setLeftTab('code')
+                        setShowFileMenu(false)
+                        formatSketchCode()
                       }}
                     >
-                      MCU {idx + 1}: {b.label}
+                      <Code2 size={14} />
+                      <span>Format code</span>
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="iot-file-dropdown-item"
+                      disabled={!activeExtraFileObj}
+                      title={!activeExtraFileObj ? (en ? 'Select a custom file tab to rename' : 'Pilih tab file tambahan untuk rename') : undefined}
+                      onClick={() => {
+                        if (!activeExtraFileObj) return
+                        setShowFileMenu(false)
+                        setLeftTab('code')
+                        setFileActionMode('rename')
+                        setFileNameDraft(activeExtraFileObj.name)
+                      }}
+                    >
+                      <Pencil size={14} />
+                      <span>Rename</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="iot-file-dropdown-item"
+                      disabled={!activeExtraFileObj}
+                      title={!activeExtraFileObj ? (en ? 'Main.ino cannot be deleted' : 'Main.ino tidak dapat dihapus') : undefined}
+                      onClick={deleteActiveCustomFile}
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="iot-file-dropdown-item"
+                      onClick={() => {
+                        setShowFileMenu(false)
+                        setLeftTab('code')
+                        setFileActionMode('new')
+                        setFileNameDraft('')
+                      }}
+                    >
+                      <Plus size={14} />
+                      <span>New file...</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="iot-file-dropdown-item"
+                      onClick={() => {
+                        setShowFileMenu(false)
+                        uploadFilesInputRef.current?.click()
+                      }}
+                    >
+                      <Upload size={14} />
+                      <span>Upload file(s)...</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </header>
+
+            <div className={`iot-editor-shell ${isDark ? 'theme-dark' : 'theme-light'}`} hidden={leftTab !== 'code'}>
+                <div className="iot-panel-head">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
+                    {activeExtraFileObj ? <FileCode2 size={14} /> : <Code2 size={14} />}
+                    {activeExtraFileObj
+                      ? activeExtraFileObj.name
+                      : boardInstances.length > 1
+                        ? `${editingBoardSpec.label}.ino`
+                        : 'Main.ino'}
+                  </span>
+                  <div className="iot-editor-actions">
+                    <button
+                      type="button"
+                      className="btn-outline iot-mini-btn"
+                      onClick={() => {
+                        setFileActionMode('new')
+                        setFileNameDraft('')
+                      }}
+                      title={en ? 'Add header/module file (.h/.cpp/.ino)' : 'Tambah file header/modul baru (.h/.cpp/.ino)'}
+                    >
+                      <Plus size={12} /> {en ? 'New file' : 'Tambah File'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline iot-mini-btn"
+                      onClick={() => editorHandleRef.current?.find()}
+                      title={en ? 'Find and replace (Ctrl/⌘+F)' : 'Cari dan ganti (Ctrl/⌘+F)'}
+                    >
+                      <Search size={12} /> {en ? 'Find' : 'Cari'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline iot-mini-btn"
+                      onClick={formatSketchCode}
+                      title={en ? 'Auto-indent & format code (Shift+Alt+F)' : 'Rapikan indentasi kode (Shift+Alt+F)'}
+                    >
+                      <AlignLeft size={12} /> {en ? 'Format' : 'Rapikan'}
+                    </button>
+                    {hasEditorError && <Badge tone="bad">{en ? 'Compile Error' : 'Error Kompilasi'}</Badge>}
+                  </div>
                 </div>
-              ) : null}
-              {extraFiles.length > 0 || syncInfo.missingIncludes.length > 0 ? (
-                <div
-                  className={`iot-file-sync-bar ${syncInfo.missingIncludes.length > 0 ? 'has-error' : ''}`}
-                  role="status"
-                  aria-label={en ? 'Project file synchronization status' : 'Status sinkronisasi multi-file'}
-                >
-                  <Link2 size={13} />
-                  <span>
-                    {syncInfo.missingIncludes.length > 0
-                      ? en
-                        ? `Missing include: ${syncInfo.missingIncludes.join(', ')}`
-                        : `File #include belum ditemukan: ${syncInfo.missingIncludes.join(', ')}`
-                      : en
-                        ? `Synced (${syncInfo.linkedFiles.length + 1} files): ${syncInfo.linkedFiles.join(' · ')} · diagram.json`
-                        : `Sinkron (${syncInfo.linkedFiles.length + 1} file): ${syncInfo.linkedFiles.join(' · ')} · diagram.json`}
+                {fileActionMode ? (
+                  <div className="iot-file-prompt" role="region" aria-label={fileActionMode === 'new' ? 'Create new sketch file' : 'Rename sketch file'}>
+                    <label htmlFor="iot-file-name-input" className="iot-file-prompt-label">
+                      {fileActionMode === 'new'
+                        ? en ? 'New filename (.h / .cpp / .html):' : 'Nama file baru (.h / .cpp / .html):'
+                        : en ? 'Rename file:' : 'Ubah nama file:'}
+                    </label>
+                    <input
+                      id="iot-file-name-input"
+                      type="text"
+                      autoFocus
+                      className="iot-file-prompt-input"
+                      value={fileNameDraft}
+                      onChange={(e) => setFileNameDraft(e.target.value)}
+                      placeholder="pins.h"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          commitFileAction()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          setFileActionMode(null)
+                          setFileNameDraft('')
+                        }
+                      }}
+                    />
+                    <button type="button" className="btn-primary iot-mini-btn" onClick={commitFileAction}>
+                      {fileActionMode === 'new' ? (en ? 'Create' : 'Buat') : (en ? 'Save' : 'Simpan')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline iot-mini-btn"
+                      onClick={() => {
+                        setFileActionMode(null)
+                        setFileNameDraft('')
+                      }}
+                    >
+                      {en ? 'Cancel' : 'Batal'}
+                    </button>
+                  </div>
+                ) : null}
+                {boardInstances.length > 1 ? (
+                  <div className="iot-mcu-switcher" role="group" aria-label={en ? 'Select MCU firmware' : 'Pilih firmware MCU'}>
+                    {boardInstances.map((b, idx) => (
+                      <button
+                        key={b.nodeId}
+                        type="button"
+                        className={`iot-mcu-tab ${activeEditingNodeId === b.nodeId ? 'is-active' : ''}`}
+                        onClick={() => {
+                          setEditingNodeId(b.nodeId)
+                        }}
+                      >
+                        MCU {idx + 1}: {b.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {extraFiles.length > 0 || syncInfo.missingIncludes.length > 0 ? (
+                  <div
+                    className={`iot-file-sync-bar ${syncInfo.missingIncludes.length > 0 ? 'has-error' : ''}`}
+                    role="status"
+                    aria-label={en ? 'Project file synchronization status' : 'Status sinkronisasi multi-file'}
+                  >
+                    <Link2 size={13} />
+                    <span>
+                      {syncInfo.missingIncludes.length > 0
+                        ? en
+                          ? `Missing include: ${syncInfo.missingIncludes.join(', ')}`
+                          : `File #include belum ditemukan: ${syncInfo.missingIncludes.join(', ')}`
+                        : en
+                          ? `Synced (${syncInfo.linkedFiles.length + 1} files): ${syncInfo.linkedFiles.join(' · ')} · diagram.json`
+                          : `Sinkron (${syncInfo.linkedFiles.length + 1} file): ${syncInfo.linkedFiles.join(' · ')} · diagram.json`}
+                    </span>
+                  </div>
+                ) : null}
+                {hasEditorError ? (
+                  <div className="iot-compile-error" role="alert">
+                    <EditorDiagnosticsList
+                      diagnostics={activeEditorDiagnostics}
+                      extraError={activeMcuCompileError}
+                      en={en}
+                      onJump={jumpToDiagnostic}
+                    />
+                  </div>
+                ) : null}
+                <CodeMirrorEditor
+                  key={editorEpoch}
+                  ref={editorHandleRef}
+                  className="iot-sketch-editor"
+                  docKey={editorDocKey}
+                  value={displayedCode}
+                  onChange={setDisplayedCode}
+                  onCursorChange={setCursorPos}
+                  onFormat={formatSketchCode}
+                  language={activeEditorLanguage}
+                  dark={isDark}
+                  ariaLabel={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
+                  diagnostics={activeEditorDiagnostics}
+                  en={en}
+                  completion={activeEditorLanguage === 'cpp' ? arduinoCompletion : undefined}
+                  extensions={activeEditorLanguage === 'cpp' ? [arduinoSyntaxExtras, arduinoSignatureHelp] : undefined}
+                  context={editorContext}
+                />
+                <div className="iot-editor-statusbar">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span>{en ? 'Ln' : 'Baris'} {cursorPos.line}, {en ? 'Col' : 'Kol'} {cursorPos.col}</span>
+                    <EditorStatusDiagnosticPill
+                      diagnostics={activeEditorDiagnostics}
+                      en={en}
+                      onJump={jumpToDiagnostic}
+                    />
+                  </span>
+                  <span>UTF-8 · {en ? 'Spaces' : 'Spasi'}: {editorIndentSize(activeEditorLanguage)} · {languageLabel}</span>
+                </div>
+              </div>
+            {leftTab === 'code' ? null : leftTab === 'diagram' ? (
+              (() => {
+                const lint = lintWokwiDiagram(diagramText || JSON.stringify(toWokwiDiagramJson(boardId, components, wires, projectTitle)))
+                return (
+                  <div className="iot-diagram-pane">
+                    <div className="iot-panel-head">
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
+                        <FileJson size={14} /> diagram.json (Wokwi v1)
+                      </span>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn-outline iot-mini-btn" onClick={openDiagramTab}>
+                          Reset Sync
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-outline iot-mini-btn"
+                          onClick={() => {
+                            const blob = new Blob([diagramText], { type: 'application/json;charset=utf-8' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = 'diagram.json'
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          }}
+                        >
+                          <Download size={12} /> JSON
+                        </button>
+                        <button type="button" className="btn-primary iot-mini-btn" onClick={applyDiagramJson}>
+                          {en ? 'Apply diagram.json' : 'Terapkan ke Kanvas'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="iot-diagram-lint-bar">
+                      <Badge tone={lint.valid ? 'good' : 'bad'}>
+                        {lint.valid ? 'wokwi-cli lint: OK (0 errors)' : `Lint Errors: ${lint.errors.length}`}
+                      </Badge>
+                      <Badge tone="info">
+                        <Link2 size={11} /> {en ? 'Canvas Synced' : 'Tersinkron Otomatis'}
+                      </Badge>
+                      {!lint.valid || diagramError ? (
+                        <span className="iot-lint-err">{diagramError ?? lint.errors[0]}</span>
+                      ) : null}
+                    </div>
+                    <textarea
+                      aria-label="Wokwi diagram.json editor"
+                      className="iot-diagram-textarea"
+                      spellCheck={false}
+                      value={diagramText}
+                      onChange={(e) => setDiagramDraft(e.target.value)}
+                    />
+                  </div>
+                )
+              })()
+            ) : leftTab === 'libraries' ? (
+              <div className="iot-libs-pane">
+                <div className="iot-panel-head">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
+                    <BookOpen size={14} /> Library Manager (libraries.txt)
                   </span>
                 </div>
-              ) : null}
-              {hasEditorError ? (
-                <div className="iot-compile-error" role="alert">
-                  <EditorDiagnosticsList
-                    diagnostics={activeEditorDiagnostics}
-                    extraError={activeMcuCompileError}
-                    en={en}
-                    onJump={jumpToDiagnostic}
+                <div className="search" style={{ width: '100%' }}>
+                  <Search size={14} />
+                  <input
+                    value={libSearch}
+                    onChange={(e) => setLibSearch(e.target.value)}
+                    placeholder={en ? 'Search Arduino / ESP32 libraries...' : 'Cari library Arduino / ESP32...'}
                   />
                 </div>
-              ) : null}
-              <div className="iot-code-wrap">
-                <div className="iot-line-gutter" aria-hidden="true">
-                  {Array.from({ length: lineCount }, (_, idx) => {
-                    const lineNo = idx + 1
-                    const err = errorLineMap.get(lineNo)
-                    const cls = [
-                      cursorPos.line === lineNo ? 'is-active-line' : '',
-                      err ? 'is-error-line' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')
+                <div className="iot-lib-list">
+                  {WOKWI_LIBRARY_REGISTRY.filter(
+                    (l) =>
+                      !libSearch.trim() ||
+                      l.name.toLowerCase().includes(libSearch.toLowerCase()) ||
+                      l.include.toLowerCase().includes(libSearch.toLowerCase()),
+                  ).map((lib) => {
+                    const installed = code.includes(lib.include)
                     return (
-                      <div
-                        key={idx}
-                        className={cls || undefined}
-                        data-error-line={err ? lineNo : undefined}
-                        title={err ? (en ? err.messageEn : err.messageId) : undefined}
-                        onClick={err ? () => jumpToDiagnostic(err) : undefined}
-                      >
-                        {lineNo}
+                      <div key={lib.id} className="iot-lib-item">
+                        <div>
+                          <strong>{lib.name}</strong> <span className="muted">v{lib.version}</span>
+                          <small style={{ display: 'block', color: 'var(--ink-2)' }}>{en ? lib.descriptionEn : lib.descriptionId}</small>
+                          <code style={{ fontSize: 11 }}>{lib.include}</code>
+                        </div>
+                        <button
+                          type="button"
+                          className={installed ? 'btn-outline iot-mini-btn' : 'btn-primary iot-mini-btn'}
+                          disabled={installed}
+                          onClick={() => {
+                            setCode((prev) => `${lib.include}\n${prev}`)
+                            setStatusNotice(`${lib.name} (${lib.include}) ditambahkan ke Main.ino.`)
+                          }}
+                        >
+                          {installed ? (en ? 'Added ✓' : 'Terpasang ✓') : en ? '+ Include' : '+ Pasang'}
+                        </button>
                       </div>
                     )
                   })}
                 </div>
-                <div className="iot-code-stage">
-                  <div
-                    className="iot-active-line-bg"
-                    style={{ top: (cursorPos.line - 1) * 19.375 + 12 }}
-                    aria-hidden="true"
+              </div>
+            ) : leftTab === 'components' ? (
+              <div className="iot-components-browser">
+                <div className="search" style={{ width: '100%' }}>
+                  <Search size={14} />
+                  <input
+                    value={partSearch}
+                    onChange={(e) => setPartSearch(e.target.value)}
+                    placeholder={en ? 'Search Components (e.g. Servo, DHT22, LED)...' : 'Cari Komponen (mis. Servo, DHT22, LED)...'}
                   />
-                  {activeEditorDiagnostics.map((d) => (
-                    <div
-                      key={`err-bg-${d.line}`}
-                      className="iot-error-line-bg"
-                      data-error-line={d.line}
-                      style={{ top: (d.line - 1) * 19.375 + 12 }}
-                      aria-hidden="true"
-                    />
-                  ))}
-                  <pre className="iot-code-highlight" aria-hidden="true">
-                    <code>
-                      <HighlightedCodeLines
-                        tokens={highlightedTokens}
-                        classPrefix="tok-"
-                        errorLines={errorLineSet}
-                      />
-                    </code>
-                  </pre>
-                  <textarea
-                    ref={codeTextareaRef}
-                    aria-label={en ? 'Sketch source code' : 'Kode program mikrokontroler'}
-                    className="iot-code-textarea"
-                    spellCheck={false}
-                    wrap="off"
-                    value={displayedCode}
-                    aria-autocomplete="list"
-                    aria-expanded={Boolean(acState)}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      const cursor = e.target.selectionStart
-                      const prevCursor = Math.min(displayedCode.length, cursor ?? displayedCode.length)
-                      const singleChar = Math.abs(val.length - displayedCode.length) === 1 && !/\s/.test(val[(cursor ?? 1) - 1] ?? '')
-                      recordCodeHistory(displayedCode, prevCursor, singleChar)
-                      setDisplayedCode(val)
-                      setCursorPos(getLineCol(val, cursor ?? 0))
-                      refreshAutocomplete(val, cursor, false)
-                    }}
-                    onClick={(e) => {
-                      const cursor = e.currentTarget.selectionStart ?? 0
-                      setCursorPos(getLineCol(e.currentTarget.value, cursor))
-                      refreshSignatureHint(e.currentTarget.value, cursor)
-                    }}
-                    onSelect={(e) => {
-                      const cursor = e.currentTarget.selectionStart ?? 0
-                      setCursorPos(getLineCol(e.currentTarget.value, cursor))
-                      refreshSignatureHint(e.currentTarget.value, cursor)
-                    }}
-                    onKeyDown={(e) => {
-                      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-                        const k = e.key.toLowerCase()
-                        if (k === 'z') {
-                          e.preventDefault()
-                          if (e.shiftKey) redoActiveCode()
-                          else undoActiveCode()
-                          return
-                        }
-                        if (k === 'y' && !e.shiftKey) {
-                          e.preventDefault()
-                          redoActiveCode()
-                          return
-                        }
-                      }
-                      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
-                        e.preventDefault()
-                        refreshAutocomplete(e.currentTarget.value, e.currentTarget.selectionStart, true)
-                        return
-                      }
-                      if ((e.shiftKey && e.altKey && e.key.toLowerCase() === 'f') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f')) {
-                        e.preventDefault()
-                        formatSketchCode()
-                        return
-                      }
-                      if (acState) {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault()
-                          setAcState((prev) =>
-                            prev ? { ...prev, activeIndex: (prev.activeIndex + 1) % prev.items.length } : null,
-                          )
-                          return
-                        }
-                        if (e.key === 'ArrowUp') {
-                          e.preventDefault()
-                          setAcState((prev) =>
-                            prev
-                              ? { ...prev, activeIndex: (prev.activeIndex - 1 + prev.items.length) % prev.items.length }
-                              : null,
-                          )
-                          return
-                        }
-                        if (e.key === 'Enter' || e.key === 'Tab') {
-                          e.preventDefault()
-                          const item = acState.items[acState.activeIndex]
-                          if (item) acceptAutocomplete(item)
-                          return
-                        }
-                        if (e.key === 'Escape') {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setAcState(null)
-                          return
-                        }
-                      } else if (sigHelp && e.key === 'Escape') {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setSigHelp(null)
-                        return
-                      }
+                </div>
 
-                      const ta = e.currentTarget
-                      const start = ta.selectionStart ?? 0
-                      const end = ta.selectionEnd ?? start
-
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        const res = handleSmartEnter(ta.value, start, end)
-                        applyEditorMutation(res.nextCode, res.nextCursor)
-                        return
-                      }
-                      if (e.key === 'Tab') {
-                        e.preventDefault()
-                        const res = handleSmartIndent(ta.value, start, end, e.shiftKey)
-                        applyEditorMutation(res.nextCode, res.nextSelStart, res.nextSelEnd)
-                        return
-                      }
-                      if (e.key === '}' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                        const out = handleSmartClosingBrace(ta.value, start, end)
-                        if (out) {
-                          e.preventDefault()
-                          applyEditorMutation(out.nextCode, out.nextCursor)
-                          return
-                        }
-                      }
-                      if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                        const bs = handleSmartBackspace(ta.value, start, end)
-                        if (bs) {
-                          e.preventDefault()
-                          applyEditorMutation(bs.nextCode, bs.nextCursor)
-                          return
-                        }
-                      }
-                      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                        const pair = handleSmartPairOrClose(ta.value, start, end, e.key)
-                        if (pair) {
-                          e.preventDefault()
-                          applyEditorMutation(pair.nextCode, pair.nextCursor)
-                        }
-                      }
-                    }}
-                    onBlur={() => {
-                      setAcState(null)
-                      setSigHelp(null)
-                    }}
-                  />
-                  {acState ? (
-                    <div
-                      className="iot-ac-popup"
-                      role="listbox"
-                      aria-label={en ? 'Code suggestions' : 'Saran kode C++'}
-                      style={{ top: acState.topPx, left: acState.leftPx }}
+                <div className="iot-cat-pills" role="group" aria-label="Component categories">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      className={`iot-cat-pill ${partCategory === cat.id ? 'is-active' : ''}`}
+                      onClick={() => setPartCategory(cat.id)}
                     >
-                      <div className="iot-ac-list">
-                        {acState.items.map((item, idx) => (
+                      {en ? cat.labelEn : cat.labelId}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Pinned Components */}
+                {pinnedKinds.length > 0 ? (
+                  <div className="iot-comp-section">
+                    <div className="iot-sec-title">
+                      <span><Pin size={13} style={{ color: '#eab308', verticalAlign: '-2px' }} /> {en ? 'Pinned Components' : 'Komponen Disematkan'}</span>
+                      <span className="muted">({pinnedKinds.length})</span>
+                    </div>
+                    <div className="iot-comp-grid">
+                      {pinnedKinds.map((pk) => {
+                        const spec = getComponentSpec(pk)
+                        return (
+                          <div key={`pin-${pk}`} className="iot-part-card is-pinned">
+                            <button
+                              type="button"
+                              className="iot-pin-toggle"
+                              title={en ? 'Unpin' : 'Lepas pin'}
+                              onClick={() => togglePin(pk)}
+                            >
+                              <Pin size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              className="iot-card-add-btn"
+                              title={en ? 'Add to circuit' : 'Tambah ke rangkaian'}
+                              onClick={() => addComponent(pk)}
+                            >
+                              <Plus size={12} />
+                            </button>
+                            <div className="iot-card-thumb" onClick={() => addComponent(pk)}>
+                              <PartThumbnail kind={pk} />
+                            </div>
+                            <strong>{en ? spec.nameEn : spec.nameId}</strong>
+                            <small>{en ? spec.subtitleEn : spec.subtitleId}</small>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Microcontrollers Grid */}
+                {matchingBoards.length > 0 ? (
+                  <div className="iot-comp-section">
+                    <div className="iot-sec-title">
+                      <span>Microcontrollers</span>
+                      <span className="muted">({matchingBoards.length})</span>
+                    </div>
+                    <div className="iot-comp-grid">
+                      {matchingBoards.map((b) => (
+                        <div
+                          key={b.id}
+                          className={`iot-part-card ${boardId === b.id ? 'is-selected-board' : ''}`}
+                        >
                           <button
-                            key={`${item.kind}-${item.label}`}
                             type="button"
-                            role="option"
-                            aria-selected={idx === acState.activeIndex}
-                            className={`iot-ac-item ${idx === acState.activeIndex ? 'is-active' : ''}`}
-                            onMouseEnter={() =>
-                              setAcState((prev) => (prev ? { ...prev, activeIndex: idx } : null))
-                            }
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              acceptAutocomplete(item)
+                            className="iot-card-add-btn"
+                            title={en ? `Add extra ${b.shortName} to design` : `Tambah ${b.shortName} ke desain`}
+                            aria-label={en ? `Add ${b.shortName} to canvas` : `Tambah ${b.shortName} ke kanvas`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              addExtraBoard(b.id)
                             }}
                           >
-                            <span className={`iot-ac-kind is-${item.kind}`} aria-hidden="true">
-                              {AC_KIND_GLYPHS[item.kind]}
-                            </span>
-                            <span className="iot-ac-label">{item.label}</span>
-                            <span className="iot-ac-param-count">
-                              {item.params ? `${item.params.length} param` : item.kind}
-                            </span>
+                            <Plus size={12} />
                           </button>
-                        ))}
-                      </div>
-                      {acActiveItem ? (
-                        <div className="iot-ac-doc" aria-live="polite">
-                          {acActiveSig ? (
-                            <div className="iot-ac-doc-sig">
-                              <code>{acActiveSig}</code>
-                              <span className="iot-ac-param-badge">
-                                {acActiveItem.params?.length ?? 0} {en ? 'params' : 'parameter'}
-                              </span>
+                          <div className="iot-card-thumb" onClick={() => switchBoard(b.id)}>
+                            <BoardThumbnail boardId={b.id} />
+                          </div>
+                          <strong onClick={() => switchBoard(b.id)}>{b.shortName}</strong>
+                          <small>{boardId === b.id ? (en ? 'Active on canvas' : 'Aktif di kanvas') : 'Microcontrollers'}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Sensors, Input Devices, Displays, Actuators, Passive */}
+                {matchingParts.length > 0 ? (
+                  <div className="iot-comp-section">
+                    <div className="iot-sec-title">
+                      <span>{categories.find((c) => c.id === partCategory)?.labelEn ?? 'Components'}</span>
+                      <span className="muted">({matchingParts.length})</span>
+                    </div>
+                    <div className="iot-comp-grid">
+                      {matchingParts.map((c) => {
+                        const isPinned = pinnedKinds.includes(c.kind)
+                        return (
+                          <div key={c.kind} className="iot-part-card">
+                            <button
+                              type="button"
+                              className={`iot-pin-toggle ${isPinned ? 'is-on' : ''}`}
+                              title={isPinned ? 'Unpin' : 'Pin'}
+                              onClick={() => togglePin(c.kind)}
+                            >
+                              <Pin size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              className="iot-card-add-btn"
+                              title={en ? 'Add to circuit' : 'Tambah ke kanvas'}
+                              aria-label={en ? `Add ${c.nameEn} to canvas` : `Tambah ${c.nameId} ke kanvas`}
+                              onClick={() => addComponent(c.kind)}
+                            >
+                              <Plus size={12} />
+                            </button>
+                            <div className="iot-card-thumb" onClick={() => addComponent(c.kind)}>
+                              <PartThumbnail kind={c.kind} />
                             </div>
-                          ) : null}
-                          <div className="iot-ac-doc-summary">
-                            {en ? acActiveItem.detailEn : acActiveItem.detailId}
+                            <strong>{en ? c.nameEn : c.nameId}</strong>
+                            <small>{en ? c.subtitleEn : c.subtitleId}</small>
                           </div>
-                          {acActiveItem.params && acActiveItem.params.length > 0 ? (
-                            <ul className="iot-ac-param-list">
-                              {acActiveItem.params.map((p) => (
-                                <li key={p.name}>
-                                  <code>{p.type} {p.name}</code>
-                                  <span>{en ? p.descEn : p.descId}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <div className="iot-ac-hint">
-                        ↑↓ {en ? 'select' : 'pilih'} · Enter/Tab {en ? 'insert' : 'sisipkan'} · Esc {en ? 'close' : 'tutup'}
-                      </div>
-                    </div>
-                  ) : null}
-                  {!acState && sigHelp ? (
-                    <div
-                      className="iot-sig-popup"
-                      role="status"
-                      aria-label={en ? 'Function parameter hints' : 'Info parameter fungsi'}
-                      style={{ top: sigHelp.topPx, left: sigHelp.leftPx }}
-                    >
-                      <div className="iot-sig-head">
-                        <code className="iot-sig-code">
-                          <span className="iot-sig-ret">{sigHelp.returnType}</span>{' '}
-                          <strong>{sigHelp.fnName}</strong>(
-                          {sigHelp.params.length === 0 ? (
-                            <span className="muted">void</span>
-                          ) : (
-                            sigHelp.params.map((p, idx) => (
-                              <span key={p.name}>
-                                {idx > 0 ? ', ' : ''}
-                                <span className={idx === sigHelp.activeParam ? 'iot-sig-active-param' : undefined}>
-                                  {p.type} {p.name}
-                                </span>
-                              </span>
-                            ))
-                          )}
-                          )
-                        </code>
-                        <span className="iot-ac-param-badge">
-                          {sigHelp.params.length === 0
-                            ? en ? '0 params' : '0 parameter'
-                            : en
-                              ? `Param ${sigHelp.activeParam + 1} of ${sigHelp.params.length}`
-                              : `Parameter ${sigHelp.activeParam + 1} dari ${sigHelp.params.length}`}
-                        </span>
-                      </div>
-                      {sigHelp.params.length > 0 ? (
-                        <div className="iot-sig-param-desc">
-                          <strong>
-                            {sigHelp.params[sigHelp.activeParam]?.type} {sigHelp.params[sigHelp.activeParam]?.name}:
-                          </strong>{' '}
-                          <span>
-                            {en
-                              ? sigHelp.params[sigHelp.activeParam]?.descEn
-                              : sigHelp.params[sigHelp.activeParam]?.descId}
-                          </span>
-                        </div>
-                      ) : null}
-                      <div className="iot-sig-summary">
-                        {en ? sigHelp.summaryEn : sigHelp.summaryId}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-              <div className="iot-editor-statusbar">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span>Ln {cursorPos.line}, Kol {cursorPos.col}</span>
-                  <EditorStatusDiagnosticPill
-                    diagnostics={activeEditorDiagnostics}
-                    en={en}
-                    onJump={jumpToDiagnostic}
-                  />
-                </span>
-                <span>Spaces: 2 · Tab indent · Ctrl+Space saran · Shift+Alt+F rapikan</span>
-              </div>
-            </div>
-          ) : leftTab === 'diagram' ? (
-            (() => {
-              const lint = lintWokwiDiagram(diagramText || JSON.stringify(toWokwiDiagramJson(boardId, components, wires, projectTitle)))
-              return (
-                <div className="iot-diagram-pane">
-                  <div className="iot-panel-head">
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
-                      <FileJson size={14} /> diagram.json (Wokwi v1)
-                    </span>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button type="button" className="btn-outline iot-mini-btn" onClick={openDiagramTab}>
-                        Reset Sync
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-outline iot-mini-btn"
-                        onClick={() => {
-                          const blob = new Blob([diagramText], { type: 'application/json;charset=utf-8' })
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = 'diagram.json'
-                          a.click()
-                          URL.revokeObjectURL(url)
-                        }}
-                      >
-                        <Download size={12} /> JSON
-                      </button>
-                      <button type="button" className="btn-primary iot-mini-btn" onClick={applyDiagramJson}>
-                        {en ? 'Apply diagram.json' : 'Terapkan ke Kanvas'}
-                      </button>
+                        )
+                      })}
                     </div>
                   </div>
-                  <div className="iot-diagram-lint-bar">
-                    <Badge tone={lint.valid ? 'good' : 'bad'}>
-                      {lint.valid ? 'wokwi-cli lint: OK (0 errors)' : `Lint Errors: ${lint.errors.length}`}
-                    </Badge>
-                    <Badge tone="info">
-                      <Link2 size={11} /> {en ? 'Canvas Synced' : 'Tersinkron Otomatis'}
-                    </Badge>
-                    {!lint.valid || diagramError ? (
-                      <span className="iot-lint-err">{diagramError ?? lint.errors[0]}</span>
-                    ) : null}
-                  </div>
-                  <textarea
-                    aria-label="Wokwi diagram.json editor"
-                    className="iot-diagram-textarea"
-                    spellCheck={false}
-                    value={diagramText}
-                    onChange={(e) => setDiagramDraft(e.target.value)}
-                  />
-                </div>
-              )
-            })()
-          ) : leftTab === 'libraries' ? (
-            <div className="iot-libs-pane">
-              <div className="iot-panel-head">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 12.5 }}>
-                  <BookOpen size={14} /> Library Manager (libraries.txt)
-                </span>
+                ) : null}
               </div>
-              <div className="search" style={{ width: '100%' }}>
-                <Search size={14} />
-                <input
-                  value={libSearch}
-                  onChange={(e) => setLibSearch(e.target.value)}
-                  placeholder={en ? 'Search Arduino / ESP32 libraries...' : 'Cari library Arduino / ESP32...'}
+            ) : (
+              <div className="iot-terminal-tab-pane">
+                <TelemetryDock
+                  sim={simState}
+                  hasWifi={BOARDS[boardId].hasWifi}
+                  lang={lang}
+                  components={components}
+                  extraFiles={extraFiles}
+                  activeTab={dockTab}
+                  onTabChange={setDockTab}
+                  onBrowserRequest={handleBrowserRequest}
+                  onClearSerial={() => setSimState((prev) => ({ ...prev, serialLog: [], plotHistory: [] }))}
+                  onSendSerial={(text) => {
+                    if (vmRef.current) vmRef.current.serialRxQueue.push(text)
+                    setSimState((prev) => ({
+                      ...prev,
+                      serialLog: [...prev.serialLog.slice(-79), { id: nextUid('tx'), timeMs: prev.elapsedMs, text, kind: 'tx' }],
+                    }))
+                  }}
                 />
               </div>
-              <div className="iot-lib-list">
-                {WOKWI_LIBRARY_REGISTRY.filter(
-                  (l) =>
-                    !libSearch.trim() ||
-                    l.name.toLowerCase().includes(libSearch.toLowerCase()) ||
-                    l.include.toLowerCase().includes(libSearch.toLowerCase()),
-                ).map((lib) => {
-                  const installed = code.includes(lib.include)
-                  return (
-                    <div key={lib.id} className="iot-lib-item">
-                      <div>
-                        <strong>{lib.name}</strong> <span className="muted">v{lib.version}</span>
-                        <small style={{ display: 'block', color: 'var(--ink-2)' }}>{en ? lib.descriptionEn : lib.descriptionId}</small>
-                        <code style={{ fontSize: 11 }}>{lib.include}</code>
-                      </div>
-                      <button
-                        type="button"
-                        className={installed ? 'btn-outline iot-mini-btn' : 'btn-primary iot-mini-btn'}
-                        disabled={installed}
-                        onClick={() => {
-                          setCode((prev) => `${lib.include}\n${prev}`)
-                          setStatusNotice(`${lib.name} (${lib.include}) ditambahkan ke Main.ino.`)
-                        }}
-                      >
-                        {installed ? (en ? 'Added ✓' : 'Terpasang ✓') : en ? '+ Include' : '+ Pasang'}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : leftTab === 'components' ? (
-            <div className="iot-components-browser">
-              <div className="search" style={{ width: '100%' }}>
-                <Search size={14} />
-                <input
-                  value={partSearch}
-                  onChange={(e) => setPartSearch(e.target.value)}
-                  placeholder={en ? 'Search Components (e.g. Servo, DHT22, LED)...' : 'Cari Komponen (mis. Servo, DHT22, LED)...'}
-                />
-              </div>
-
-              <div className="iot-cat-pills" role="group" aria-label="Component categories">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className={`iot-cat-pill ${partCategory === cat.id ? 'is-active' : ''}`}
-                    onClick={() => setPartCategory(cat.id)}
-                  >
-                    {en ? cat.labelEn : cat.labelId}
-                  </button>
-                ))}
-              </div>
-
-              {/* Pinned Components */}
-              {pinnedKinds.length > 0 ? (
-                <div className="iot-comp-section">
-                  <div className="iot-sec-title">
-                    <span><Pin size={13} style={{ color: '#eab308', verticalAlign: '-2px' }} /> {en ? 'Pinned Components' : 'Komponen Disematkan'}</span>
-                    <span className="muted">({pinnedKinds.length})</span>
-                  </div>
-                  <div className="iot-comp-grid">
-                    {pinnedKinds.map((pk) => {
-                      const spec = getComponentSpec(pk)
-                      return (
-                        <div key={`pin-${pk}`} className="iot-part-card is-pinned">
-                          <button
-                            type="button"
-                            className="iot-pin-toggle"
-                            title={en ? 'Unpin' : 'Lepas pin'}
-                            onClick={() => togglePin(pk)}
-                          >
-                            <Pin size={11} />
-                          </button>
-                          <button
-                            type="button"
-                            className="iot-card-add-btn"
-                            title={en ? 'Add to circuit' : 'Tambah ke rangkaian'}
-                            onClick={() => addComponent(pk)}
-                          >
-                            <Plus size={12} />
-                          </button>
-                          <div className="iot-card-thumb" onClick={() => addComponent(pk)}>
-                            <PartThumbnail kind={pk} />
-                          </div>
-                          <strong>{en ? spec.nameEn : spec.nameId}</strong>
-                          <small>{en ? spec.subtitleEn : spec.subtitleId}</small>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Microcontrollers Grid */}
-              {matchingBoards.length > 0 ? (
-                <div className="iot-comp-section">
-                  <div className="iot-sec-title">
-                    <span>Microcontrollers</span>
-                    <span className="muted">({matchingBoards.length})</span>
-                  </div>
-                  <div className="iot-comp-grid">
-                    {matchingBoards.map((b) => (
-                      <div
-                        key={b.id}
-                        className={`iot-part-card ${boardId === b.id ? 'is-selected-board' : ''}`}
-                      >
-                        <button
-                          type="button"
-                          className="iot-card-add-btn"
-                          title={en ? `Add extra ${b.shortName} to design` : `Tambah ${b.shortName} ke desain`}
-                          aria-label={en ? `Add ${b.shortName} to canvas` : `Tambah ${b.shortName} ke kanvas`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            addExtraBoard(b.id)
-                          }}
-                        >
-                          <Plus size={12} />
-                        </button>
-                        <div className="iot-card-thumb" onClick={() => switchBoard(b.id)}>
-                          <BoardThumbnail boardId={b.id} />
-                        </div>
-                        <strong onClick={() => switchBoard(b.id)}>{b.shortName}</strong>
-                        <small>{boardId === b.id ? (en ? 'Active on canvas' : 'Aktif di kanvas') : 'Microcontrollers'}</small>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Sensors, Input Devices, Displays, Actuators, Passive */}
-              {matchingParts.length > 0 ? (
-                <div className="iot-comp-section">
-                  <div className="iot-sec-title">
-                    <span>{categories.find((c) => c.id === partCategory)?.labelEn ?? 'Components'}</span>
-                    <span className="muted">({matchingParts.length})</span>
-                  </div>
-                  <div className="iot-comp-grid">
-                    {matchingParts.map((c) => {
-                      const isPinned = pinnedKinds.includes(c.kind)
-                      return (
-                        <div key={c.kind} className="iot-part-card">
-                          <button
-                            type="button"
-                            className={`iot-pin-toggle ${isPinned ? 'is-on' : ''}`}
-                            title={isPinned ? 'Unpin' : 'Pin'}
-                            onClick={() => togglePin(c.kind)}
-                          >
-                            <Pin size={11} />
-                          </button>
-                          <button
-                            type="button"
-                            className="iot-card-add-btn"
-                            title={en ? 'Add to circuit' : 'Tambah ke kanvas'}
-                            aria-label={en ? `Add ${c.nameEn} to canvas` : `Tambah ${c.nameId} ke kanvas`}
-                            onClick={() => addComponent(c.kind)}
-                          >
-                            <Plus size={12} />
-                          </button>
-                          <div className="iot-card-thumb" onClick={() => addComponent(c.kind)}>
-                            <PartThumbnail kind={c.kind} />
-                          </div>
-                          <strong>{en ? c.nameEn : c.nameId}</strong>
-                          <small>{en ? c.subtitleEn : c.subtitleId}</small>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="iot-terminal-tab-pane">
-              <TelemetryDock
-                sim={simState}
-                hasWifi={BOARDS[boardId].hasWifi}
-                lang={lang}
-                components={components}
-                extraFiles={extraFiles}
-                activeTab={dockTab}
-                onTabChange={setDockTab}
-                onBrowserRequest={handleBrowserRequest}
-                onClearSerial={() => setSimState((prev) => ({ ...prev, serialLog: [], plotHistory: [] }))}
-                onSendSerial={(text) => {
-                  if (vmRef.current) vmRef.current.serialRxQueue.push(text)
-                  setSimState((prev) => ({
-                    ...prev,
-                    serialLog: [...prev.serialLog.slice(-79), { id: nextUid('tx'), timeMs: prev.elapsedMs, text, kind: 'tx' }],
-                  }))
-                }}
-              />
-            </div>
-          )}
-        </section>
+            )}
+          </section>
         ) : null}
 
         {focusMode !== 'canvas' ? (
@@ -2996,7 +2538,6 @@ export function IotSimulatorStudio({
             onSelectMcuCode={(nodeId) => {
               setEditingNodeId(nodeId)
               setLeftTab('code')
-              setAcState(null)
             }}
             onOpenWebBrowser={() => {
               if (focusMode === 'canvas') setFocusMode('normal')

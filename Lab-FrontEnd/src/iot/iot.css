@@ -254,425 +254,54 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.iot-code-wrap {
-  display: flex;
-  flex: 1;
-  min-height: 455px;
-  overflow: auto;
+.iot-editor-shell[hidden] { display: none; }
+
+.iot-editor-shell > .iot-panel-head {
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 
-.iot-editor-shell.theme-light .iot-code-wrap {
-  background: #ffffff;
-  color: #1e293b;
-}
-
-.iot-editor-shell.theme-light .iot-line-gutter {
-  background: #f8fafc;
-  color: #94a3b8;
-  border-right: 1px solid #e2e8f0;
-}
-
-.iot-editor-shell.theme-light .iot-code-textarea {
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  caret-color: #0f172a;
-}
-
-.iot-editor-shell.theme-dark .iot-code-wrap {
-  background: #0f172a;
-  color: #e2e8f0;
-}
-
-.iot-editor-shell.theme-dark .iot-line-gutter {
-  background: #090e1a;
-  color: #64748b;
-  border-right: 1px solid #1e293b;
-}
-
-.iot-editor-shell.theme-dark .iot-code-textarea {
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  caret-color: #f8fafc;
-}
-
-.iot-line-gutter {
-  padding: 12px 0;
-  text-align: right;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 19.375px;
-  user-select: none;
-  flex-shrink: 0;
-  min-width: 48px;
-  box-sizing: border-box;
-}
-
-.iot-line-gutter > div {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  padding: 0 10px 0 6px;
-  height: 19.375px;
-  line-height: 19.375px;
-  box-sizing: border-box;
-}
-
-.iot-line-gutter > div.is-error-line {
-  background: rgba(239, 68, 68, 0.14);
-  color: #dc2626;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.iot-line-gutter > div.is-error-line::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #dc2626;
-  flex-shrink: 0;
-}
-
-.iot-editor-shell.theme-dark .iot-line-gutter > div.is-error-line {
-  background: rgba(248, 113, 113, 0.2);
-  color: #fca5a5;
-}
-
-.iot-editor-shell.theme-dark .iot-line-gutter > div.is-error-line::before {
-  background: #f87171;
-}
-
-.iot-code-stage {
-  position: relative;
-  display: grid;
-  flex: 1 0 auto;
-  min-width: 0;
-}
-
-.iot-code-highlight,
-.iot-code-textarea {
-  grid-area: 1 / 1;
-  margin: 0;
-  padding: 12px;
-  border: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 1.55;
-  letter-spacing: 0;
-  tab-size: 2;
-  white-space: pre;
-  word-wrap: normal;
-  overflow-wrap: normal;
-  box-sizing: border-box;
-}
-
-.iot-code-highlight {
-  position: relative;
-  z-index: 1;
-  pointer-events: none;
-  user-select: none;
-  overflow: visible;
-  background: transparent;
-}
-
-.iot-code-highlight code {
-  display: block;
-  font: inherit;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  border-radius: 0;
-  color: inherit;
-}
-
-.iot-code-textarea {
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 455px;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  background: transparent;
-}
-
-.iot-code-textarea::selection {
-  background: rgba(59, 130, 246, 0.25);
-}
-
-/* Arduino / C++ Syntax Highlighting (Wokwi / VS Code palette) */
-.iot-editor-shell.theme-light .tok-plain { color: #1e293b; }
-.iot-editor-shell.theme-light .tok-comment { color: #15803d; font-style: italic; }
-.iot-editor-shell.theme-light .tok-preproc { color: #9333ea; font-weight: 600; }
-.iot-editor-shell.theme-light .tok-string { color: #b91c1c; }
-.iot-editor-shell.theme-light .tok-number { color: #047857; }
-.iot-editor-shell.theme-light .tok-type { color: #0369a1; font-weight: 600; }
-.iot-editor-shell.theme-light .tok-keyword { color: #a21caf; font-weight: 600; }
-.iot-editor-shell.theme-light .tok-builtin { color: #92400e; }
-.iot-editor-shell.theme-light .tok-const { color: #1d4ed8; font-weight: 600; }
-.iot-editor-shell.theme-light .tok-punct { color: #475569; }
-
-.iot-editor-shell.theme-dark .tok-plain { color: #e2e8f0; }
-.iot-editor-shell.theme-dark .tok-comment { color: #6a9955; font-style: italic; }
-.iot-editor-shell.theme-dark .tok-preproc { color: #c586c0; font-weight: 600; }
-.iot-editor-shell.theme-dark .tok-string { color: #ce9178; }
-.iot-editor-shell.theme-dark .tok-number { color: #b5cea8; }
-.iot-editor-shell.theme-dark .tok-type { color: #569cd6; font-weight: 600; }
-.iot-editor-shell.theme-dark .tok-keyword { color: #c586c0; font-weight: 600; }
-.iot-editor-shell.theme-dark .tok-builtin { color: #dcdcaa; }
-.iot-editor-shell.theme-dark .tok-const { color: #4fc1ff; font-weight: 600; }
-.iot-editor-shell.theme-dark .tok-punct { color: #94a3b8; }
-
-/* Inline VS Code-Style Arduino C++ Autocomplete & Parameter Hints */
-.iot-ac-popup {
-  position: absolute;
-  z-index: 40;
-  width: min(390px, calc(100% - 16px));
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.24);
-  overflow: hidden;
-  display: grid;
-}
-
-.iot-ac-list {
-  max-height: 175px;
-  overflow-y: auto;
-  display: grid;
-}
-
-.iot-ac-item {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.iot-ac-item:hover,
-.iot-ac-item.is-active {
-  background: var(--brand-soft);
-}
-
-.iot-ac-kind {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
-  width: 20px;
-  height: 20px;
-  line-height: 20px;
-  border-radius: 5px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-}
-
-.iot-ac-kind.is-fn,
-.iot-ac-kind.is-method { color: #9333ea; background: rgba(168, 85, 247, 0.14); }
-.iot-ac-kind.is-type { color: #0369a1; background: rgba(14, 165, 233, 0.14); }
-.iot-ac-kind.is-kw,
-.iot-ac-kind.is-hdr { color: #92400e; background: rgba(245, 158, 11, 0.14); }
-.iot-ac-kind.is-const,
-.iot-ac-kind.is-var { color: #1d4ed8; background: rgba(59, 130, 246, 0.14); }
-.iot-ac-kind.is-snip { color: #047857; background: rgba(16, 185, 129, 0.14); }
-
-.iot-ac-label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.iot-ac-param-count {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-.iot-ac-doc {
-  display: grid;
-  gap: 5px;
-  padding: 8px 10px;
-  background: var(--surface-2);
-  border-top: 1px solid var(--line);
-  font-size: 11.5px;
-}
-
-.iot-ac-doc-sig {
+.iot-editor-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
 }
 
-.iot-ac-doc-sig code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--ink);
+.iot-sketch-editor {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: clamp(330px, 52vh, 600px);
+  --cm-bg: #ffffff;
+  --cm-fg: #1e293b;
+  --cm-gutter-bg: #f8fafc;
+  --cm-gutter-fg: #5a6879;
+  --cm-gutter-border: #e2e8f0;
 }
 
-.iot-ac-param-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  background: var(--brand-soft);
-  color: var(--brand);
-  white-space: nowrap;
-}
-
-.iot-ac-doc-summary {
-  color: var(--ink-2);
-  line-height: 1.35;
-}
-
-.iot-ac-param-list {
-  margin: 2px 0 0;
-  padding-left: 0;
-  list-style: none;
-  display: grid;
-  gap: 3px;
-}
-
-.iot-ac-param-list li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px;
-  align-items: baseline;
-  font-size: 11px;
-  color: var(--ink-2);
-}
-
-.iot-ac-param-list code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.iot-ac-hint {
-  padding: 4px 10px;
-  font-size: 10.5px;
-  color: var(--ink-3);
-  background: var(--surface);
-  border-top: 1px solid var(--line);
-}
-
-.iot-sig-popup {
-  position: absolute;
-  z-index: 40;
-  width: min(390px, calc(100% - 16px));
-  display: grid;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: 9px;
-  border: 1px solid var(--brand);
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
-  font-size: 11.5px;
-}
-
-.iot-sig-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.iot-sig-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  line-height: 1.4;
-}
-
-.iot-sig-ret {
-  color: #0369a1;
-  font-weight: 700;
-}
-
-.iot-sig-active-param {
-  font-weight: 800;
-  color: var(--brand);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.iot-sig-param-desc {
-  color: var(--ink);
-  background: var(--surface-2);
-  padding: 4px 7px;
-  border-radius: 6px;
-  line-height: 1.35;
-}
-
-.iot-sig-summary {
-  color: var(--ink-2);
-  font-size: 11px;
-}
-
-.iot-line-gutter .is-active-line {
-  font-weight: 700;
-  color: var(--brand);
-}
-
-.iot-active-line-bg {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 19.375px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.iot-editor-shell.theme-light .iot-active-line-bg {
-  background: rgba(14, 165, 233, 0.06);
-}
-
-.iot-editor-shell.theme-dark .iot-active-line-bg {
-  background: rgba(148, 163, 184, 0.09);
-}
-
-.iot-error-line-bg {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 19.375px;
-  background: rgba(239, 68, 68, 0.11);
-  border-left: 3px solid #dc2626;
-  box-sizing: border-box;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.iot-editor-shell.theme-dark .iot-error-line-bg {
-  background: rgba(248, 113, 113, 0.17);
-  border-left-color: #f87171;
+.theme-dark .iot-sketch-editor {
+  --cm-bg: #1b1d1e;
+  --cm-fg: #e2e8f0;
+  --cm-gutter-bg: #202223;
+  --cm-gutter-fg: #a2adbc;
+  --cm-gutter-border: #343839;
+  --cm-caret: #f8fafc;
+  --cm-active-line: #24282a;
+  --cm-selection: #263d50;
+  --cm-error-bg: #392328;
+  --cm-error-edge: #f87171;
+  --cm-comment: #8cb875;
+  --cm-preproc: #c586c0;
+  --cm-string: #ce9178;
+  --cm-number: #b5cea8;
+  --cm-type: #79b9eb;
+  --cm-keyword: #c586c0;
+  --cm-builtin: #dcdcaa;
+  --cm-fn: #dcdcaa;
+  --cm-var: #9cdcfe;
+  --cm-constant: #4fc1ff;
+  --cm-punctuation: #a2adbc;
+  --cm-invalid: #f87171;
 }
 
 .iot-editor-statusbar {
@@ -1278,9 +907,8 @@
     padding-bottom: 20px;
   }
 
-  .iot-code-wrap,
-  .iot-code-textarea {
-    min-height: 280px;
+  .iot-sketch-editor {
+    height: clamp(290px, 48svh, 440px);
   }
 
   .iot-live-line {

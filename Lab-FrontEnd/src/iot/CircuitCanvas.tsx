@@ -482,6 +482,8 @@ export function CircuitCanvas({
       const isTextInput =
         tag === 'TEXTAREA' ||
         tag === 'SELECT' ||
+        Boolean((target as HTMLElement | null)?.isContentEditable) ||
+        Boolean((target as HTMLElement | null)?.closest?.('.cm-editor')) ||
         (tag === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes((target as HTMLInputElement).type))
       if (isTextInput) return
 
