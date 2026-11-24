@@ -253,9 +253,31 @@ test('mahasiswa mengakses Lab Pengembangan Web dengan bar misi minimalis, XP Exp
 
   // Ubah kode editor HTML secara live dan pastikan render sebelah kanan langsung berubah
   const editor = page.getByLabel('Kode program aplikasi web')
-  const curCode = await editor.inputValue()
+  const curCode = (await editor.locator('.cm-line').allTextContents()).join('\n')
   await editor.fill(curCode.replace('Arsitektur Web & HTTP', 'Arsitektur Web Live Render'))
   await expect(preview.getByRole('heading', { name: 'Arsitektur Web Live Render' })).toBeVisible()
+
+  // Dokumen lengkap dirender sebagai isi body. Head metadata dan komentar tetap di luar preview.
+  await editor.fill(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Belajar HTML #01</title>
+  <style>.example { color: rgb(20, 91, 52); }</style>
+</head>
+<body>
+  <!-- Catatan internal -->
+  <p class="example">Hello &amp; World!</p>
+  <ul><li>Satu<li>Dua</ul>
+  ${curCode}
+</body>
+</html>`)
+  const sample = preview.getByText('Hello & World!', { exact: true })
+  await expect(sample).toBeVisible()
+  await expect(sample).toHaveCSS('color', 'rgb(20, 91, 52)')
+  await expect(preview.getByRole('listitem')).toHaveCount(2)
+  await expect(preview).not.toContainText(/DOCTYPE|Belajar HTML #01|Catatan internal/)
+  await expect(page.getByLabel('Status bar editor')).toContainText('0 Error')
 
   // Uji switcher viewport Mobile 390px
   await page.getByRole('button', { name: 'Mobile' }).click()
@@ -323,7 +345,7 @@ test('dosen memiliki seluruh 14 misi Web Dev terbuka, dapat menguji React, FastA
   await expect(page.getByText('Portal Mahasiswa Rani P2')).toBeVisible()
 })
 
-test('editor kode Web Dev selaras tanpa drift CSS, mendukung autocomplete, auto-close HTML, dan auto-indent VS Code', async ({ page }) => {
+test('CodeMirror Web Dev memberikan saran dan diagnostik sesuai grammar file', async ({ page }) => {
   await page.route('**/api/me', (r) => r.fulfill({ json: lecturer }))
   await attachCommonMocks(page, lecturer.email)
   await attachWebDevApiMocks(page, 'dosen')()
@@ -332,75 +354,126 @@ test('editor kode Web Dev selaras tanpa drift CSS, mendukung autocomplete, auto-
   await page.goto('/lab/dosen/web-dev')
 
   const editor = page.getByLabel('Kode program aplikasi web')
+  const status = page.getByLabel('Status bar editor')
+  const readDoc = async () => (await editor.locator('.cm-line').allTextContents()).join('\n')
   await expect(editor).toBeVisible()
+  await expect(editor).toHaveAttribute('contenteditable', 'true')
+  await expect(editor.locator('.tok-type').first()).toBeVisible()
 
-  // 1. Verifikasi overlay highlight <pre><code> selaras 1:1 dengan <textarea> (bebas .portal code box & font shrink)
-  const metrics = await page.evaluate(() => {
-    const code = document.querySelector('.wd-code-highlight code')
-    const ta = document.querySelector('.wd-code-textarea')
-    if (!code || !ta) return null
-    const cs = getComputedStyle(code)
-    const ts = getComputedStyle(ta)
-    return {
-      codeBorderTop: cs.borderTopWidth,
-      codePadLeft: cs.paddingLeft,
-      codeBg: cs.backgroundColor,
-      codeFontSize: cs.fontSize,
-      taFontSize: ts.fontSize,
-      codeLineHeight: cs.lineHeight,
-      taLineHeight: ts.lineHeight,
-    }
-  })
-  expect(metrics).not.toBeNull()
-  expect(metrics?.codeBorderTop).toBe('0px')
-  expect(metrics?.codePadLeft).toBe('0px')
-  expect(metrics?.codeFontSize).toBe(metrics?.taFontSize)
-  expect(metrics?.codeLineHeight).toBe(metrics?.taLineHeight)
-
-  // 2. Uji auto-close tag HTML (`<section>` -> `<section></section>`) & smart Enter indent
   await editor.fill('')
-  await editor.click()
   await editor.pressSequentially('<section>')
-  await expect(editor).toHaveValue('<section></section>')
+  await expect.poll(readDoc).toBe('<section></section>')
   await editor.press('Enter')
-  await expect(editor).toHaveValue('<section>\n  \n</section>')
+  await expect.poll(readDoc).toBe('<section>\n  \n</section>')
 
-  // 3. Uji autocomplete popup muncul saat mengetik `<he` dan sisip snippet dengan Enter
   await editor.pressSequentially('<he')
-  const acBox = page.getByRole('listbox', { name: 'Saran kode' })
-  await expect(acBox).toBeVisible()
-  await expect(acBox).toContainText('<header>')
-  await editor.press('Enter')
-  await expect(editor).toHaveValue(/<header class="">/)
+  const suggestions = page.getByRole('listbox', { name: 'Saran kode' })
+  await expect(suggestions.getByRole('option', { name: '<header>', exact: true })).toBeVisible()
+  await suggestions.getByRole('option', { name: '<header>', exact: true }).click()
+  await expect(editor).toContainText('<header class="">')
 
-  // 4. Uji Ctrl+Space trigger manual & tombol Rapikan merapikan HTML
-  await editor.press('Control+Space')
-  await expect(acBox).toBeVisible()
-  await editor.press('Escape')
-  await expect(acBox).toBeHidden()
-
-  await editor.fill('<div><p>Halo</p></div>')
+  await editor.fill('<div   class = "stack"><p>Halo</p></div>')
   await page.getByRole('button', { name: 'Rapikan' }).click()
-  await expect(editor).toHaveValue('<div>\n  <p>Halo</p>\n</div>\n')
-  await expect(page.getByLabel('Status bar editor')).toContainText('Spaces: 2')
-  await expect(page.getByLabel('Status bar editor')).toContainText('0 Error')
+  await expect.poll(readDoc).toContain('<div class="stack">')
+  await expect(status).toContainText('0 Error')
 
-  // 5. Uji red error penanda baris saat tag HTML belum ditutup atau CSS kurang ';'
   await editor.fill('<section>\n  <h1>Judul Tanpa Penutup</h1>')
-  await expect(page.locator('.wd-line-gutter .is-error-line[data-error-line="1"]')).toBeVisible()
-  await expect(page.locator('.wd-error-line-bg[data-error-line="1"]')).toBeVisible()
-  await expect(page.locator('.wd-code-highlight .ed-code-error-squiggle[data-error-line="1"]')).toBeVisible()
-  await expect(page.locator('.wd-compile-error')).toContainText("Tag '<section>' di baris 1 belum ditutup")
-  await expect(page.getByLabel('Status bar editor')).toContainText('1 Error · Ln 1')
+  await expect(page.locator('.cm-error-line[data-error-line="1"] .cm-lintRange-error')).toBeVisible()
+  const diagnostic = page.getByRole('button', { name: /Baris 1 Tag '<section>' belum ditutup/ })
+  await diagnostic.click()
+  await expect(editor).toBeFocused()
+  await expect(status).toContainText('Ln 1, Col 2')
+
+  // Uji Emmet-style tag `h1` (tanpa `<`), tag HTML5 modern (`<dialog>`), atribut modern (`loading`, `popovertarget`, `oninput`, `aria-current`)
+  await editor.fill('')
+  await editor.pressSequentially('h1')
+  await expect(suggestions.getByRole('option', { name: '<h1>', exact: true })).toBeVisible()
+  await suggestions.getByRole('option', { name: '<h1>', exact: true }).click()
+  await expect.poll(readDoc).toBe('<h1></h1>')
+
+  await editor.fill('<img ')
+  await editor.press('End')
+  await editor.pressSequentially('load')
+  await expect(suggestions.getByRole('option', { name: 'loading', exact: true })).toBeVisible()
+  await suggestions.getByRole('option', { name: 'loading', exact: true }).click()
+  await editor.pressSequentially('="la')
+  await expect(suggestions.getByRole('option', { name: 'lazy', exact: true })).toBeVisible()
+
+  await editor.fill('<dialog open><button popovertarget="p" oninput="console.log(1)" aria-current="page" style="display: flex;">OK</button></dialog>')
+  await expect(status).toContainText('0 Error')
+
+  // Uji mismatched close tag HTML, SVG self-closing, serta embedded <style> CSS & <script> JS di dalam HTML
+  await editor.fill('<div></span>')
+  await expect(page.getByRole('button', { name: /Baris 1 Tag penutup '<\/span>' tidak cocok/ })).toBeVisible()
+
+  await editor.fill('<svg viewBox="0 0 24 24"><path d="M0 0" /></svg>\n<style>.card:hover { --bg: #0f172a; padding: 12px 1rem; }</style>\n<script>const run = async () => document.querySelector(".card");</script>')
+  await expect(status).toContainText('0 Error')
+  await expect(editor.locator('.tok-const').first()).toBeVisible()
+  await expect(editor.locator('.tok-number').first()).toBeVisible()
+  await expect(editor.locator('.tok-fn').first()).toBeVisible()
+  await expect(editor.locator('.tok-var').first()).toBeVisible()
+
+  await editor.fill('<style>.card { color: ; }</style>')
+  await expect(page.getByRole('button', { name: /Baris 1 Nilai properti CSS belum diisi/ })).toBeVisible()
+  await editor.fill('<script>const broken = ;</script>')
+  await expect(page.locator('.cm-error-line[data-error-line="1"]')).toBeVisible()
 
   await page.getByRole('tab', { name: 'style.css' }).click()
-  const cssCode = await editor.inputValue()
-  await editor.fill(cssCode.replace('padding: 14px;', 'padding: 14px'))
-  await expect(page.locator('.wd-error-line-bg[data-error-line="2"]')).toBeVisible()
-  await expect(page.locator('.wd-compile-error')).toContainText('Baris 2')
-  await expect(page.locator('.wd-compile-error')).toContainText("titik koma (';')")
+  await editor.fill('p { color: red }')
+  await expect(status).toContainText('0 Error')
+  await editor.fill('p {\n  color: red\n  margin: 0;\n}')
+  await expect(page.locator('.cm-error-line[data-error-line="3"]')).toBeVisible()
+  await editor.fill('p {\n  color: ;\n}')
+  await expect(page.getByRole('button', { name: /Baris 2 Nilai properti CSS belum diisi/ })).toBeVisible()
+  await editor.fill('@layer base {\n  @container (min-width: 320px) {\n    .card {\n      --fg: oklch(60% 0.15 240);\n      &:hover { width: clamp(12rem, 50%, 32rem); }\n    }\n  }\n}\n')
+  await expect(status).toContainText('0 Error')
 
-  await editor.fill(cssCode)
-  await expect(page.locator('.wd-error-line-bg')).toHaveCount(0)
-  await expect(page.getByLabel('Status bar editor')).toContainText('0 Error')
+  // Uji saran nilai properti CSS kontekstual (`display: fl` -> `flex`) & fungsi modern (`clamp()`)
+  await editor.fill('.card { display:  }')
+  await editor.click()
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 17; i++) await page.keyboard.press('ArrowRight')
+  await editor.pressSequentially('fl')
+  await expect(suggestions.getByRole('option', { name: 'flex', exact: true })).toBeVisible()
+
+  // Uji dot-member autocomplete Web/DOM API di JavaScript (`document.`), keyword ES6 (`async`), & inferensi elemen lokal
+  await page.getByRole('tab', { name: 'app.js' }).click()
+  await editor.fill('')
+  await editor.pressSequentially('document.')
+  await expect(suggestions.getByRole('option', { name: 'querySelector', exact: true })).toBeVisible()
+  await suggestions.getByRole('option', { name: 'querySelector', exact: true }).click()
+  await expect.poll(readDoc).toBe('document.querySelector("")')
+
+  await editor.fill('const btn = document.getElementById("go");\n')
+  await editor.click()
+  await page.keyboard.press('End')
+  await editor.pressSequentially('btn.classL')
+  await expect(suggestions.getByRole('option', { name: 'classList', exact: true })).toBeVisible()
+
+  await editor.fill('')
+  await editor.pressSequentially('asy')
+  await expect(suggestions.getByRole('option', { name: 'async', exact: true })).toBeVisible()
+
+  const fixtures = [
+    ['script.js', 'JavaScript', 'const value = /[{}]/.test(input)', 'const value = ;'],
+    ['model.ts', 'TypeScript', 'const count: number = 1', 'const count: = 1'],
+    ['Card.jsx', 'JSX', 'const card = <div>Hello</div>', 'const card = <div><span></div>'],
+    ['Card.tsx', 'TSX', 'const card = (name: string) => <p>{name}</p>', 'const card = (name: ) => <p>{name}</p>'],
+    ['model.py', 'Python', 'def label():\n    return f"Item {1}"', 'def label():\nprint(1)'],
+    ['schema.sql', 'PostgreSQL', 'SELECT 1::int', 'SELECT FROM;'],
+    ['settings.json', 'JSON', '{"ok": true}', '{"ok": }'],
+  ]
+  for (const [file, language, valid, invalid] of fixtures) {
+    await page.getByRole('button', { name: 'Tambah File' }).click()
+    await page.getByRole('textbox', { name: 'Nama file baru' }).fill(file)
+    await page.getByRole('button', { name: 'Buat', exact: true }).click()
+    await expect(status).toContainText(language)
+    await editor.fill(invalid)
+    await expect(page.locator('.cm-error-line').first(), file).toBeVisible()
+    await editor.fill(valid)
+    await expect(status, file).toContainText('0 Error')
+    await page.getByRole('button', { name: 'Rapikan' }).click()
+    await expect.poll(async () => (await readDoc()).endsWith('\n')).toBe(true)
+    await expect(status, file).toContainText('0 Error')
+  }
 })
