@@ -24,8 +24,8 @@ import { StudioControls } from './StudioControls'
 import { resolveLabWeather, sensorSample, studioScene, useStudioSettings, WEATHER_LABELS } from './studio-model'
 import './login.css'
 
-const DESKTOP_DIVIDER_EDGE = 'M56 0 C22 4 6 10 6 28 C6 54 14 64 56 76 C86 84 94 92 60 100'
-const DESKTOP_DIVIDER_RIBBON = 'M66 0 C32 4 14 11 14 28 C14 53 23 63 65 75 C94 83 100 92 70 100'
+const DESKTOP_DIVIDER_EDGE = 'M36 0 C22 12 16 24 18 40 C20 56 70 67 74 82 C76 91 64 97 48 100'
+const DESKTOP_DIVIDER_RIBBON = 'M45 0 C31 12 24 24 26 40 C28 56 79 67 83 82 C85 91 73 97 57 100'
 
 const messagesId: Record<string, string> = {
   cancelled: 'Login dibatalkan. Anda bisa mencoba lagi saat siap.',
