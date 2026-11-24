@@ -10,11 +10,13 @@ import {
   Terminal,
 } from 'lucide-react'
 import { Fragment, createElement, useCallback, useMemo, useState, type ReactNode } from 'react'
+import { parse, type DefaultTreeAdapterTypes as HtmlAst } from 'parse5'
 import { Badge } from '../portal/ui'
 import {
   invokeVirtualFastApi,
   matchElementCss,
   parseSafeCssRules,
+  parseSafeInlineStyle,
   type JsDomBinding,
   type ParsedCssRule,
   type ReactComponentModel,
@@ -29,50 +31,31 @@ import type {
 export type PreviewSubTab = 'preview' | 'console' | 'api' | 'db'
 
 const ALLOWED_WEB_TAGS = new Set([
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'p',
-  'div',
-  'section',
-  'header',
-  'nav',
-  'main',
-  'footer',
-  'article',
-  'aside',
-  'span',
-  'strong',
-  'em',
-  'b',
-  'i',
-  'small',
-  'code',
-  'pre',
-  'ul',
-  'ol',
-  'li',
-  'table',
-  'thead',
-  'tbody',
-  'tr',
-  'th',
-  'td',
-  'form',
-  'label',
-  'input',
-  'textarea',
-  'select',
-  'option',
-  'button',
-  'a',
-  'hr',
-  'br',
-  'blockquote',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hgroup',
+  'p', 'div', 'section', 'header', 'nav', 'main', 'footer', 'article', 'aside', 'search',
+  'span', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'mark', 'time', 'abbr', 'address',
+  'cite', 'q', 'del', 'ins', 'sub', 'sup', 'kbd', 'samp', 'var', 'dfn', 'bdi', 'bdo',
+  'ruby', 'rt', 'rp', 'data', 'code', 'pre',
+  'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+  'table', 'thead', 'tbody', 'tfoot', 'caption', 'colgroup', 'col', 'tr', 'th', 'td',
+  'form', 'fieldset', 'legend', 'label', 'input', 'textarea', 'select', 'optgroup', 'option',
+  'datalist', 'button', 'output', 'progress', 'meter',
+  'details', 'summary', 'dialog',
+  'a', 'hr', 'br', 'wbr', 'blockquote', 'figure', 'figcaption', 'img', 'picture',
+  'svg', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'g', 'defs', 'text', 'tspan',
 ])
 
-const VOID_TAGS = new Set(['br', 'hr', 'input'])
+const VOID_TAGS = new Set(['br', 'hr', 'input', 'img', 'wbr', 'col'])
+
+const SVG_TAGS = new Set([
+  'svg', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'g', 'defs', 'text', 'tspan',
+])
+
+function isSafeImageSrc(src: string | undefined): boolean {
+  if (!src) return false
+  const trimmed = src.trim()
+  return /^(?:https?:\/\/|\/|data:image\/(?:png|jpeg|jpg|gif|webp);base64,)/i.test(trimmed)
+}
 
 interface MarkupAstNode {
   kind: 'text' | 'element'
@@ -81,6 +64,45 @@ interface MarkupAstNode {
   attrs?: Record<string, string>
   hasReactClick?: boolean
   children?: MarkupAstNode[]
+}
+
+/** Convert only the visible HTML body into preview nodes. The parser never creates live DOM elements. */
+function parseHtmlPreview(markup: string): { nodes: MarkupAstNode[]; styles: string[] } {
+  const findElement = (children: HtmlAst.ChildNode[], name: string) =>
+    children.find((child): child is HtmlAst.Element => 'tagName' in child && child.tagName === name)
+  const document = parse(markup)
+  const html = findElement(document.childNodes, 'html')
+  const head = html && findElement(html.childNodes, 'head')
+  const body = html && findElement(html.childNodes, 'body')
+  const styles: string[] = []
+
+  const convert = (children: HtmlAst.ChildNode[]): MarkupAstNode[] => children.flatMap((child): MarkupAstNode[] => {
+    if (child.nodeName === '#text' && 'value' in child) return [{ kind: 'text', text: child.value }]
+    if (!('tagName' in child)) return []
+    const isHtmlNs = child.namespaceURI === 'http://www.w3.org/1999/xhtml'
+    const isSvgNs = child.namespaceURI === 'http://www.w3.org/2000/svg' && SVG_TAGS.has(child.tagName)
+    if (!isHtmlNs && !isSvgNs) return []
+    if (child.tagName === 'style') {
+      for (const text of child.childNodes) {
+        if (text.nodeName === '#text' && 'value' in text) styles.push(text.value)
+      }
+      return []
+    }
+    if (['script', 'title', 'template', 'iframe', 'object', 'noscript'].includes(child.tagName)) return []
+    const visibleChildren = convert(child.childNodes)
+    if (!ALLOWED_WEB_TAGS.has(child.tagName)) return visibleChildren
+    return [{
+      kind: 'element',
+      tag: child.tagName,
+      attrs: Object.fromEntries(child.attrs.map(({ name, value }) => [name, value])),
+      children: visibleChildren,
+    }]
+  })
+
+  // Collect style elements in source order without adding head elements to the rendered tree.
+  if (head) convert(head.childNodes)
+  const nodes = body ? convert(body.childNodes) : []
+  return { nodes, styles }
 }
 
 function parseTagAttrs(rawAttrs: string): { attrs: Record<string, string>; hasReactClick: boolean } {
@@ -311,20 +333,54 @@ function renderAstNodes(
     const attrs = node.attrs ?? {}
     const idAttr = attrs.id || null
     const classAttr = attrs.class || attrs.classname || null
-    const computedStyle = matchElementCss(cssRules, tag, classAttr, idAttr)
+    const computedStyle = {
+      ...matchElementCss(cssRules, tag, classAttr, idAttr),
+      ...parseSafeInlineStyle(attrs.style),
+    }
+
+    const commonProps: Record<string, unknown> = {
+      key,
+      id: idAttr || undefined,
+      style: computedStyle,
+      title: attrs.title || undefined,
+      dir: attrs.dir === 'ltr' || attrs.dir === 'rtl' || attrs.dir === 'auto' ? attrs.dir : undefined,
+      lang: attrs.lang || undefined,
+      role: attrs.role || undefined,
+      hidden: 'hidden' in attrs ? true : undefined,
+    }
+    for (const [k, v] of Object.entries(attrs)) {
+      if (/^aria-[a-z-]+$/.test(k)) commonProps[k] = v
+    }
 
     if (VOID_TAGS.has(tag)) {
       if (tag === 'input') {
         return createElement('input', {
-          key,
-          id: idAttr || undefined,
+          ...commonProps,
           className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
-          style: computedStyle,
           type: attrs.type || 'text',
+          name: attrs.name || undefined,
           placeholder: attrs.placeholder || undefined,
+          defaultValue: attrs.value || undefined,
+          defaultChecked: 'checked' in attrs ? true : undefined,
+          disabled: 'disabled' in attrs ? true : undefined,
+          required: 'required' in attrs ? true : undefined,
+          readOnly: 'readonly' in attrs ? true : undefined,
+          min: attrs.min || undefined,
+          max: attrs.max || undefined,
+          step: attrs.step || undefined,
         })
       }
-      return createElement(tag, { key, style: computedStyle })
+      if (tag === 'img') {
+        return createElement('img', {
+          ...commonProps,
+          className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
+          src: isSafeImageSrc(attrs.src) ? attrs.src : undefined,
+          alt: attrs.alt ?? '',
+          width: attrs.width || undefined,
+          height: attrs.height || undefined,
+        })
+      }
+      return createElement(tag, commonProps)
     }
 
     const overrideText = idAttr && idAttr in domOverrides ? domOverrides[idAttr] : null
@@ -399,13 +455,52 @@ function renderAstNodes(
       )
     }
 
+    const extraProps: Record<string, unknown> = {}
+    if (tag === 'label' && (attrs.for || attrs.htmlfor)) extraProps.htmlFor = attrs.for || attrs.htmlfor
+    if (tag === 'textarea') {
+      if (attrs.rows) extraProps.rows = Number(attrs.rows) || undefined
+      if (attrs.cols) extraProps.cols = Number(attrs.cols) || undefined
+      if (attrs.placeholder) extraProps.placeholder = attrs.placeholder
+      if (attrs.name) extraProps.name = attrs.name
+      if ('disabled' in attrs) extraProps.disabled = true
+      if ('required' in attrs) extraProps.required = true
+      if ('readonly' in attrs) extraProps.readOnly = true
+    }
+    if (tag === 'select' || tag === 'option') {
+      if (attrs.name) extraProps.name = attrs.name
+      if (attrs.value) extraProps.value = attrs.value
+      if ('disabled' in attrs) extraProps.disabled = true
+      if ('multiple' in attrs) extraProps.multiple = true
+    }
+    if (tag === 'th' || tag === 'td') {
+      if (attrs.colspan) extraProps.colSpan = Number(attrs.colspan) || undefined
+      if (attrs.rowspan) extraProps.rowSpan = Number(attrs.rowspan) || undefined
+    }
+    if ((tag === 'details' || tag === 'dialog') && 'open' in attrs) extraProps.open = true
+    if (tag === 'progress' || tag === 'meter') {
+      if (attrs.value) extraProps.value = Number(attrs.value)
+      if (attrs.max) extraProps.max = Number(attrs.max)
+      if (attrs.min) extraProps.min = Number(attrs.min)
+    }
+    if (SVG_TAGS.has(tag)) {
+      const svgMap: Record<string, string> = {
+        viewbox: 'viewBox', width: 'width', height: 'height', fill: 'fill', stroke: 'stroke',
+        'stroke-width': 'strokeWidth', 'stroke-linecap': 'strokeLinecap', 'stroke-linejoin': 'strokeLinejoin',
+        d: 'd', cx: 'cx', cy: 'cy', r: 'r', rx: 'rx', ry: 'ry', x: 'x', y: 'y',
+        x1: 'x1', y1: 'y1', x2: 'x2', y2: 'y2', points: 'points', transform: 'transform', opacity: 'opacity',
+      }
+      for (const [k, v] of Object.entries(attrs)) {
+        const mapped = svgMap[k.toLowerCase()]
+        if (mapped) extraProps[mapped] = v
+      }
+    }
+
     return createElement(
       tag,
       {
-        key,
-        id: idAttr || undefined,
+        ...commonProps,
+        ...extraProps,
         className: classAttr ? `wd-el ${classAttr}` : 'wd-el',
-        style: computedStyle,
       },
       children,
     )
@@ -471,18 +566,21 @@ export function WebDevPreviewPane({
         .join('\n'),
     [files],
   )
-  const cssRules = useMemo(() => parseSafeCssRules(cssText), [cssText])
-
   const htmlFile = useMemo(
     () =>
       files.find((f) => f.name.toLowerCase() === 'index.html') ??
-      files.find((f) => f.name.toLowerCase().endsWith('.html')) ??
+      files.find((f) => /\.html?$/i.test(f.name)) ??
       null,
     [files],
   )
   const jsxFile = useMemo(
     () => files.find((f) => f.name.toLowerCase().endsWith('.jsx') || f.name.toLowerCase().endsWith('.tsx')) ?? null,
     [files],
+  )
+  const htmlPreview = useMemo(() => htmlFile ? parseHtmlPreview(htmlFile.content) : null, [htmlFile])
+  const cssRules = useMemo(
+    () => parseSafeCssRules([cssText, ...(htmlPreview?.styles ?? [])].join('\n')),
+    [cssText, htmlPreview],
   )
 
   const handleTestRoute = useCallback(
@@ -563,10 +661,9 @@ export function WebDevPreviewPane({
       )
     }
 
-    if (!htmlFile) return null
-    const ast = parseMarkupToAst(htmlFile.content)
+    if (!htmlPreview) return null
     return renderAstNodes(
-      ast,
+      htmlPreview.nodes,
       'wd-html',
       cssRules,
       combinedDom,
@@ -588,7 +685,7 @@ export function WebDevPreviewPane({
     cssRules,
     handleInvokeBinding,
     handleTestRoute,
-    htmlFile,
+    htmlPreview,
     jsxFile,
     onConsoleLogAdded,
     reactCounter,
@@ -741,8 +838,8 @@ export function WebDevPreviewPane({
                 <strong>{en ? 'Click Run to render your Web app' : 'Klik Jalankan untuk merender aplikasi Web Anda'}</strong>
                 <p>
                   {en
-                    ? 'HTML, CSS, JavaScript ES6+, React JSX, Python/FastAPI, and PostgreSQL output are evaluated live in this sandbox.'
-                    : 'Hasil HTML, CSS, JavaScript ES6+, React JSX, FastAPI, dan PostgreSQL akan langsung di-render di area ini.'}
+                    ? 'View HTML and CSS alongside simulated JavaScript, React, FastAPI, and PostgreSQL output.'
+                    : 'Lihat tampilan HTML dan CSS serta hasil simulasi JavaScript, React, FastAPI, dan PostgreSQL.'}
                 </p>
               </div>
             ) : activePath !== '/' && apiJsonView ? (

@@ -2,46 +2,170 @@ import type { CSSProperties } from 'react'
 import type { WebDevFastApiRoute, WebDevFile, WebDevSqlTable } from './types'
 
 const ALLOWED_CSS_PROPS = new Map<string, keyof CSSProperties>([
-  ['color', 'color'],
-  ['background', 'background'],
-  ['background-color', 'backgroundColor'],
-  ['padding', 'padding'],
-  ['padding-top', 'paddingTop'],
-  ['padding-bottom', 'paddingBottom'],
-  ['padding-left', 'paddingLeft'],
-  ['padding-right', 'paddingRight'],
-  ['margin', 'margin'],
-  ['margin-top', 'marginTop'],
-  ['margin-bottom', 'marginBottom'],
-  ['margin-left', 'marginLeft'],
-  ['margin-right', 'marginRight'],
-  ['display', 'display'],
-  ['flex-direction', 'flexDirection'],
-  ['justify-content', 'justifyContent'],
+  ['accent-color', 'accentColor'],
+  ['align-content', 'alignContent'],
   ['align-items', 'alignItems'],
-  ['flex-wrap', 'flexWrap'],
-  ['gap', 'gap'],
-  ['grid-template-columns', 'gridTemplateColumns'],
+  ['align-self', 'alignSelf'],
+  ['aspect-ratio', 'aspectRatio'],
+  ['backdrop-filter', 'backdropFilter'],
+  ['background', 'background'],
+  ['background-clip', 'backgroundClip'],
+  ['background-color', 'backgroundColor'],
+  ['background-image', 'backgroundImage'],
+  ['background-position', 'backgroundPosition'],
+  ['background-repeat', 'backgroundRepeat'],
+  ['background-size', 'backgroundSize'],
   ['border', 'border'],
   ['border-bottom', 'borderBottom'],
-  ['border-top', 'borderTop'],
+  ['border-bottom-color', 'borderBottomColor'],
+  ['border-bottom-left-radius', 'borderBottomLeftRadius'],
+  ['border-bottom-right-radius', 'borderBottomRightRadius'],
+  ['border-bottom-style', 'borderBottomStyle'],
+  ['border-bottom-width', 'borderBottomWidth'],
+  ['border-collapse', 'borderCollapse'],
+  ['border-color', 'borderColor'],
+  ['border-left', 'borderLeft'],
   ['border-radius', 'borderRadius'],
-  ['font-size', 'fontSize'],
-  ['font-weight', 'fontWeight'],
-  ['font-family', 'fontFamily'],
-  ['text-align', 'textAlign'],
-  ['width', 'width'],
-  ['max-width', 'maxWidth'],
-  ['min-width', 'minWidth'],
-  ['min-height', 'minHeight'],
-  ['height', 'height'],
+  ['border-right', 'borderRight'],
+  ['border-spacing', 'borderSpacing'],
+  ['border-style', 'borderStyle'],
+  ['border-top', 'borderTop'],
+  ['border-top-left-radius', 'borderTopLeftRadius'],
+  ['border-top-right-radius', 'borderTopRightRadius'],
+  ['border-width', 'borderWidth'],
+  ['bottom', 'bottom'],
   ['box-shadow', 'boxShadow'],
+  ['box-sizing', 'boxSizing'],
+  ['caret-color', 'caretColor'],
+  ['clear', 'clear'],
+  ['clip-path', 'clipPath'],
+  ['color', 'color'],
+  ['color-scheme', 'colorScheme'],
+  ['column-gap', 'columnGap'],
+  ['cursor', 'cursor'],
+  ['direction', 'direction'],
+  ['display', 'display'],
+  ['fill', 'fill'],
+  ['filter', 'filter'],
+  ['flex', 'flex'],
+  ['flex-basis', 'flexBasis'],
+  ['flex-direction', 'flexDirection'],
+  ['flex-flow', 'flexFlow'],
+  ['flex-grow', 'flexGrow'],
+  ['flex-shrink', 'flexShrink'],
+  ['flex-wrap', 'flexWrap'],
+  ['float', 'float'],
+  ['font', 'font'],
+  ['font-family', 'fontFamily'],
+  ['font-size', 'fontSize'],
+  ['font-style', 'fontStyle'],
+  ['font-variant', 'fontVariant'],
+  ['font-variant-numeric', 'fontVariantNumeric'],
+  ['font-weight', 'fontWeight'],
+  ['gap', 'gap'],
+  ['grid', 'grid'],
+  ['grid-area', 'gridArea'],
+  ['grid-auto-columns', 'gridAutoColumns'],
+  ['grid-auto-flow', 'gridAutoFlow'],
+  ['grid-auto-rows', 'gridAutoRows'],
+  ['grid-column', 'gridColumn'],
+  ['grid-row', 'gridRow'],
+  ['grid-template-areas', 'gridTemplateAreas'],
+  ['grid-template-columns', 'gridTemplateColumns'],
+  ['grid-template-rows', 'gridTemplateRows'],
+  ['height', 'height'],
+  ['inset', 'inset'],
+  ['isolation', 'isolation'],
+  ['justify-content', 'justifyContent'],
+  ['justify-items', 'justifyItems'],
+  ['justify-self', 'justifySelf'],
+  ['left', 'left'],
+  ['letter-spacing', 'letterSpacing'],
   ['line-height', 'lineHeight'],
   ['list-style', 'listStyle'],
-  ['border-collapse', 'borderCollapse'],
-  ['cursor', 'cursor'],
+  ['list-style-position', 'listStylePosition'],
+  ['list-style-type', 'listStyleType'],
+  ['margin', 'margin'],
+  ['margin-block', 'marginBlock'],
+  ['margin-bottom', 'marginBottom'],
+  ['margin-inline', 'marginInline'],
+  ['margin-left', 'marginLeft'],
+  ['margin-right', 'marginRight'],
+  ['margin-top', 'marginTop'],
+  ['max-height', 'maxHeight'],
+  ['max-width', 'maxWidth'],
+  ['min-height', 'minHeight'],
+  ['min-width', 'minWidth'],
+  ['mix-blend-mode', 'mixBlendMode'],
+  ['object-fit', 'objectFit'],
+  ['object-position', 'objectPosition'],
   ['opacity', 'opacity'],
+  ['order', 'order'],
+  ['outline', 'outline'],
+  ['outline-offset', 'outlineOffset'],
+  ['overflow', 'overflow'],
+  ['overflow-wrap', 'overflowWrap'],
+  ['overflow-x', 'overflowX'],
+  ['overflow-y', 'overflowY'],
+  ['padding', 'padding'],
+  ['padding-block', 'paddingBlock'],
+  ['padding-bottom', 'paddingBottom'],
+  ['padding-inline', 'paddingInline'],
+  ['padding-left', 'paddingLeft'],
+  ['padding-right', 'paddingRight'],
+  ['padding-top', 'paddingTop'],
+  ['place-content', 'placeContent'],
+  ['place-items', 'placeItems'],
+  ['place-self', 'placeSelf'],
+  ['pointer-events', 'pointerEvents'],
+  ['position', 'position'],
+  ['resize', 'resize'],
+  ['right', 'right'],
+  ['rotate', 'rotate'],
+  ['row-gap', 'rowGap'],
+  ['scale', 'scale'],
+  ['scroll-behavior', 'scrollBehavior'],
+  ['stroke', 'stroke'],
+  ['stroke-width', 'strokeWidth'],
+  ['table-layout', 'tableLayout'],
+  ['text-align', 'textAlign'],
+  ['text-decoration', 'textDecoration'],
+  ['text-indent', 'textIndent'],
+  ['text-overflow', 'textOverflow'],
+  ['text-shadow', 'textShadow'],
+  ['text-transform', 'textTransform'],
+  ['text-underline-offset', 'textUnderlineOffset'],
+  ['text-wrap', 'textWrap'],
+  ['top', 'top'],
+  ['transform', 'transform'],
+  ['transform-origin', 'transformOrigin'],
+  ['transition', 'transition'],
+  ['translate', 'translate'],
+  ['user-select', 'userSelect'],
+  ['vertical-align', 'verticalAlign'],
+  ['visibility', 'visibility'],
+  ['white-space', 'whiteSpace'],
+  ['width', 'width'],
+  ['word-break', 'wordBreak'],
+  ['word-spacing', 'wordSpacing'],
+  ['writing-mode', 'writingMode'],
+  ['z-index', 'zIndex'],
 ])
+
+export function parseSafeInlineStyle(rawStyle: string | undefined): CSSProperties {
+  if (!rawStyle) return {}
+  const styleObj: Record<string, string> = {}
+  for (const decl of rawStyle.split(';')) {
+    const colonIdx = decl.indexOf(':')
+    if (colonIdx <= 0) continue
+    const prop = decl.slice(0, colonIdx).trim().toLowerCase()
+    const val = decl.slice(colonIdx + 1).trim()
+    if (!val || /url\s*\(|expression\s*\(|javascript:/i.test(val)) continue
+    const camelProp = ALLOWED_CSS_PROPS.get(prop)
+    if (camelProp) styleObj[camelProp] = val
+  }
+  return styleObj as CSSProperties
+}
 
 export interface ParsedCssRule {
   selector: string
@@ -57,23 +181,12 @@ export function parseSafeCssRules(cssText: string): ParsedCssRule[] {
     const selectorsRaw = m[1].trim()
     const body = m[2].trim()
     if (!selectorsRaw || !body) continue
-    const styleObj: Record<string, string> = {}
-    for (const decl of body.split(';')) {
-      const colonIdx = decl.indexOf(':')
-      if (colonIdx <= 0) continue
-      const prop = decl.slice(0, colonIdx).trim().toLowerCase()
-      const val = decl.slice(colonIdx + 1).trim()
-      if (!val || /url\s*\(|expression\s*\(|javascript:/i.test(val)) continue
-      const camelProp = ALLOWED_CSS_PROPS.get(prop)
-      if (camelProp) {
-        styleObj[camelProp] = val
-      }
-    }
+    const styleObj = parseSafeInlineStyle(body)
     if (Object.keys(styleObj).length === 0) continue
     for (const sel of selectorsRaw.split(',')) {
       const trimmed = sel.trim()
       if (trimmed) {
-        rules.push({ selector: trimmed, style: styleObj as CSSProperties })
+        rules.push({ selector: trimmed, style: styleObj })
       }
     }
   }
@@ -90,18 +203,23 @@ export function matchElementCss(
   const merged: Record<string, unknown> = {}
   for (const r of rules) {
     const parts = r.selector.trim().split(/\s+/)
-    const leaf = parts[parts.length - 1]
+    const rawLeaf = parts[parts.length - 1]
+    if (!rawLeaf) continue
+    const leaf = rawLeaf.replace(/:{1,2}[a-zA-Z-]+(?:\([^)]*\))?/g, '')
     if (!leaf) continue
     let matched = false
     if (leaf === tag || leaf === '*') {
       matched = true
-    } else if (leaf.startsWith('.') && classes.has(leaf.slice(1))) {
+    } else if (leaf.startsWith('.') && leaf.slice(1).split('.').every((c) => classes.has(c))) {
       matched = true
     } else if (leaf.startsWith('#') && idAttr && leaf.slice(1) === idAttr) {
       matched = true
+    } else if (leaf.includes('#')) {
+      const [lTag, lId] = leaf.split('#')
+      if ((lTag === '' || lTag === tag) && idAttr && lId === idAttr) matched = true
     } else if (leaf.includes('.')) {
-      const [lTag, lCls] = leaf.split('.')
-      if ((lTag === '' || lTag === tag) && classes.has(lCls)) matched = true
+      const [lTag, ...lClasses] = leaf.split('.')
+      if ((lTag === '' || lTag === tag) && lClasses.every((c) => classes.has(c))) matched = true
     }
     if (matched) {
       Object.assign(merged, r.style)
