@@ -4,34 +4,10 @@ import { drawLabScreen, laptopSceneAt, LAPTOP_HEIGHT, LAPTOP_WIDTH } from './lab
 import { createIndoorFoliage } from './indoor-foliage'
 import type { LabWeather, StudioSettings } from './studio-model'
 import { createGreenLedDimmer, createRearInstruments, greenLedLevel, REAR_DISPLAYS } from './rear-instruments'
+import { createQuadProjector } from './quadProjector'
 
 // Native photograph coordinates. The night photograph has a slightly different camera angle.
-type Point = [number, number]
 const seed = (n: number) => { const x = Math.sin(n * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x) }
-function project(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, corners: Point[], columns = 10, rows = 8) {
-  // Perspective-correct quad subdivided into triangles; nothing spills onto the bezel.
-  const [a, b, c, d] = corners
-  const dx1 = b[0] - c[0], dx2 = d[0] - c[0], dx3 = a[0] - b[0] + c[0] - d[0]
-  const dy1 = b[1] - c[1], dy2 = d[1] - c[1], dy3 = a[1] - b[1] + c[1] - d[1]
-  const det = dx1 * dy2 - dx2 * dy1
-  const g = (dx3 * dy2 - dx2 * dy3) / det, h = (dx1 * dy3 - dx3 * dy1) / det
-  const point = (u: number, v: number): Point => [((b[0] - a[0] + g * b[0]) * u + (d[0] - a[0] + h * d[0]) * v + a[0]) / (g * u + h * v + 1), ((b[1] - a[1] + g * b[1]) * u + (d[1] - a[1] + h * d[1]) * v + a[1]) / (g * u + h * v + 1)]
-  const tri = (uv: Point[]) => {
-    const p = uv.map(([u, v]) => point(u, v)), s = uv.map(([u, v]) => [u * source.width, v * source.height])
-    const [s0, s1, s2] = s, [p0, p1, p2] = p
-    const den = (s1[0] - s0[0]) * (s2[1] - s0[1]) - (s2[0] - s0[0]) * (s1[1] - s0[1])
-    const aa = ((p1[0] - p0[0]) * (s2[1] - s0[1]) - (p2[0] - p0[0]) * (s1[1] - s0[1])) / den
-    const bb = ((p1[1] - p0[1]) * (s2[1] - s0[1]) - (p2[1] - p0[1]) * (s1[1] - s0[1])) / den
-    const cc = ((p2[0] - p0[0]) * (s1[0] - s0[0]) - (p1[0] - p0[0]) * (s2[0] - s0[0])) / den
-    const dd = ((p2[1] - p0[1]) * (s1[0] - s0[0]) - (p1[1] - p0[1]) * (s2[0] - s0[0])) / den
-    ctx.save(); ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.lineTo(...p2); ctx.closePath(); ctx.clip()
-    ctx.transform(aa, bb, cc, dd, p0[0] - aa * s0[0] - cc * s0[1], p0[1] - bb * s0[0] - dd * s0[1]); ctx.drawImage(source, 0, 0); ctx.restore()
-  }
-  for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
-    const u = x / columns, v = y / rows, uu = (x + 1) / columns, vv = (y + 1) / rows
-    tri([[u, v], [uu, v], [uu, vv]]); tri([[u, v], [uu, vv], [u, vv]])
-  }
-}
 
 export function LabScene({ scene, weather, settings, en, onSample }: { scene: SceneDescriptor; weather: LabWeather; settings: StudioSettings; en: boolean; onSample: (seconds: number) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -45,6 +21,7 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
     const screenCtx = screen.getContext('2d')!
     const instruments = createRearInstruments()
     const indoorFoliage = createIndoorFoliage()
+    const projector = createQuadProjector()
     let greenDimmer: HTMLCanvasElement | null = null
     const foliage = document.createElement('canvas'); foliage.width = 318; foliage.height = 165
     const foliageCtx = foliage.getContext('2d', { willReadFrequently: true })!
@@ -66,7 +43,7 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
       const indoorSway = settings.leaves && !reduce.matches ? indoorFoliage.draw(ctx, t) : 0
       drawLabScreen(screenCtx, t, settings.program, weather, settings.distance, settings.network)
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-      project(ctx, screen, warmAngle ? [[43, 248], [736, 281], [790, 665], [85, 730]] : [[43, 246], [752, 284], [802, 687], [87, 740]])
+      projector.project(ctx, screen, warmAngle ? [[43, 248], [736, 281], [790, 665], [85, 730]] : [[43, 246], [752, 284], [802, 687], [87, 740]])
       const led = (x: number, y: number, color: string, active: boolean, radius = 2) => {
         if (!active) { ctx.save(); const dim = ctx.createRadialGradient(x, y, 0, x, y, radius * 4); dim.addColorStop(0, 'rgba(5,8,9,.7)'); dim.addColorStop(1, 'rgba(5,8,9,0)'); ctx.fillStyle = dim; ctx.fillRect(x - radius * 4, y - radius * 4, radius * 8, radius * 8); ctx.restore() }
         ctx.fillStyle = active ? color : '#243a2c'; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill()
@@ -147,8 +124,8 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
       ctx.restore()
       const rear = REAR_DISPLAYS[warmAngle ? 'night' : 'day']
       ctx.save(); ctx.filter = 'blur(.3px)'
-      rear.monitors.forEach((quad, i) => project(ctx, instruments.drawMonitor(t, i, settings.network), quad, 3, 2))
-      rear.scopes.forEach((quad, i) => project(ctx, instruments.drawScope(t, i), quad, 3, 2))
+      rear.monitors.forEach((quad, i) => projector.project(ctx, instruments.drawMonitor(t, i, settings.network), quad, 3, 2))
+      rear.scopes.forEach((quad, i) => projector.project(ctx, instruments.drawScope(t, i), quad, 3, 2))
       ctx.restore()
       canvas.dataset.frame = String(Math.floor(elapsed * 30)); canvas.dataset.program = settings.program; canvas.dataset.weather = weather
       canvas.dataset.greenLed = greenLevel.toFixed(3)
@@ -171,7 +148,7 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
     redraw.current = resume
     const observer = new ResizeObserver(resize); observer.observe(canvas)
     reduce.addEventListener('change', resume); document.addEventListener('visibilitychange', resume); resize()
-    return () => { disposed = true; photo.onload = null; cancelAnimationFrame(frame); observer.disconnect(); reduce.removeEventListener('change', resume); document.removeEventListener('visibilitychange', resume); redraw.current = null }
+    return () => { disposed = true; photo.onload = null; cancelAnimationFrame(frame); observer.disconnect(); reduce.removeEventListener('change', resume); document.removeEventListener('visibilitychange', resume); redraw.current = null; projector.dispose() }
   }, [])
   return <canvas ref={canvasRef} className="login-lab-effects" aria-hidden="true" data-lab-animation />
 }

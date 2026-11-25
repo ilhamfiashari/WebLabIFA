@@ -220,3 +220,48 @@ test('workstation popup is symmetrically centered and responsive on 390px mobile
   await dialog.getByRole('button', { name: /Tutup workstation|Close workstation/ }).click()
   await expect(dialog).toHaveCount(0)
 })
+
+test('projected laptop screen has zero triangle grid seams in both WebGL and 2D fallback on mobile', async ({ page }) => {
+  for (const disableWebGl of [false, true]) {
+    if (disableWebGl) {
+      await page.addInitScript(() => {
+        const orig = HTMLCanvasElement.prototype.getContext
+        HTMLCanvasElement.prototype.getContext = function (
+          this: HTMLCanvasElement,
+          type: string,
+          ...args: unknown[]
+        ) {
+          if (type === 'webgl' || type === 'webgl2') return null
+          return orig.apply(this, [type, ...args] as Parameters<typeof orig>)
+        } as typeof HTMLCanvasElement.prototype.getContext
+      })
+    }
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Studio', exact: true }).click()
+    await page.getByLabel('Program laptop').selectOption('attacks')
+    await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'attacks')
+
+    // Sample top-left light header area inside the laptop canvas: every pixel must remain bright (no dark seam bleed).
+    const darkSeamPixels = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-lab-animation]') as HTMLCanvasElement | null
+      if (!canvas) return -1
+      const ctx = canvas.getContext('2d')!
+      const rect = canvas.getBoundingClientRect()
+      const sx = canvas.width / rect.width
+      const sy = canvas.height / rect.height
+      const scale = Math.max(rect.width / 1446, rect.height / 1087)
+      const offsetX = (rect.width - 1446 * scale) * 0.5
+      // Scan across y=338 (below title text, above graph nodes) from x=95..235 in 1446x1087 coords (crosses grid column/diagonal seams)
+      let darkCount = 0
+      for (let lx = 95; lx <= 235; lx += 2) {
+        const px = Math.round((offsetX + lx * scale) * sx)
+        const py = Math.round((338 * scale) * sy)
+        const d = ctx.getImageData(px, py, 1, 1).data
+        if (d[3] < 245 || d[0] < 200 || d[1] < 200 || d[2] < 200) darkCount++
+      }
+      return darkCount
+    })
+    expect(darkSeamPixels).toBe(0)
+  }
+})
