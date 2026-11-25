@@ -2247,26 +2247,28 @@ export function IotSimulatorStudio({
               </div>
             ) : leftTab === 'components' ? (
               <div className="iot-components-browser">
-                <div className="search" style={{ width: '100%' }}>
-                  <Search size={14} />
-                  <input
-                    value={partSearch}
-                    onChange={(e) => setPartSearch(e.target.value)}
-                    placeholder={en ? 'Search Components (e.g. Servo, DHT22, LED)...' : 'Cari Komponen (mis. Servo, DHT22, LED)...'}
-                  />
-                </div>
+                <div className="iot-components-sticky-head">
+                  <div className="search" style={{ width: '100%' }}>
+                    <Search size={14} />
+                    <input
+                      value={partSearch}
+                      onChange={(e) => setPartSearch(e.target.value)}
+                      placeholder={en ? 'Search Components (e.g. Servo, DHT22, LED)...' : 'Cari Komponen (mis. Servo, DHT22, LED)...'}
+                    />
+                  </div>
 
-                <div className="iot-cat-pills" role="group" aria-label="Component categories">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      className={`iot-cat-pill ${partCategory === cat.id ? 'is-active' : ''}`}
-                      onClick={() => setPartCategory(cat.id)}
-                    >
-                      {en ? cat.labelEn : cat.labelId}
-                    </button>
-                  ))}
+                  <div className="iot-cat-pills" role="group" aria-label="Component categories">
+                    {categories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        className={`iot-cat-pill ${partCategory === cat.id ? 'is-active' : ''}`}
+                        onClick={() => setPartCategory(cat.id)}
+                      >
+                        {en ? cat.labelEn : cat.labelId}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Pinned Components */}

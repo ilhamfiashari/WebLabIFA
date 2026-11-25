@@ -182,3 +182,57 @@ test('Documentation menu works across Mahasiswa, Dosen, and Admin portals with s
   await expect(page.getByRole('heading', { level: 1, name: /Dokumentasi IoT Simulator/i })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Dokumentasi' })).toBeVisible()
 })
+
+test('DHT22 sliders never clip at max value and Components filter pills stay visible when scrolled', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await mockCommonApi(page, lecturer)
+  await page.goto('/lab/dosen/iot')
+
+  // Open DHT22 + OLED preset via Mission / Preset selector if available, or add DHT22 from Components tab
+  await page.getByRole('tab', { name: 'Components' }).click()
+  const catGroup = page.getByRole('group', { name: 'Component categories' })
+  await expect(catGroup.getByRole('button', { name: 'Sensors' })).toBeVisible()
+  await expect(catGroup.getByRole('button', { name: 'Displays' })).toBeVisible()
+
+  // Scroll the components browser down and confirm sticky header keeps all category pills visible
+  await page.locator('.iot-components-browser').evaluate((el) => { el.scrollTop = 300 })
+  await expect(catGroup.getByRole('button', { name: 'Microcontrollers' })).toBeVisible()
+  await expect(catGroup.getByRole('button', { name: 'Sensors' })).toBeVisible()
+
+  // Filter to Sensors and add DHT22 to canvas
+  await catGroup.getByRole('button', { name: 'Sensors' }).click()
+  await page.getByRole('button', { name: /Tambah DHT22/i }).click()
+
+  // Verify both DHT22 sliders fit strictly inside their foreignObject even when temp = 55°C (max)
+  const tempSlider = page.locator('foreignObject input[title="Suhu °C"]').last()
+  const humSlider = page.locator('foreignObject input[title="Kelembapan %"]').last()
+  await expect(tempSlider).toBeVisible()
+  await expect(humSlider).toBeVisible()
+  await tempSlider.fill('55')
+
+  const bounds = await page.evaluate(() => {
+    const temp = document.querySelector('foreignObject input[title="Suhu °C"]') as HTMLInputElement | null
+    const hum = document.querySelector('foreignObject input[title="Kelembapan %"]') as HTMLInputElement | null
+    const fo = temp?.closest('foreignObject')
+    if (!temp || !hum || !fo) return null
+    const fb = fo.getBoundingClientRect()
+    const tb = temp.getBoundingClientRect()
+    const hb = hum.getBoundingClientRect()
+    return {
+      foW: fb.width,
+      foH: fb.height,
+      tempRightDiff: tb.right - fb.right,
+      humRightDiff: hb.right - fb.right,
+      humBottomDiff: hb.bottom - fb.bottom,
+      tempW: tb.width,
+      humW: hb.width,
+    }
+  })
+
+  expect(bounds).not.toBeNull()
+  expect(bounds!.tempRightDiff).toBeLessThanOrEqual(2)
+  expect(bounds!.humRightDiff).toBeLessThanOrEqual(2)
+  expect(bounds!.humBottomDiff).toBeLessThanOrEqual(2)
+  expect(bounds!.tempW).toBeLessThanOrEqual(bounds!.foW + 2)
+  expect(bounds!.humW).toBeLessThanOrEqual(bounds!.foW + 2)
+})

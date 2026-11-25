@@ -5,9 +5,11 @@ import '@fontsource/inter/latin-800.css'
 import {
   CloudRain,
   CloudSnow,
+  Code2,
   Cpu,
   LoaderCircle,
   Moon,
+  ShieldCheck,
   Sun,
   Sunrise,
   Sunset,
@@ -190,6 +192,68 @@ export function LoginView() {
           </button>
 
           <p className="login-v2-account-note">{tr.brand.accountNote}</p>
+
+          <section
+            className="login-v2-standards"
+            aria-label={lang === 'en' ? 'Laboratory tracks and technology standards' : 'Standar praktikum dan teknologi'}
+          >
+            <p className="login-v2-standards-eyebrow">
+              {lang === 'en' ? 'Standards & Technology Stack' : 'Standar & Teknologi Praktikum'}
+            </p>
+            <ul className="login-v2-standards-list">
+              <li className="login-v2-standard-item">
+                <span className="login-v2-standard-icon" aria-hidden="true">
+                  <ShieldCheck size={15} />
+                </span>
+                <div className="login-v2-standard-body">
+                  <div className="login-v2-standard-head">
+                    <strong>Cybersecurity</strong>
+                    <span className="login-v2-standard-pill">OWASP Top 10:2025</span>
+                  </div>
+                  <p>
+                    {lang === 'en'
+                      ? 'Vulnerability analysis, controlled pentesting, and secure patching aligned with OWASP Top 10:2025 & CWE.'
+                      : 'Analisis kerentanan, uji penetrasi terkendali, dan patching kode berbasis standar OWASP Top 10:2025 & CWE.'}
+                  </p>
+                </div>
+              </li>
+              <li className="login-v2-standard-item">
+                <span className="login-v2-standard-icon" aria-hidden="true">
+                  <Cpu size={15} />
+                </span>
+                <div className="login-v2-standard-body">
+                  <div className="login-v2-standard-head">
+                    <strong>Internet of Things</strong>
+                    <span className="login-v2-standard-pill">Wokwi · Arduino C++</span>
+                  </div>
+                  <p>
+                    {lang === 'en'
+                      ? 'ESP32-C3, ESP32, Arduino & Pico W circuit simulation following Wokwi (diagram.json), Ohm’s Law, & MQTT TLS.'
+                      : 'Simulasi rangkaian & firmware ESP32-C3, ESP32, Arduino, dan Pico W mengacu pedoman Wokwi (diagram.json), Hukum Ohm, & MQTT TLS.'}
+                  </p>
+                </div>
+              </li>
+              <li className="login-v2-standard-item">
+                <span className="login-v2-standard-icon" aria-hidden="true">
+                  <Code2 size={15} />
+                </span>
+                <div className="login-v2-standard-body">
+                  <div className="login-v2-standard-head">
+                    <strong>Web Development</strong>
+                    <span className="login-v2-standard-pill">W3C · HTML5 · SQL</span>
+                  </div>
+                  <p>
+                    {lang === 'en'
+                      ? 'CSP-safe HTML5, CSS3/4 & JS/DOM studio (W3C/WHATWG parse5), FastAPI routes, and PostgreSQL practice.'
+                      : 'Studio HTML5, CSS3/4 & JS/DOM berbasis standar W3C/WHATWG (parse5), rute REST/FastAPI, serta basis data PostgreSQL.'}
+                  </p>
+                </div>
+              </li>
+            </ul>
+            <p className="login-v2-tech-strip">
+              Rust · Axum · React 19 · PostgreSQL 17 · Google OIDC · MFA/Passkeys
+            </p>
+          </section>
 
           <div aria-live="polite" className="login-feedback">
             {messages[status] && (

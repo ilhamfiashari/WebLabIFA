@@ -348,12 +348,42 @@
 .iot-components-browser {
   display: grid;
   gap: 12px;
-  padding: 12px 12px 24px;
+  padding: 0 12px 24px;
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
   overflow-y: auto;
   align-content: start;
+}
+
+.iot-components-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Keep SVG foreignObject sliders & buttons crisp, bounded, and never clipped on macOS/Chrome */
+.iot-interactive-control input[type='range'] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  height: 14px;
+  box-sizing: border-box;
+  display: block;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.iot-interactive-control button {
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .iot-cat-pills {

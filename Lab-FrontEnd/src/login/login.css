@@ -112,7 +112,7 @@
 
 .login-v2-main {
   margin-block: auto;
-  padding-block: 48px;
+  padding-block: 24px;
 }
 
 .login-v2-title {
@@ -165,6 +165,100 @@
   font-size: 0.875rem;
   line-height: 1.45;
   text-align: center;
+}
+
+.login-v2-standards {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--login-line) 55%, transparent);
+  display: grid;
+  gap: 10px;
+}
+
+.login-v2-standards-eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--login-accent);
+}
+
+.login-v2-standards-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.login-v2-standard-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--login-line) 52%, transparent);
+  background: color-mix(in srgb, var(--login-action) 78%, transparent);
+}
+
+.login-v2-standard-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--studio-fill);
+  color: var(--login-ink);
+  margin-top: 1px;
+}
+
+.login-v2-standard-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.login-v2-standard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.login-v2-standard-head strong {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--login-ink);
+}
+
+.login-v2-standard-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--studio-fill);
+  color: var(--login-ink);
+  white-space: nowrap;
+}
+
+.login-v2-standard-body p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.42;
+  color: var(--login-secondary);
+}
+
+.login-v2-tech-strip {
+  margin: 2px 0 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--login-secondary);
+  text-align: center;
+  opacity: 0.88;
 }
 
 .login-v2-shell .login-feedback {
