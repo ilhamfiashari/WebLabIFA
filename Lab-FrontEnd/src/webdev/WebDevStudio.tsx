@@ -22,6 +22,8 @@ import { Badge } from '../portal/ui'
 import { useI18n } from '../shared/i18n'
 import { simApi } from '../simulator/api'
 import { BLANK_WEBDEV_FILES, WEBDEV_MISSIONS } from './missions'
+import { collectVirtualElements, parseHtmlPreview } from './htmlAst'
+import type { JsElementPatch, JsSandboxSession } from './jsRuntime'
 import {
   analyzeJavaScriptAndReact,
   executeSafePython,
@@ -63,10 +65,13 @@ function useDarkTheme(): boolean {
 }
 
 interface ExecSnapshot {
+  runId: number
   renderReady: boolean
   consoleLines: string[]
   pythonLines: string[]
   initialDomUpdates: Record<string, string>
+  initialPatches: Record<string, JsElementPatch>
+  jsSession: JsSandboxSession
   bindings: ReturnType<typeof analyzeJavaScriptAndReact>['bindings']
   reactModel: ReturnType<typeof analyzeJavaScriptAndReact>['reactModel']
   apiRoutes: WebDevFastApiRoute[]
@@ -75,7 +80,15 @@ interface ExecSnapshot {
   sqlExecuted: boolean
 }
 
+let nextRunCounter = 1
+
 function runSandboxFiles(files: WebDevFile[], markReady: boolean): ExecSnapshot {
+  const htmlFile =
+    files.find((f) => f.name.toLowerCase() === 'index.html') ??
+    files.find((f) => /\.html?$/i.test(f.name)) ??
+    null
+  const htmlParsed = htmlFile ? parseHtmlPreview(htmlFile.content) : null
+  const virtualElements = htmlParsed ? collectVirtualElements(htmlParsed.nodes, 'wd-html') : []
   const jsFiles = files.filter(
     (f) => /\.(js|mjs|cjs|ts|mts|cts)$/i.test(f.name),
   )
@@ -91,17 +104,25 @@ function runSandboxFiles(files: WebDevFile[], markReady: boolean): ExecSnapshot 
     .map((f) => f.content)
     .join('\n')
 
-  const jsRes = analyzeJavaScriptAndReact(jsFiles, jsxFiles)
+  const jsRes = analyzeJavaScriptAndReact(
+    jsFiles,
+    jsxFiles,
+    virtualElements,
+    htmlParsed?.scripts ?? [],
+  )
   const pyRes = pyText ? executeSafePython(pyText) : { outputLines: [], routes: [] }
   const sqlRes = sqlText
     ? executeSafeSql(sqlText)
     : { tables: [], logs: [], selectResults: [] }
 
   return {
+    runId: nextRunCounter++,
     renderReady: markReady,
     consoleLines: jsRes.consoleLines,
     pythonLines: pyRes.outputLines,
     initialDomUpdates: jsRes.initialDomUpdates,
+    initialPatches: jsRes.initialPatches,
+    jsSession: jsRes.jsSession,
     bindings: jsRes.bindings,
     reactModel: jsRes.reactModel,
     apiRoutes: pyRes.routes,
@@ -928,12 +949,15 @@ export function WebDevStudio({
             key={activeMissionId ?? activeProjectId ?? 'blank'}
             files={files}
             lang={lang}
+            execRunId={execState.runId}
             renderReady={execState.renderReady}
             activeSubTab={previewSubTab}
             onSubTabChange={setPreviewSubTab}
             consoleLines={execState.consoleLines}
             pythonLines={execState.pythonLines}
             initialDomUpdates={execState.initialDomUpdates}
+            initialPatches={execState.initialPatches}
+            jsSession={execState.jsSession}
             bindings={execState.bindings}
             reactModel={execState.reactModel}
             apiRoutes={execState.apiRoutes}

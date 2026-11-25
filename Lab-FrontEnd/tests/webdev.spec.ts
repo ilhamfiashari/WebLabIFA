@@ -491,3 +491,69 @@ test('CodeMirror Web Dev memberikan saran dan diagnostik sesuai grammar file', a
   expect(h1Size).toBeGreaterThan(h2Size)
   expect(h2Size).toBeGreaterThan(pSize)
 })
+
+test('CSS variables, specificity, :hover, dan JS interaktif (counter, style, classList, input.value, <script>) bekerja nyata', async ({ page }) => {
+  await page.route('**/api/me', (r) => r.fulfill({ json: lecturer }))
+  await attachCommonMocks(page, lecturer.email)
+  await attachWebDevApiMocks(page, 'dosen')()
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/lab/dosen/web-dev')
+
+  const editor = page.getByLabel('Kode program aplikasi web')
+  await page.getByRole('tab', { name: 'index.html' }).click()
+  await editor.fill(`<main class="panel">
+  <h1 id="judul">Awal</h1>
+  <p class="lead">Dalam panel</p>
+  <input id="nama" type="text" value="Budi" />
+  <button id="aksi" type="button">Proses</button>
+  <p id="hasil">Klik: 0</p>
+  <script>console.log("Inline script ready");</script>
+</main>
+<p class="outside">Luar panel</p>`)
+
+  await page.getByRole('tab', { name: 'style.css' }).click()
+  await editor.fill(`:root { --accent: rgb(22, 163, 74); --hoverbg: rgb(254, 240, 138); }
+.panel p.lead { color: var(--accent); }
+p { color: rgb(100, 116, 139); }
+.aktif { background-color: rgb(220, 252, 231); }
+#aksi:hover { background-color: var(--hoverbg); }`)
+
+  await page.getByRole('tab', { name: 'app.js' }).click()
+  await editor.fill(`let count = 0;
+const btn = document.querySelector("#aksi");
+const hasil = document.getElementById("hasil");
+const judul = document.getElementById("judul");
+const namaInput = document.getElementById("nama");
+
+btn.addEventListener("click", () => {
+  count++;
+  const nama = namaInput.value || "Tamu";
+  hasil.textContent = \`Halo \${nama}, Klik: \${count}\`;
+  hasil.classList.toggle("aktif");
+  judul.style.color = count > 1 ? "rgb(37, 99, 235)" : "rgb(220, 38, 38)";
+  console.log("Klik ke-" + count + " untuk " + nama);
+});`)
+
+  await page.getByRole('button', { name: /Jalankan|Run/i }).first().click()
+  const preview = page.getByTestId('webdev-rendered-preview')
+
+  await expect(preview.locator('p.lead')).toHaveCSS('color', 'rgb(22, 163, 74)')
+  await expect(preview.locator('p.outside')).toHaveCSS('color', 'rgb(100, 116, 139)')
+
+  await preview.locator('#nama').fill('Sinta')
+  await preview.locator('#aksi').click()
+  await expect(preview.locator('#hasil')).toHaveText('Halo Sinta, Klik: 1')
+  await expect(preview.locator('#hasil')).toHaveCSS('background-color', 'rgb(220, 252, 231)')
+  await expect(preview.locator('#judul')).toHaveCSS('color', 'rgb(220, 38, 38)')
+
+  await preview.locator('#aksi').click()
+  await expect(preview.locator('#hasil')).toHaveText('Halo Sinta, Klik: 2')
+  await expect(preview.locator('#judul')).toHaveCSS('color', 'rgb(37, 99, 235)')
+
+  await page.getByRole('tab', { name: /Console \/ Output/ }).click()
+  const consoleOut = page.getByTestId('webdev-console-output')
+  await expect(consoleOut).toContainText('Inline script ready')
+  await expect(consoleOut).toContainText('Klik ke-1 untuk Sinta')
+  await expect(consoleOut).toContainText('Klik ke-2 untuk Sinta')
+})
