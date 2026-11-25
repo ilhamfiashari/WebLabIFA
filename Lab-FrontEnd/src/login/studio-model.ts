@@ -36,10 +36,15 @@ export function resolveLabWeather(weather: PublicWeatherResponse | null): LabWea
   if (weather.condition === 'rain') return 'rain'
   return weather.condition === 'cloudy' ? 'cloudy' : 'clear'
 }
-export function studioScene(time: LoginSceneKey, weather: LabWeather): LoginSceneKey {
+export function studioScene(
+  timeSetting: StudioSettings['time'],
+  autoTime: LoginSceneKey,
+  weather: LabWeather,
+): LoginSceneKey {
+  if (timeSetting !== 'auto') return timeSetting
   if (weather === 'snow' || weather === 'blizzard') return 'snowy'
   if (['drizzle', 'rain', 'storm'].includes(weather)) return 'rainy'
-  return time
+  return autoTime
 }
 export function sensorSample(seconds: number, weather: LabWeather, distance: number, network: number) {
   const wet = ['drizzle', 'rain', 'storm'].includes(weather), snow = ['snow', 'blizzard'].includes(weather)

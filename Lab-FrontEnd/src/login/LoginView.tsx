@@ -96,7 +96,7 @@ export function LoginView() {
   const [seconds, setSeconds] = useState(0)
   const [preview, setPreview] = useState(false)
   const activeWeather = settings.weather === 'auto' ? resolveLabWeather(weather) : settings.weather
-  const scene = LOGIN_SCENES[studioScene(settings.time === 'auto' ? resolveTimeScene(now, weather) : settings.time, activeWeather)]
+  const scene = LOGIN_SCENES[studioScene(settings.time, resolveTimeScene(now, weather), activeWeather)]
   const sample = sensorSample(seconds, activeWeather, settings.distance, settings.network)
 
   const status = new URLSearchParams(window.location.search).get('status') ?? ''
@@ -117,7 +117,14 @@ export function LoginView() {
     minute: '2-digit',
     hour12: false,
   })
-  const sceneLabel = settings.weather !== 'auto' ? WEATHER_LABELS[activeWeather][lang === 'en' ? 1 : 0] : lang === 'en' ? scene.labelEn : scene.labelId
+  const baseSceneLabel = lang === 'en' ? scene.labelEn : scene.labelId
+  const weatherLabel = WEATHER_LABELS[activeWeather][lang === 'en' ? 1 : 0]
+  const sceneLabel =
+    settings.time !== 'auto' && settings.weather !== 'auto'
+      ? `${baseSceneLabel} · ${weatherLabel}`
+      : settings.weather !== 'auto'
+        ? weatherLabel
+        : baseSceneLabel
   const tempLabel =
     settings.weather !== 'auto' ? ` · ${Math.round(sample.temperature)}°C · ${lang === 'en' ? 'Simulation' : 'Simulasi'}` : typeof weather?.temperature_c === 'number' ? ` · ${Math.round(weather.temperature_c)}°C` : ''
 

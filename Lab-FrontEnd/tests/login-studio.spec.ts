@@ -23,6 +23,12 @@ test('studio programs, weather, pause, sensors and persistence', async ({ page }
     await page.getByLabel('Cuaca di luar').selectOption(weather)
     await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-weather', weather)
   }
+  for (const lighting of ['sunrise', 'day', 'sunset', 'night'] as const) {
+    await page.getByLabel('Pencahayaan ruang').selectOption(lighting)
+    await expect(page.locator('.hero-image')).toHaveAttribute('src', `/assets/login/lab-${lighting}.webp`)
+    await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-weather', 'blizzard')
+  }
+  await page.getByLabel('Pencahayaan ruang').selectOption('day')
   await page.getByLabel('Cuaca di luar').selectOption('storm')
   await page.getByLabel('Program laptop').selectOption('iot')
   await page.getByLabel('Aktivitas jaringan').fill('0')
