@@ -321,10 +321,10 @@ fn normalize_and_validate_files(
     if raw.len() > 24 {
         return Err("Maksimal 24 file pendamping per proyek IoT.");
     }
-    let mut out = Vec::with_capacity(raw.len());
+    let mut out = Vec::new();
     let mut seen = HashSet::new();
     let mut total_bytes = 0usize;
-    for f in raw {
+    for f in raw.iter().take(24) {
         let name = f.name.trim();
         if name.is_empty()
             || name.len() > 64
@@ -372,8 +372,7 @@ fn combine_firmware_sources(main_code: &str, files: &[SketchFileEntry]) -> Strin
     }
     let mut sorted: Vec<&SketchFileEntry> = files.iter().collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
-    let cap = main_code.len() + sorted.iter().map(|f| f.content.len() + 32).sum::<usize>();
-    let mut out = String::with_capacity(cap);
+    let mut out = String::new();
     out.push_str(main_code);
     for f in sorted {
         out.push_str("\n// --- FILE: ");

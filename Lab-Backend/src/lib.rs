@@ -393,10 +393,10 @@ async fn controls(State(state): State<AppState>, request: Request, next: Next) -
     response
 }
 
-fn cookie(config: &Config, name: &'static str, value: String, seconds: i64) -> Cookie<'static> {
+fn cookie(_config: &Config, name: &'static str, value: String, seconds: i64) -> Cookie<'static> {
     Cookie::build((name, value))
         .http_only(true)
-        .secure(config.secure())
+        .secure(true)
         .same_site(SameSite::Lax)
         .path("/")
         .max_age(time::Duration::seconds(seconds))
@@ -863,6 +863,6 @@ mod tests {
         config.base_url = "http://localhost:5173".into();
         let dev = cookie(&config, config.session_cookie(), "opaque".into(), 28800);
         assert_eq!(dev.name(), "ifa_session_dev");
-        assert_eq!(dev.secure(), Some(false));
+        assert_eq!(dev.secure(), Some(true));
     }
 }

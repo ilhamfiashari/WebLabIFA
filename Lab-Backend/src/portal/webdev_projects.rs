@@ -288,10 +288,10 @@ pub fn normalize_and_validate_webdev_files(
         return Err("Maksimal 16 file proyek diperbolehkan.");
     }
     let mut seen = HashSet::new();
-    let mut cleaned = Vec::with_capacity(raw.len());
+    let mut cleaned = Vec::new();
     let mut total_bytes = 0usize;
 
-    for f in raw {
+    for f in raw.iter().take(16) {
         let name = f.name.trim().replace(['/', '\\'], "");
         if name.is_empty() || name.len() > 64 || name.starts_with('.') {
             return Err("Nama file tidak valid.");

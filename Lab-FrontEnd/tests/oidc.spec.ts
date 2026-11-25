@@ -35,7 +35,7 @@ test.describe('OIDC lokal dengan backend dan PostgreSQL nyata', () => {
     await page.goto('/login')
     await page.getByRole('button', { name: 'Masuk dengan Google', exact: true }).click()
     await expect(page).toHaveURL(/\/login\?status=unauthorized$/)
-    await expect(page.getByRole('status')).toContainText('tidak memiliki akses')
+    await expect(page.getByRole('status')).toContainText('belum memiliki akses')
     expect((await page.request.get('/api/me')).status()).toBe(401)
   })
   test('Dosen beralih ke Admin dan guard menolak konteks lain', async ({ page }) => {

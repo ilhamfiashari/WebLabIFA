@@ -59,7 +59,7 @@ pub fn sanitize_moodle_text(raw: &str) -> String {
     s = strip_tag_block(&s, "style");
 
     // Hapus seluruh sisa tag HTML <...>
-    let mut plain = String::with_capacity(s.len());
+    let mut plain = String::new();
     let mut in_tag = false;
     for ch in s.chars() {
         if ch == '<' {
@@ -88,7 +88,7 @@ fn strip_tag_block(input: &str, tag: &str) -> String {
     let lower = input.to_ascii_lowercase();
     let open = format!("<{tag}");
     let close = format!("</{tag}>");
-    let mut out = String::with_capacity(input.len());
+    let mut out = String::new();
     let mut idx = 0;
     while idx < input.len() {
         if let Some(rel_start) = lower[idx..].find(&open) {
@@ -759,7 +759,6 @@ fn parse_aiken(raw: &str, track: &str, default_level: u8) -> Result<Vec<Exercise
     Ok(parsed)
 }
 
-#[derive(Deserialize)]
 struct JsonImportRow {
     title: Option<String>,
     track: Option<String>,
@@ -770,14 +769,410 @@ struct JsonImportRow {
     code_lang: Option<String>,
     question: String,
     kind: Option<String>,
-    #[serde(default)]
     options: Vec<Choice>,
     answer: Vec<String>,
     hint: Option<String>,
     explanation: Option<String>,
     estimated_minutes: Option<i32>,
-    #[serde(default)]
     tags: Vec<String>,
+}
+
+const MAX_JSON_DEPTH: usize = 12;
+const MAX_JSON_ELEMENTS: usize = 2000;
+const MAX_JSON_ROWS: usize = 200;
+
+enum SafeJson {
+    Null,
+    Bool,
+    Int(i64),
+    Str(String),
+    Array(Vec<SafeJson>),
+    Object(Vec<(String, SafeJson)>),
+}
+
+struct BoundedJsonParser<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+    nodes: usize,
+}
+
+impl<'a> BoundedJsonParser<'a> {
+    fn new(input: &'a str) -> Self {
+        Self {
+            bytes: input.as_bytes(),
+            pos: 0,
+            nodes: 0,
+        }
+    }
+
+    fn skip_ws(&mut self) {
+        while self.pos < self.bytes.len() {
+            match self.bytes[self.pos] {
+                b' ' | b'\t' | b'\r' | b'\n' => self.pos += 1,
+                _ => break,
+            }
+        }
+    }
+
+    fn peek(&self) -> Option<u8> {
+        self.bytes.get(self.pos).copied()
+    }
+
+    fn bump_node(&mut self) -> Result<(), String> {
+        self.nodes += 1;
+        if self.nodes > MAX_JSON_ELEMENTS {
+            Err("Struktur JSON terlalu besar untuk diimpor.".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn parse_root(mut self) -> Result<SafeJson, String> {
+        self.skip_ws();
+        let val = self.parse_value(0)?;
+        self.skip_ws();
+        if self.pos != self.bytes.len() {
+            return Err("Karakter tak terduga di akhir dokumen JSON.".to_string());
+        }
+        Ok(val)
+    }
+
+    fn parse_value(&mut self, depth: usize) -> Result<SafeJson, String> {
+        if depth > MAX_JSON_DEPTH {
+            return Err("Kedalaman struktur JSON melebihi batas aman.".to_string());
+        }
+        self.bump_node()?;
+        self.skip_ws();
+        match self.peek() {
+            Some(b'{') => self.parse_object(depth + 1),
+            Some(b'[') => self.parse_array(depth + 1),
+            Some(b'"') => self.parse_string().map(SafeJson::Str),
+            Some(b't') => self.expect_literal(b"true", SafeJson::Bool),
+            Some(b'f') => self.expect_literal(b"false", SafeJson::Bool),
+            Some(b'n') => self.expect_literal(b"null", SafeJson::Null),
+            Some(b'-' | b'0'..=b'9') => self.parse_number(),
+            _ => Err("Token JSON tidak valid.".to_string()),
+        }
+    }
+
+    fn expect_literal(&mut self, lit: &[u8], val: SafeJson) -> Result<SafeJson, String> {
+        if self.bytes.get(self.pos..self.pos + lit.len()) == Some(lit) {
+            self.pos += lit.len();
+            Ok(val)
+        } else {
+            Err("Literal JSON tidak valid.".to_string())
+        }
+    }
+
+    fn parse_object(&mut self, depth: usize) -> Result<SafeJson, String> {
+        self.pos += 1; // '{'
+        self.skip_ws();
+        let mut entries = Vec::new();
+        if self.peek() == Some(b'}') {
+            self.pos += 1;
+            return Ok(SafeJson::Object(entries));
+        }
+        loop {
+            self.skip_ws();
+            if self.peek() != Some(b'"') {
+                return Err("Kunci objek JSON harus berupa string.".to_string());
+            }
+            let key = self.parse_string()?;
+            self.skip_ws();
+            if self.peek() != Some(b':') {
+                return Err("Diharapkan ':' setelah kunci objek JSON.".to_string());
+            }
+            self.pos += 1;
+            let value = self.parse_value(depth)?;
+            entries.push((key, value));
+            self.skip_ws();
+            match self.peek() {
+                Some(b',') => self.pos += 1,
+                Some(b'}') => {
+                    self.pos += 1;
+                    break;
+                }
+                _ => return Err("Objek JSON tidak ditutup dengan '}'.".to_string()),
+            }
+        }
+        Ok(SafeJson::Object(entries))
+    }
+
+    fn parse_array(&mut self, depth: usize) -> Result<SafeJson, String> {
+        self.pos += 1; // '['
+        self.skip_ws();
+        let mut items = Vec::new();
+        if self.peek() == Some(b']') {
+            self.pos += 1;
+            return Ok(SafeJson::Array(items));
+        }
+        loop {
+            let value = self.parse_value(depth)?;
+            items.push(value);
+            self.skip_ws();
+            match self.peek() {
+                Some(b',') => self.pos += 1,
+                Some(b']') => {
+                    self.pos += 1;
+                    break;
+                }
+                _ => return Err("Array JSON tidak ditutup dengan ']'.".to_string()),
+            }
+        }
+        Ok(SafeJson::Array(items))
+    }
+
+    fn parse_string(&mut self) -> Result<String, String> {
+        self.pos += 1; // '"'
+        let mut out = String::new();
+        while self.pos < self.bytes.len() {
+            let b = self.bytes[self.pos];
+            match b {
+                b'"' => {
+                    self.pos += 1;
+                    return Ok(out);
+                }
+                b'\\' => {
+                    self.pos += 1;
+                    let esc = self
+                        .peek()
+                        .ok_or_else(|| "Escape string JSON terpotong.".to_string())?;
+                    self.pos += 1;
+                    match esc {
+                        b'"' => out.push('"'),
+                        b'\\' => out.push('\\'),
+                        b'/' => out.push('/'),
+                        b'b' => out.push('\u{0008}'),
+                        b'f' => out.push('\u{000C}'),
+                        b'n' => out.push('\n'),
+                        b'r' => out.push('\r'),
+                        b't' => out.push('\t'),
+                        b'u' => {
+                            let code = self.parse_hex4()?;
+                            if (0xD800..=0xDBFF).contains(&code) {
+                                if self.bytes.get(self.pos..self.pos + 2) != Some(b"\\u") {
+                                    return Err("Unicode surrogate JSON tidak valid.".to_string());
+                                }
+                                self.pos += 2;
+                                let low = self.parse_hex4()?;
+                                if !(0xDC00..=0xDFFF).contains(&low) {
+                                    return Err("Unicode surrogate JSON tidak valid.".to_string());
+                                }
+                                let cp = 0x10000
+                                    + (((code as u32 - 0xD800) << 10) | (low as u32 - 0xDC00));
+                                let ch = char::from_u32(cp)
+                                    .ok_or_else(|| "Kode Unicode JSON tidak valid.".to_string())?;
+                                out.push(ch);
+                            } else {
+                                let ch = char::from_u32(code as u32)
+                                    .ok_or_else(|| "Kode Unicode JSON tidak valid.".to_string())?;
+                                out.push(ch);
+                            }
+                        }
+                        _ => return Err("Urutan escape JSON tidak dikenali.".to_string()),
+                    }
+                }
+                0x00..=0x1F => return Err("Karakter kontrol ilegal dalam string JSON.".to_string()),
+                _ => {
+                    let rest = std::str::from_utf8(&self.bytes[self.pos..])
+                        .map_err(|_| "Encoding UTF-8 JSON tidak valid.".to_string())?;
+                    let ch = rest
+                        .chars()
+                        .next()
+                        .ok_or_else(|| "String JSON tidak ditutup.".to_string())?;
+                    out.push(ch);
+                    self.pos += ch.len_utf8();
+                }
+            }
+        }
+        Err("String JSON tidak ditutup dengan '\"'.".to_string())
+    }
+
+    fn parse_hex4(&mut self) -> Result<u16, String> {
+        let slice = self
+            .bytes
+            .get(self.pos..self.pos + 4)
+            .ok_or_else(|| "Escape \\uXXXX terpotong.".to_string())?;
+        let hex_str = std::str::from_utf8(slice)
+            .map_err(|_| "Escape \\uXXXX bukan ASCII valid.".to_string())?;
+        self.pos += 4;
+        u16::from_str_radix(hex_str, 16).map_err(|_| "Escape \\uXXXX tidak valid.".to_string())
+    }
+
+    fn parse_number(&mut self) -> Result<SafeJson, String> {
+        let start = self.pos;
+        if self.peek() == Some(b'-') {
+            self.pos += 1;
+        }
+        let digit_start = self.pos;
+        while matches!(self.peek(), Some(b'0'..=b'9')) {
+            self.pos += 1;
+        }
+        if self.pos == digit_start {
+            return Err("Angka JSON tidak valid.".to_string());
+        }
+        let int_end = self.pos;
+        if self.peek() == Some(b'.') {
+            self.pos += 1;
+            let frac_start = self.pos;
+            while matches!(self.peek(), Some(b'0'..=b'9')) {
+                self.pos += 1;
+            }
+            if self.pos == frac_start {
+                return Err("Angka desimal JSON tidak valid.".to_string());
+            }
+        }
+        if matches!(self.peek(), Some(b'e' | b'E')) {
+            self.pos += 1;
+            if matches!(self.peek(), Some(b'+' | b'-')) {
+                self.pos += 1;
+            }
+            let exp_start = self.pos;
+            while matches!(self.peek(), Some(b'0'..=b'9')) {
+                self.pos += 1;
+            }
+            if self.pos == exp_start {
+                return Err("Eksponen angka JSON tidak valid.".to_string());
+            }
+        }
+        let int_str = std::str::from_utf8(&self.bytes[start..int_end])
+            .map_err(|_| "Angka JSON tidak valid.".to_string())?;
+        let parsed = int_str
+            .parse::<i64>()
+            .map_err(|_| "Angka JSON berada di luar rentang integer.".to_string())?;
+        Ok(SafeJson::Int(parsed))
+    }
+}
+
+fn json_row_from_value(value: SafeJson) -> Result<JsonImportRow, String> {
+    let SafeJson::Object(entries) = value else {
+        return Err("Setiap item soal JSON harus berupa objek.".to_string());
+    };
+    let mut title = None;
+    let mut track = None;
+    let mut level = None;
+    let mut owasp = None;
+    let mut scenario = None;
+    let mut code = None;
+    let mut code_lang = None;
+    let mut question = None;
+    let mut kind = None;
+    let mut options = Vec::new();
+    let mut answer = None;
+    let mut hint = None;
+    let mut explanation = None;
+    let mut estimated_minutes = None;
+    let mut tags = Vec::new();
+
+    for (key, val) in entries {
+        match key.as_str() {
+            "title" => title = opt_string(val)?,
+            "track" => track = opt_string(val)?,
+            "level" => {
+                level = match val {
+                    SafeJson::Null => None,
+                    SafeJson::Int(n) if (0..=255).contains(&n) => Some(n as u8),
+                    _ => return Err("Field 'level' harus berupa bilangan bulat 1..4.".to_string()),
+                };
+            }
+            "owasp" => owasp = opt_string(val)?,
+            "scenario" => scenario = opt_string(val)?,
+            "code" => code = opt_string(val)?,
+            "code_lang" => code_lang = opt_string(val)?,
+            "question" => {
+                question = match val {
+                    SafeJson::Str(s) => Some(s),
+                    _ => return Err("Field 'question' harus berupa string.".to_string()),
+                };
+            }
+            "kind" => kind = opt_string(val)?,
+            "options" => {
+                if let SafeJson::Array(arr) = val {
+                    for item in arr.into_iter().take(12) {
+                        let SafeJson::Object(opt_entries) = item else {
+                            return Err(
+                                "Setiap item pada 'options' harus berupa objek.".to_string()
+                            );
+                        };
+                        let mut k = None;
+                        let mut t = None;
+                        for (ok, ov) in opt_entries {
+                            match ok.as_str() {
+                                "key" => k = opt_string(ov)?,
+                                "text" => t = opt_string(ov)?,
+                                _ => {}
+                            }
+                        }
+                        if let (Some(key), Some(text)) = (k, t) {
+                            options.push(Choice { key, text });
+                        }
+                    }
+                } else if !matches!(val, SafeJson::Null) {
+                    return Err("Field 'options' harus berupa array.".to_string());
+                }
+            }
+            "answer" => {
+                answer = Some(string_vec(val, "answer")?);
+            }
+            "hint" => hint = opt_string(val)?,
+            "explanation" => explanation = opt_string(val)?,
+            "estimated_minutes" => {
+                estimated_minutes = match val {
+                    SafeJson::Null => None,
+                    SafeJson::Int(n) => Some(n.clamp(1, 60) as i32),
+                    _ => {
+                        return Err(
+                            "Field 'estimated_minutes' harus berupa bilangan bulat.".to_string()
+                        );
+                    }
+                };
+            }
+            "tags" if !matches!(val, SafeJson::Null) => {
+                tags = string_vec(val, "tags")?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(JsonImportRow {
+        title,
+        track,
+        level,
+        owasp,
+        scenario,
+        code,
+        code_lang,
+        question: question.ok_or_else(|| "Field wajib 'question' tidak ditemukan.".to_string())?,
+        kind,
+        options,
+        answer: answer.ok_or_else(|| "Field wajib 'answer' tidak ditemukan.".to_string())?,
+        hint,
+        explanation,
+        estimated_minutes,
+        tags,
+    })
+}
+
+fn opt_string(val: SafeJson) -> Result<Option<String>, String> {
+    match val {
+        SafeJson::Null => Ok(None),
+        SafeJson::Str(s) => Ok(Some(s)),
+        _ => Err("Nilai field string JSON tidak valid.".to_string()),
+    }
+}
+
+fn string_vec(val: SafeJson, field: &str) -> Result<Vec<String>, String> {
+    let SafeJson::Array(arr) = val else {
+        return Err(format!("Field '{field}' harus berupa array string."));
+    };
+    let mut out = Vec::new();
+    for item in arr.into_iter().take(20) {
+        let SafeJson::Str(s) = item else {
+            return Err(format!("Setiap elemen '{field}' harus berupa string."));
+        };
+        out.push(s);
+    }
+    Ok(out)
 }
 
 fn parse_json_bank(
@@ -785,19 +1180,32 @@ fn parse_json_bank(
     default_track: &str,
     default_level: u8,
 ) -> Result<Vec<Exercise>, String> {
-    let rows: Vec<JsonImportRow> = if raw.trim_start().starts_with('[') {
-        serde_json::from_str(raw).map_err(|e| format!("JSON array tidak valid: {e}"))?
-    } else {
-        #[derive(Deserialize)]
-        struct Wrapper {
-            exercises: Vec<JsonImportRow>,
+    if raw.len() > MAX_IMPORT_BYTES {
+        return Err("Ukuran payload JSON melebihi batas maksimum.".to_string());
+    }
+    let root = BoundedJsonParser::new(raw).parse_root()?;
+    let raw_rows = match root {
+        SafeJson::Array(items) => items,
+        SafeJson::Object(entries) => entries
+            .into_iter()
+            .find_map(|(k, v)| match (k.as_str(), v) {
+                ("exercises", SafeJson::Array(items)) => Some(items),
+                _ => None,
+            })
+            .ok_or_else(|| "JSON objek wajib memiliki array 'exercises'.".to_string())?,
+        _ => {
+            return Err(
+                "JSON harus berupa array soal atau objek dengan field 'exercises'.".to_string(),
+            );
         }
-        serde_json::from_str::<Wrapper>(raw)
-            .map_err(|e| format!("JSON objek (wajib field exercises) tidak valid: {e}"))?
-            .exercises
     };
 
-    let mut out = Vec::with_capacity(rows.len());
+    let mut rows = Vec::new();
+    for item in raw_rows.into_iter().take(MAX_JSON_ROWS) {
+        rows.push(json_row_from_value(item)?);
+    }
+
+    let mut out = Vec::new();
     for r in rows {
         let track = match r.track {
             Some(t) => normalize_track(&t)?,
@@ -1044,5 +1452,35 @@ ANSWER: B\n";
             parse_import(&exported_xml, ImportFormat::MoodleXml, "iot", 1, 50).unwrap();
         assert_eq!(reimported.len(), 1);
         assert_eq!(reimported[0].answer, vec!["b"]);
+    }
+
+    #[test]
+    fn parses_bounded_json_bank_and_rejects_excessive_nesting() {
+        let payload = r#"{
+          "exercises": [
+            {
+              "title": "Validasi Origin",
+              "track": "web",
+              "level": 2,
+              "question": "Header HTTP apa yang diverifikasi untuk mencegah CSRF?",
+              "options": [
+                {"key": "a", "text": "Origin"},
+                {"key": "b", "text": "Accept-Language"}
+              ],
+              "answer": ["a"],
+              "tags": ["CSRF", "OWASP"]
+            }
+          ]
+        }"#;
+        let (items, fmt) = parse_import(payload, ImportFormat::Json, "web", 1, 50).unwrap();
+        assert_eq!(fmt, "json");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Validasi Origin");
+        assert_eq!(items[0].answer, vec!["a"]);
+        assert_eq!(items[0].options.len(), 2);
+
+        let deeply_nested = format!("{}1{}", "[".repeat(32), "]".repeat(32));
+        let err = parse_import(&deeply_nested, ImportFormat::Json, "web", 1, 50).unwrap_err();
+        assert!(err.contains("Kedalaman"));
     }
 }
