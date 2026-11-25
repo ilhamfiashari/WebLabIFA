@@ -2,6 +2,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
 import { drawLabScreen } from '../src/login/lab-animation'
+import { REAR_MONITOR_THEME_COUNT, REAR_SCOPE_THEME_COUNT, rearMonitorThemeAt, rearScopeThemeAt } from '../src/login/rear-instruments'
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/me', route => route.fulfill({ status: 401, json: {} }))
@@ -146,6 +147,14 @@ test('laptop renders twelve scenes with coding, CLI and selectable menus', async
   }
   expect(new Set(frames).size).toBe(12)
   expect(textCalls).toBeGreaterThan(200)
+
+  // Rear bench monitors and oscilloscopes cycle across distinct visual themes over time and stagger per display
+  const monitorThemes = new Set([0, 6, 12, 18, 24].map(sec => rearMonitorThemeAt(sec, 0)))
+  const scopeThemes = new Set([0, 6, 12, 18, 24].map(sec => rearScopeThemeAt(sec, 0)))
+  expect(monitorThemes.size).toBe(REAR_MONITOR_THEME_COUNT)
+  expect(scopeThemes.size).toBe(REAR_SCOPE_THEME_COUNT)
+  expect(rearMonitorThemeAt(1, 0)).not.toBe(rearMonitorThemeAt(1, 1))
+  expect(new Set([0, 1, 2].map(ch => rearScopeThemeAt(1, ch))).size).toBe(3)
 
   await page.goto('/login')
   await page.getByRole('button', { name: 'Laptop: Pentest', exact: true }).click()
