@@ -15,7 +15,7 @@ test('studio programs, weather, pause, sensors and persistence', async ({ page }
   await page.goto('/login')
   await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-screen-resolution', '1920x1080')
   await page.getByRole('button', { name: 'Studio', exact: true }).click()
-  for (const program of ['security', 'pentest', 'vulnerability', 'attacks', 'iot', 'protocols']) {
+  for (const program of ['security', 'pentest', 'vulnerability', 'attacks', 'web', 'stego', 'iot', 'protocols', 'desktop']) {
     await page.getByLabel('Program laptop').selectOption(program)
     await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', program)
   }
@@ -164,4 +164,25 @@ test('laptop renders twelve scenes with coding, CLI and selectable menus', async
   await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'attacks')
   await page.getByRole('button', { name: 'Laptop: IoT simulation', exact: true }).click()
   await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'iot')
+
+  // Zoomed Workstation Pop-up: Desktop folders, file preview, and interactive wide Terminal
+  await page.getByRole('button', { name: 'Laptop: Zoom workstation', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  // Not full-screen: modal width should stay comfortably smaller than 1440px viewport
+  const box = await dialog.locator('.ws-window').boundingBox()
+  expect(box!.width).toBeLessThan(1200)
+  await dialog.getByRole('tab', { name: 'Desktop' }).click()
+  await dialog.getByRole('button', { name: 'Steganography' }).first().click()
+  await dialog.getByRole('button', { name: /cover_lab\.png/ }).click()
+  await expect(dialog.getByText(/FLAG\{IFA_STEGO_LSB_2026\}/)).toBeVisible()
+  await dialog.getByRole('button', { name: /Jalankan di Terminal|Run in Terminal/ }).click()
+  await expect(dialog.getByRole('log')).toContainText('FLAG{IFA_STEGO_LSB_2026}')
+  await dialog.getByLabel(/Input perintah terminal|Terminal command input/).fill('cd ..')
+  await page.keyboard.press('Enter')
+  await dialog.getByLabel(/Input perintah terminal|Terminal command input/).fill('ls')
+  await page.keyboard.press('Enter')
+  await expect(dialog.getByRole('log')).toContainText('CyberSecurity/')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
 })
