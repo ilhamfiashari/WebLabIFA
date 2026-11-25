@@ -981,6 +981,9 @@ export const COMPONENT_CATALOG: ComponentSpec[] = [
       { id: 'VCC', label: 'VCC', dx: 22, dy: 74, role: 'power' },
       { id: 'IN', label: 'IN', dx: 48, dy: 74, role: 'signal' },
       { id: 'GND', label: 'GND', dx: 74, dy: 74, role: 'gnd' },
+      { id: 'NC', label: 'NC (Normally Closed)', dx: 22, dy: 6, role: 'signal' },
+      { id: 'COM', label: 'COM (Common)', dx: 48, dy: 6, role: 'signal' },
+      { id: 'NO', label: 'NO (Normally Open)', dx: 74, dy: 6, role: 'signal' },
     ],
   },
   {
@@ -1318,7 +1321,7 @@ export const RESISTOR_MULTIPLIER_BANDS: ResistorColorBand[] = [
   { multiplier: 1000000, nameId: 'Biru (×1MΩ)', nameEn: 'Blue (×1MΩ)', hex: '#2563eb' },
 ]
 
-export const RESISTOR_QUICK_VALUES = [47, 100, 220, 330, 470, 1000, 2200, 4700, 10000, 100000]
+export const RESISTOR_QUICK_VALUES = [47, 100, 220, 330, 470, 1000, 2200, 4700, 10000, 100000, 1000000]
 
 export function formatOhms(ohms: number): string {
   if (ohms >= 1000000) return `${+(ohms / 1000000).toFixed(2)}MΩ`

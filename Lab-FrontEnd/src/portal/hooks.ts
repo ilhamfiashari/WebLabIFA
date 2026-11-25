@@ -45,10 +45,10 @@ export const roleName = (role: string) => role === 'admin' ? 'Admin' : role === 
 /** Rute yang boleh dibuka oleh setiap peran aktif. Backend tetap memeriksa setiap endpoint. */
 export function allowedPath(role: string, path: string) {
   const id = '(/[a-zA-Z0-9_-]{1,64})?'
-  if (role === 'admin') return ['', '/pengguna', '/kelas', '/katalog', '/audit', '/pengaturan'].some(p => path === `/lab/admin${p}`)
+  if (role === 'admin') return ['', '/pengguna', '/kelas', '/katalog', '/audit', '/dokumentasi', '/pengaturan'].some(p => path === `/lab/admin${p}`)
   if (role === 'dosen') {
     return (
-      ['/lab/dosen', '/lab/dosen/web', '/lab/dosen/web-dev', '/lab/dosen/iot', '/lab/dosen/kelas', '/lab/dosen/leaderboard', '/lab/dosen/penugasan', '/lab/dosen/progres', '/lab/dosen/panduan', '/lab/dosen/pengaturan'].includes(path) ||
+      ['/lab/dosen', '/lab/dosen/web', '/lab/dosen/web-dev', '/lab/dosen/iot', '/lab/dosen/kelas', '/lab/dosen/leaderboard', '/lab/dosen/penugasan', '/lab/dosen/progres', '/lab/dosen/panduan', '/lab/dosen/dokumentasi', '/lab/dosen/pengaturan'].includes(path) ||
       new RegExp(`^/lab/dosen/web/[a-zA-Z0-9_-]{1,32}(/[a-zA-Z0-9_-]{1,64})?$`).test(path) ||
       new RegExp(`^/lab/dosen/web-dev/[a-zA-Z0-9_-]{1,64}$`).test(path) ||
       new RegExp(`^/lab/dosen/iot/[a-zA-Z0-9_-]{1,64}$`).test(path) ||
@@ -57,7 +57,7 @@ export function allowedPath(role: string, path: string) {
     )
   }
   return (
-    ['/lab', '/lab/pencapaian', '/lab/peringkat', '/lab/web', '/lab/web-dev', '/lab/iot', '/lab/tugas', '/lab/progres', '/lab/riwayat', '/lab/panduan', '/lab/pengaturan'].includes(path) ||
+    ['/lab', '/lab/pencapaian', '/lab/peringkat', '/lab/web', '/lab/web-dev', '/lab/iot', '/lab/tugas', '/lab/progres', '/lab/riwayat', '/lab/panduan', '/lab/dokumentasi', '/lab/pengaturan'].includes(path) ||
     new RegExp(`^/lab/latihan${id}$`).test(path) ||
     new RegExp(`^/lab/web/[a-zA-Z0-9_-]{1,32}(/[a-zA-Z0-9_-]{1,64})?$`).test(path) ||
     new RegExp(`^/lab/web-dev/[a-zA-Z0-9_-]{1,64}$`).test(path) ||

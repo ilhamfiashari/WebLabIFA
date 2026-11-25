@@ -36,6 +36,7 @@ export const TRANSLATIONS = {
         riwayat: 'Riwayat',
         latihan: 'Latihan',
         panduan: 'Panduan',
+        dokumentasi: 'Dokumentasi',
         pengaturan: 'Pengaturan',
       },
       lecturer: {
@@ -49,6 +50,7 @@ export const TRANSLATIONS = {
         progres: 'Progres & Nilai',
         latihan: 'Bank latihan',
         panduan: 'Panduan',
+        dokumentasi: 'Dokumentasi',
         pengaturan: 'Pengaturan',
       },
       admin: {
@@ -57,6 +59,7 @@ export const TRANSLATIONS = {
         kelas: 'Kelas',
         katalog: 'Katalog & Publikasi',
         audit: 'Audit Log',
+        dokumentasi: 'Dokumentasi',
         pengaturan: 'Pengaturan',
       },
     },
@@ -270,6 +273,7 @@ export const TRANSLATIONS = {
         riwayat: 'History',
         latihan: 'Practice',
         panduan: 'Guide',
+        dokumentasi: 'Documentation',
         pengaturan: 'Settings',
       },
       lecturer: {
@@ -283,6 +287,7 @@ export const TRANSLATIONS = {
         progres: 'Progress & Grades',
         latihan: 'Exercise Bank',
         panduan: 'Guide',
+        dokumentasi: 'Documentation',
         pengaturan: 'Settings',
       },
       admin: {
@@ -291,6 +296,7 @@ export const TRANSLATIONS = {
         kelas: 'Classes',
         katalog: 'Catalog & Publishing',
         audit: 'Audit Log',
+        dokumentasi: 'Documentation',
         pengaturan: 'Settings',
       },
     },

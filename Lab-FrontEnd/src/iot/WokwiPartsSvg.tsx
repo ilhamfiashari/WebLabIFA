@@ -636,7 +636,13 @@ export function WokwiExtendedPartSvg({
       )
     }
     case 'led-bar-graph': {
-      const litCount = sim.running ? (Math.floor(sim.elapsedMs / 250) % 10) + 1 : 6
+      const wiredLevel = sim.barGraphLevels?.[comp.id]
+      const litCount =
+        wiredLevel !== undefined
+          ? wiredLevel
+          : sim.running
+            ? (Math.floor(sim.elapsedMs / 250) % 10) + 1
+            : 6
       const modeClr = comp.color ?? 'GYR'
       return (
         <g>

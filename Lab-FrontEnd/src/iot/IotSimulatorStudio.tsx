@@ -51,6 +51,7 @@ import { webDevSnippets } from '../webdev/cmWebDev'
 import type { CodeDiagnostic } from '../shared/editorDiagnostics'
 import { EditorDiagnosticsList, EditorStatusDiagnosticPill } from '../shared/EditorDiagnosticsUi'
 import {
+  analyzeCircuitSafety,
   analyzeProjectFileSync,
   compileArduinoSketch,
   createInitialSimulation,
@@ -59,6 +60,7 @@ import {
   invokeVirtualWebRoute,
   stepLoop,
   stepSetup,
+  syncCircuitActuators,
   syncWebServerState,
   verifyCircuitAndCode,
   type SketchFile,
@@ -2479,6 +2481,13 @@ export function IotSimulatorStudio({
               const nextComps = cur.components.map((c) => (c.id === id ? { ...c, ...patch } : c))
               liveCircuitRef.current = { ...cur, components: nextComps }
               setComponents(nextComps)
+              if (simState.running && vmRef.current) {
+                syncCircuitActuators(vmRef.current, nextComps, cur.wires)
+                syncBuzzerAudio(vmRef.current.sim.buzzerActive, true, audioOnRef.current)
+                setSimState({ ...vmRef.current.sim, running: true })
+              } else {
+                setSimState((prev) => ({ ...prev, alerts: analyzeCircuitSafety(cur.boardId, nextComps, cur.wires) }))
+              }
             }}
             onUpdateProps={(id, patch) => {
               const isTransientRuntimeInput = simState.running && (patch.pressed !== undefined || patch.motion !== undefined)
@@ -2495,6 +2504,9 @@ export function IotSimulatorStudio({
               liveCircuitRef.current = { ...cur, components: nextComps }
               setComponents(nextComps)
               if (simState.running && vmRef.current) {
+                syncCircuitActuators(vmRef.current, nextComps, cur.wires)
+                syncBuzzerAudio(vmRef.current.sim.buzzerActive, true, audioOnRef.current)
+                setSimState({ ...vmRef.current.sim, running: true })
                 triggerImmediateVmStep()
               }
             }}
@@ -2505,7 +2517,13 @@ export function IotSimulatorStudio({
               const nextWires = [...cur.wires, nw]
               liveCircuitRef.current = { ...cur, wires: nextWires }
               setWires(nextWires)
-              setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, cur.components, nextWires), running: prev.running }))
+              if (simState.running && vmRef.current) {
+                syncCircuitActuators(vmRef.current, cur.components, nextWires)
+                syncBuzzerAudio(vmRef.current.sim.buzzerActive, true, audioOnRef.current)
+                setSimState({ ...vmRef.current.sim, running: true })
+              } else {
+                setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, cur.components, nextWires), running: prev.running }))
+              }
             }}
             onUpdateWire={(wireId, patch) => {
               if (!gestureActiveRef.current) pushCircuitUndo()
@@ -2520,7 +2538,13 @@ export function IotSimulatorStudio({
               const nextWires = cur.wires.filter((w) => w.id !== wireId)
               liveCircuitRef.current = { ...cur, wires: nextWires }
               setWires(nextWires)
-              setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, cur.components, nextWires), running: prev.running }))
+              if (simState.running && vmRef.current) {
+                syncCircuitActuators(vmRef.current, cur.components, nextWires)
+                syncBuzzerAudio(vmRef.current.sim.buzzerActive, true, audioOnRef.current)
+                setSimState({ ...vmRef.current.sim, running: true })
+              } else {
+                setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, cur.components, nextWires), running: prev.running }))
+              }
             }}
             onDeleteNode={(nodeId) => {
               if (nodeId === 'board') return
@@ -2531,7 +2555,13 @@ export function IotSimulatorStudio({
               liveCircuitRef.current = { ...cur, components: nextComps, wires: nextWires }
               setComponents(nextComps)
               setWires(nextWires)
-              setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, nextWires), running: prev.running }))
+              if (simState.running && vmRef.current) {
+                syncCircuitActuators(vmRef.current, nextComps, nextWires)
+                syncBuzzerAudio(vmRef.current.sim.buzzerActive, true, audioOnRef.current)
+                setSimState({ ...vmRef.current.sim, running: true })
+              } else {
+                setSimState((prev) => ({ ...prev, ...createInitialSimulation(cur.boardId, nextComps, nextWires), running: prev.running }))
+              }
             }}
             onDuplicateNode={duplicateNode}
             onSelectPrimaryBoard={switchBoard}

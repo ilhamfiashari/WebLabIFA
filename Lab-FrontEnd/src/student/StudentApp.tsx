@@ -32,6 +32,7 @@ import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../share
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
+import { IotDocsPage } from '../iot/IotDocsPage'
 import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
 import { WebDevStudio } from '../webdev/WebDevStudio'
 import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
@@ -50,6 +51,7 @@ const PAGES: NavPage[] = [
   { key: 'riwayat', path: '/lab/riwayat', label: 'Riwayat', icon: History },
   { key: 'latihan', path: '/lab/latihan', label: 'Latihan', icon: BookOpenCheck },
   { key: 'panduan', path: '/lab/panduan', label: 'Panduan', icon: BookOpen },
+  { key: 'dokumentasi', path: '/lab/dokumentasi', label: 'Dokumentasi', icon: BookOpen },
   { key: 'pengaturan', path: '/lab/pengaturan', label: 'Pengaturan', icon: Settings },
 ]
 
@@ -79,6 +81,7 @@ export function StudentApp(props: Props) {
       riwayat: tr.nav.student.riwayat,
       latihan: tr.nav.student.latihan,
       panduan: tr.nav.student.panduan,
+      dokumentasi: tr.nav.student.dokumentasi,
       pengaturan: tr.nav.student.pengaturan,
     }
     return { ...p, label: labelMap[p.key] ?? p.label }
@@ -109,11 +112,13 @@ export function StudentApp(props: Props) {
                   ? 'riwayat'
                   : path.startsWith('/lab/panduan')
                     ? 'panduan'
-                    : path.startsWith('/lab/pengaturan')
-                      ? 'pengaturan'
-                      : path.startsWith('/lab/latihan')
-                        ? 'latihan'
-                        : 'beranda'
+                    : path.startsWith('/lab/dokumentasi')
+                      ? 'dokumentasi'
+                      : path.startsWith('/lab/pengaturan')
+                        ? 'pengaturan'
+                        : path.startsWith('/lab/latihan')
+                          ? 'latihan'
+                          : 'beranda'
 
   const dashQ = useQuery({
     queryKey: ['student-dashboard'],
@@ -175,6 +180,8 @@ export function StudentApp(props: Props) {
         <StudentHistoryPage go={go} />
       ) : active === 'panduan' ? (
         <PanduanPage role="mahasiswa" />
+      ) : active === 'dokumentasi' ? (
+        <IotDocsPage role="mahasiswa" onOpenStudio={() => go('/lab/iot')} />
       ) : active === 'pengaturan' ? (
         <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
           <PageHead
