@@ -95,10 +95,21 @@ test('green board LED pulses and rear instrument pixels move, then freeze on pau
   })
   const before = await readRear()
   await expect.poll(readRear).not.toEqual(before)
+  const readIndoorLeaves = () => page.locator('[data-lab-animation]').evaluate((element: HTMLCanvasElement) => {
+    const scale = Math.max(element.clientWidth / 1446, element.clientHeight / 1087) * element.width / element.clientWidth
+    const ctx = element.getContext('2d')!
+    const pixels = ctx.getImageData(Math.round(15 * scale), Math.round(15 * scale), Math.round(110 * scale), Math.round(110 * scale)).data
+    return Array.from(pixels).reduce((sum, value, index) => (sum + value * (index % 29 + 1)) % 1000000007, 0)
+  })
+  const leavesBefore = await readIndoorLeaves()
+  expect(leavesBefore).toBeGreaterThan(0)
+  await expect.poll(readIndoorLeaves).not.toEqual(leavesBefore)
   await page.getByRole('button', { name: 'Jeda animasi', exact: true }).click()
   const frozen = await readRear()
+  const leavesFrozen = await readIndoorLeaves()
   await page.waitForTimeout(350)
   expect(await readRear()).toEqual(frozen)
+  expect(await readIndoorLeaves()).toEqual(leavesFrozen)
 })
 
 test('laptop renders twelve scenes with coding, CLI and selectable menus', async ({ page }) => {
