@@ -1,8 +1,23 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Maximize2, Moon, Pause, Play, SlidersHorizontal, Sun, X } from 'lucide-react'
+import { Maximize2, Monitor, Moon, Pause, Play, SlidersHorizontal, Sun, Terminal, X } from 'lucide-react'
 import { PROGRAM_LABELS, STUDIO_DEFAULTS, WEATHER_LABELS, type StudioSettings } from './studio-model'
+import type { WorkstationView } from './LaptopWorkstationModal'
 
-export function StudioControls({ settings, setSettings, en, preview, onPreview }: { settings: StudioSettings; setSettings: Dispatch<SetStateAction<StudioSettings>>; en: boolean; preview: boolean; onPreview: () => void }) {
+export function StudioControls({
+  settings,
+  setSettings,
+  en,
+  preview,
+  onPreview,
+  onOpenWorkstation,
+}: {
+  settings: StudioSettings
+  setSettings: Dispatch<SetStateAction<StudioSettings>>
+  en: boolean
+  preview: boolean
+  onPreview: () => void
+  onOpenWorkstation: (view: WorkstationView) => void
+}) {
   const [open, setOpen] = useState(false)
   const dark = settings.theme === 'dark' || (settings.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
   const trigger = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null)
@@ -16,6 +31,8 @@ export function StudioControls({ settings, setSettings, en, preview, onPreview }
     return () => { document.removeEventListener('keydown', close); document.removeEventListener('pointerdown', outside) }
   }, [open])
   return <div className="login-studio-dock">
+    <button type="button" className="login-studio-trigger" onClick={() => onOpenWorkstation('terminal')} aria-label={en ? 'Zoom Terminal' : 'Zoom Terminal'} title={en ? 'Zoom Terminal' : 'Perbesar Terminal'}><Terminal size={17} /></button>
+    <button type="button" className="login-studio-trigger" onClick={() => { update('program', 'desktop'); onOpenWorkstation('desktop') }} aria-label={en ? 'Open Desktop OS' : 'Buka Desktop OS'} title={en ? 'Open Desktop OS' : 'Tampilkan Desktop'}><Monitor size={17} /></button>
     <button type="button" className="login-studio-trigger login-studio-preview" onClick={onPreview} aria-label={preview ? en ? 'Back to login' : 'Kembali ke login' : en ? 'Preview studio' : 'Pratinjau studio'} aria-pressed={preview}>{preview ? <X size={17} /> : <Maximize2 size={17} />}</button>
     <button type="button" className="login-studio-trigger" onClick={() => update('theme', dark ? 'light' : 'dark')} aria-label={en ? 'Toggle light / dark theme' : 'Ganti tema terang / gelap'}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
     <button type="button" className="login-studio-trigger" onClick={() => update('paused', !settings.paused)} aria-label={settings.paused ? en ? 'Play animation' : 'Putar animasi' : en ? 'Pause animation' : 'Jeda animasi'} aria-pressed={settings.paused}>{settings.paused ? <Play size={17} /> : <Pause size={17} />}</button>

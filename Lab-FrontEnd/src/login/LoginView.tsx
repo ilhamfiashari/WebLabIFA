@@ -19,6 +19,7 @@ import { type LoginSceneKey, useRealtimeAtmosphere } from './weatherTime'
 import { LOGIN_SCENES, resolveTimeScene } from './weatherTime'
 import { LabScene } from './LabScene'
 import { LaptopMenu } from './LaptopMenu'
+import { LaptopWorkstationModal, type WorkstationView } from './LaptopWorkstationModal'
 import { laptopSceneAt } from './lab-animation'
 import { StudioControls } from './StudioControls'
 import { resolveLabWeather, sensorSample, studioScene, useStudioSettings, WEATHER_LABELS } from './studio-model'
@@ -95,6 +96,12 @@ export function LoginView() {
   const [settings, setSettings] = useStudioSettings()
   const [seconds, setSeconds] = useState(0)
   const [preview, setPreview] = useState(false)
+  const [workstationOpen, setWorkstationOpen] = useState(false)
+  const [workstationView, setWorkstationView] = useState<WorkstationView>('terminal')
+  const openWorkstation = (view: WorkstationView = 'terminal') => {
+    setWorkstationView(view)
+    setWorkstationOpen(true)
+  }
   const activeWeather = settings.weather === 'auto' ? resolveLabWeather(weather) : settings.weather
   const scene = LOGIN_SCENES[studioScene(settings.time, resolveTimeScene(now, weather), activeWeather)]
   const sample = sensorSample(seconds, activeWeather, settings.distance, settings.network)
@@ -214,6 +221,7 @@ export function LoginView() {
           en={lang === 'en'}
           preview={preview}
           onPreview={() => setPreview(value => !value)}
+          onOpenWorkstation={openWorkstation}
         />
 
         <footer className="login-v2-footer">
@@ -244,7 +252,12 @@ export function LoginView() {
             />
           </picture>
           <LabScene scene={scene} weather={activeWeather} settings={settings} en={lang === 'en'} onSample={setSeconds} />
-          <LaptopMenu time={scene.key} selected={laptopSceneAt(seconds, settings.program).mode} onSelect={program => setSettings(s => ({ ...s, program }))} />
+          <LaptopMenu
+            time={scene.key}
+            selected={laptopSceneAt(seconds, settings.program).mode}
+            onSelect={program => setSettings(s => ({ ...s, program }))}
+            onOpenZoom={openWorkstation}
+          />
         </div>
 
         <div className="login-v2-cards-stack">
@@ -297,6 +310,18 @@ export function LoginView() {
           </div>
         </div>
       </aside>
+
+      <LaptopWorkstationModal
+        open={workstationOpen}
+        view={workstationView}
+        onChangeView={setWorkstationView}
+        program={settings.program}
+        weather={activeWeather}
+        settings={settings}
+        en={lang === 'en'}
+        onSelectProgram={program => setSettings(s => ({ ...s, program }))}
+        onClose={() => setWorkstationOpen(false)}
+      />
     </main>
   )
 }
