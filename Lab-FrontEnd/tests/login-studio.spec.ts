@@ -186,3 +186,37 @@ test('laptop renders twelve scenes with coding, CLI and selectable menus', async
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
 })
+
+test('workstation popup is symmetrically centered and responsive on 390px mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/login')
+
+  await page.getByRole('button', { name: 'Zoom Terminal', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+
+  const winBox = (await dialog.locator('.ws-window').boundingBox())!
+  const leftGap = winBox.x
+  const rightGap = 390 - (winBox.x + winBox.width)
+  expect(leftGap).toBeGreaterThanOrEqual(8)
+  expect(rightGap).toBeGreaterThanOrEqual(8)
+  expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(2)
+
+  // Close button and Run button stay inside 390px viewport
+  const closeBox = (await dialog.getByRole('button', { name: /Tutup workstation|Close workstation/ }).boundingBox())!
+  expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(385)
+  const submitBtn = dialog.getByRole('button', { name: /Jalankan perintah|Run command/ })
+  await expect(submitBtn).toBeVisible()
+  await dialog.getByLabel(/Input perintah terminal|Terminal command input/).fill('whoami')
+  await submitBtn.click()
+  await expect(dialog.getByRole('log')).toContainText('uid=1000')
+  await page.screenshot({ path: path.join(os.tmpdir(), 'ws-mobile-terminal.png') })
+
+  await dialog.getByRole('tab', { name: 'Desktop' }).click()
+  const stegoBox = (await dialog.locator('.ws-desktop-icons').getByRole('button', { name: 'Steganography' }).boundingBox())!
+  expect(stegoBox.height).toBeLessThan(85)
+  expect(stegoBox.x + stegoBox.width).toBeLessThanOrEqual(385)
+  await page.screenshot({ path: path.join(os.tmpdir(), 'ws-mobile-desktop.png') })
+  await dialog.getByRole('button', { name: /Tutup workstation|Close workstation/ }).click()
+  await expect(dialog).toHaveCount(0)
+})

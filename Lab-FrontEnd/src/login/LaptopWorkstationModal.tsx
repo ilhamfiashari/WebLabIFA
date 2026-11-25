@@ -935,17 +935,28 @@ export function LaptopWorkstationModal({
                     runCommand(input)
                   }}
                 >
-                  <span className="ws-term-prompt">ifa@weblab:{cwd.replace('/home/ifa', '~')}$</span>
+                  <span className="ws-term-prompt">
+                    <span className="ws-term-prompt-host">ifa@weblab:</span>
+                    <span>{cwd.replace('/home/ifa', '~')}$</span>
+                  </span>
                   <input
                     ref={inputRef}
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder={en ? 'Type help, ls, stegsolve, nmap, curl, iot, desktop...' : 'Ketik help, ls, stegsolve, nmap, curl, iot, desktop...'}
+                    placeholder={en ? 'Type help, ls, stegsolve, nmap...' : 'Ketik help, ls, stegsolve, nmap...'}
                     aria-label={en ? 'Terminal command input' : 'Input perintah terminal'}
                     spellCheck={false}
                     autoComplete="off"
                   />
+                  <button
+                    type="submit"
+                    className="ws-term-submit"
+                    aria-label={en ? 'Run command' : 'Jalankan perintah'}
+                  >
+                    <Play size={12} aria-hidden="true" />
+                    <span>{en ? 'Run' : 'Kirim'}</span>
+                  </button>
                 </form>
               </section>
             </div>
