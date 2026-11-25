@@ -1,3 +1,4 @@
+mod access_approval;
 mod admin;
 mod catalog;
 mod instructor;
@@ -6,6 +7,7 @@ mod sessions;
 mod student;
 mod webdev_projects;
 
+pub use access_approval::*;
 pub use admin::*;
 pub use catalog::*;
 pub use instructor::*;

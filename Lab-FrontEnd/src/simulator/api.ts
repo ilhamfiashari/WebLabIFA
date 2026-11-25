@@ -642,6 +642,38 @@ export interface AdminSecurityMonitorResponse {
   anomalies: SecurityAnomalyRow[]
 }
 
+export interface AccessRequestItem {
+  id: string
+  email: string
+  name: string
+  workspace_domain: string | null
+  requested_role: 'mahasiswa' | 'dosen'
+  status: 'pending' | 'approved' | 'rejected'
+  note: string
+  reviewed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ApprovedAccountItem {
+  email: string
+  full_name: string
+  nim: string | null
+  role: 'mahasiswa' | 'dosen'
+  class_id: string | null
+  source: 'approval' | 'excel_import' | 'manual' | 'migration'
+  created_at: string
+  updated_at: string
+}
+
+export interface AccessApprovalsResponse {
+  pending_count: number
+  can_approve_dosen: boolean
+  classes: Array<{ id: string; name: string; course: string; semester: string }>
+  requests: AccessRequestItem[]
+  approved_accounts: ApprovedAccountItem[]
+}
+
 export const simApi = {
   getCatalog(params?: { q?: string; track?: string; category?: string }) {
     const sp = new URLSearchParams()
@@ -1116,5 +1148,53 @@ export const simApi = {
       newly_unlocked?: string[]
       mission_states?: import('../webdev/types').WebDevMissionAccessState[]
     }>('/api/webdev/missions/submit', csrf, body)
+  },
+  getAccessApprovals() {
+    return getJson<AccessApprovalsResponse>('/api/portal/access-requests')
+  },
+  decideAccessRequest(
+    csrf: string,
+    requestId: string,
+    body: {
+      action: 'approve' | 'reject'
+      role?: 'mahasiswa' | 'dosen'
+      class_id?: string
+      note?: string
+    },
+  ) {
+    return postJson<{
+      id: string
+      email: string
+      status: 'approved' | 'rejected'
+      role?: string
+      class_id?: string | null
+    }>(`/api/portal/access-requests/${encodeURIComponent(requestId)}/decide`, csrf, body)
+  },
+  importApprovedStudents(
+    csrf: string,
+    body: {
+      default_class_id?: string
+      source?: 'excel_import' | 'manual'
+      rows: Array<{
+        email: string
+        name?: string
+        nim?: string
+        class_id?: string
+        role?: 'mahasiswa' | 'dosen'
+      }>
+    },
+  ) {
+    return postJson<{
+      imported: number
+      updated: number
+      skipped: number
+      errors: string[]
+    }>('/api/portal/students/import', csrf, body)
+  },
+  revokeApprovedAccount(csrf: string, email: string) {
+    return deleteJson<{ revoked: boolean; email: string }>(
+      `/api/portal/approved-accounts/${encodeURIComponent(email)}`,
+      csrf,
+    )
   },
 }

@@ -31,14 +31,18 @@ const messagesId: Record<string, string> = {
   cancelled: 'Login dibatalkan. Anda bisa mencoba lagi saat siap.',
   expired: 'Waktu login habis atau tautan sudah digunakan. Mulai login kembali.',
   temporary: 'Login belum dapat diproses. Tunggu sebentar, lalu coba lagi.',
-  unauthorized: 'Akun Google ini belum memiliki akses. Gunakan akun yang telah diizinkan.',
+  pending_approval: 'Akun Anda belum disetujui. Permintaan akses telah dicatat dan menunggu persetujuan Admin atau Dosen.',
+  rejected: 'Permintaan akses untuk akun ini ditolak oleh Admin atau Dosen.',
+  unauthorized: 'Akun Google ini belum memiliki akses. Gunakan akun yang telah disetujui Admin atau Dosen.',
 }
 
 const messagesEn: Record<string, string> = {
   cancelled: 'Sign-in cancelled. You can try again whenever ready.',
   expired: 'Sign-in expired or link was already used. Please start again.',
   temporary: 'Sign-in could not be processed right now. Wait a moment and retry.',
-  unauthorized: 'This Google account does not have access. Use an authorized account.',
+  pending_approval: 'Your account is not approved yet. An access request has been recorded and is awaiting Admin or Lecturer approval.',
+  rejected: 'The access request for this account was rejected by an Admin or Lecturer.',
+  unauthorized: 'This Google account does not have access. Use an account approved by an Admin or Lecturer.',
 }
 
 function SceneWeatherIcon({ scene }: { scene: LoginSceneKey }) {

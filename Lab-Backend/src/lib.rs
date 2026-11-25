@@ -178,6 +178,22 @@ pub fn router(state: AppState) -> Router {
             get(portal::admin_get_settings).post(portal::admin_update_settings),
         )
         .route(
+            "/api/portal/access-requests",
+            get(portal::list_access_approvals),
+        )
+        .route(
+            "/api/portal/access-requests/{request_id}/decide",
+            post(portal::decide_access_request),
+        )
+        .route(
+            "/api/portal/students/import",
+            post(portal::import_approved_students).layer(DefaultBodyLimit::max(256 * 1024)),
+        )
+        .route(
+            "/api/portal/approved-accounts/{email}",
+            delete(portal::revoke_approved_account),
+        )
+        .route(
             "/api/account/security",
             get(security_account::get_security_settings),
         )
@@ -576,13 +592,70 @@ async fn complete_login(
             workspace_domain = domain
         );
     }
-    if !state.config.eligible(&email, hd) {
-        return Err("unauthorized");
+    let privileged = state.config.email_allowed(&email);
+    let mut approved_role: Option<String> = None;
+    let mut approved_class_id: Option<String> = None;
+
+    if !privileged {
+        let approved: Option<(String, Option<String>)> =
+            sqlx::query_as("SELECT role, class_id FROM approved_accounts WHERE email=$1")
+                .bind(&email)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|_| "temporary")?;
+
+        if let Some((role, class_id)) = approved {
+            approved_role = Some(role);
+            approved_class_id = class_id;
+        } else {
+            let can_request_access = state.config.eligible(&email, hd)
+                || (email.ends_with("@if.itera.ac.id")
+                    && hd.is_some_and(|d| {
+                        d == "if.itera.ac.id" || state.config.workspace_domain.as_deref() == Some(d)
+                    }));
+            if !can_request_access {
+                return Err("unauthorized");
+            }
+            let existing_req: Option<(String,)> =
+                sqlx::query_as("SELECT status FROM access_requests WHERE email=$1")
+                    .bind(&email)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .map_err(|_| "temporary")?;
+            if let Some((status,)) = existing_req
+                && status == "rejected"
+            {
+                return Err("rejected");
+            }
+            let requested_role = if email.ends_with("@if.itera.ac.id") {
+                "dosen"
+            } else {
+                "mahasiswa"
+            };
+            sqlx::query(
+                "INSERT INTO access_requests (id, email, name, workspace_domain, requested_role, status) \
+                 VALUES ($1, $2, $3, $4, $5, 'pending') \
+                 ON CONFLICT (email) DO UPDATE SET \
+                   name = EXCLUDED.name, \
+                   workspace_domain = EXCLUDED.workspace_domain, \
+                   status = CASE WHEN access_requests.status = 'rejected' THEN 'rejected' ELSE 'pending' END, \
+                   updated_at = now()",
+            )
+            .bind(Uuid::new_v4())
+            .bind(&email)
+            .bind(name)
+            .bind(hd)
+            .bind(requested_role)
+            .execute(&state.pool)
+            .await
+            .map_err(|_| "temporary")?;
+            return Err("pending_approval");
+        }
     }
+
     let mut tx = state.pool.begin().await.map_err(|_| "temporary")?;
     let user: (Uuid, bool) = sqlx::query_as("INSERT INTO users (id,issuer,subject,name,email,workspace_domain) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (issuer,subject) DO UPDATE SET name=EXCLUDED.name,email=EXCLUDED.email,workspace_domain=EXCLUDED.workspace_domain WHERE users.active RETURNING id,access_initialized")
         .bind(Uuid::new_v4()).bind(&state.config.issuer).bind(subject).bind(name).bind(&email).bind(hd).fetch_optional(&mut *tx).await.map_err(|_| "temporary")?.ok_or("unauthorized")?;
-    let privileged = state.config.email_allowed(&email);
     if privileged {
         let binding: (Uuid,) = sqlx::query_as("INSERT INTO privileged_bindings(email,user_id) VALUES($1,$2) ON CONFLICT(email) DO UPDATE SET email=EXCLUDED.email RETURNING user_id")
             .bind(&email).bind(user.0).fetch_one(&mut *tx).await.map_err(|_| "temporary")?;
@@ -596,8 +669,10 @@ async fn complete_login(
             .execute(&mut *tx)
             .await
             .map_err(|_| "temporary")?;
-        let roles = if privileged {
+        let roles: Vec<&str> = if privileged {
             vec!["dosen", "admin"]
+        } else if approved_role.as_deref() == Some("dosen") {
+            vec!["dosen"]
         } else {
             vec!["mahasiswa"]
         };
@@ -623,8 +698,31 @@ async fn complete_login(
         .await
         .map_err(|_| "temporary")?;
     }
+    if let Some(ref cid) = approved_class_id {
+        let role_in_class = if approved_role.as_deref() == Some("dosen") {
+            "dosen"
+        } else {
+            "mahasiswa"
+        };
+        sqlx::query(
+            "INSERT INTO class_memberships(class_id,user_id,role_in_class) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+        )
+        .bind(cid)
+        .bind(user.0)
+        .bind(role_in_class)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| "temporary")?;
+    }
+    let allowed_login_roles: Vec<&str> = if privileged {
+        vec!["dosen", "admin"]
+    } else if approved_role.as_deref() == Some("dosen") {
+        vec!["dosen", "mahasiswa"]
+    } else {
+        vec!["mahasiswa"]
+    };
     let role: Option<(String,)> = sqlx::query_as("SELECT role FROM user_roles WHERE user_id=$1 AND role=ANY($2) ORDER BY CASE role WHEN 'dosen' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END LIMIT 1")
-        .bind(user.0).bind(if privileged { vec!["dosen", "admin"] } else { vec!["mahasiswa"] }).fetch_optional(&mut *tx).await.map_err(|_| "temporary")?;
+        .bind(user.0).bind(allowed_login_roles).fetch_optional(&mut *tx).await.map_err(|_| "temporary")?;
     let role = role.ok_or("unauthorized")?.0;
     if let Some(old) = jar.get(state.config.session_cookie()) {
         sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
@@ -686,28 +784,41 @@ pub(crate) async fn identity(state: &AppState, jar: &CookieJar) -> Result<Identi
     let token_hash = hash(token.value());
     let identity = sqlx::query_as::<_, Identity>("WITH active AS (UPDATE sessions s SET last_seen_at=now() FROM users u WHERE s.token_hash=$1 AND s.expires_at>now() AND s.last_seen_at>now()-interval '30 minutes' AND u.id=s.user_id AND u.active AND EXISTS(SELECT 1 FROM user_roles r WHERE r.user_id=u.id AND r.role=s.active_role) RETURNING s.user_id,s.csrf_token,s.expires_at,s.active_role) SELECT u.id,u.name,u.email,u.workspace_domain,a.active_role AS role,ARRAY(SELECT r.role FROM user_roles r WHERE r.user_id=u.id ORDER BY r.role) AS allowed_roles,a.csrf_token,a.expires_at FROM active a JOIN users u ON u.id=a.user_id")
         .bind(&token_hash).fetch_optional(&state.pool).await?;
-    if let Some(mut identity) = identity
-        && state
-            .config
-            .eligible(&identity.email, identity.workspace_domain.as_deref())
-    {
+    if let Some(mut identity) = identity {
         let privileged = state.config.email_allowed(&identity.email);
-        identity.allowed_roles.retain(|role| {
-            if privileged {
-                role == "dosen" || role == "admin"
-            } else {
-                role == "mahasiswa"
+        let approved_role: Option<String> = if privileged {
+            None
+        } else {
+            sqlx::query_scalar("SELECT role FROM approved_accounts WHERE email=$1")
+                .bind(identity.email.to_ascii_lowercase())
+                .fetch_optional(&state.pool)
+                .await?
+        };
+        let eligible = privileged
+            || approved_role.is_some()
+            || state
+                .config
+                .eligible(&identity.email, identity.workspace_domain.as_deref());
+        if eligible {
+            identity.allowed_roles.retain(|role| {
+                if privileged {
+                    role == "dosen" || role == "admin"
+                } else if approved_role.as_deref() == Some("dosen") {
+                    role == "dosen" || role == "mahasiswa"
+                } else {
+                    role == "mahasiswa"
+                }
+            });
+            if !identity.allowed_roles.contains(&identity.role) {
+                sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
+                    .bind(&token_hash)
+                    .execute(&state.pool)
+                    .await?;
+                return Err(ApiError(StatusCode::UNAUTHORIZED));
             }
-        });
-        if !identity.allowed_roles.contains(&identity.role) {
-            sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
-                .bind(&token_hash)
-                .execute(&state.pool)
-                .await?;
-            return Err(ApiError(StatusCode::UNAUTHORIZED));
+            identity.home_route = home_route(&identity.role).into();
+            return Ok(identity);
         }
-        identity.home_route = home_route(&identity.role).into();
-        return Ok(identity);
     }
     sqlx::query("DELETE FROM sessions WHERE token_hash=$1")
         .bind(&token_hash)

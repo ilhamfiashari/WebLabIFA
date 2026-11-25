@@ -85,6 +85,27 @@ for (const scenario of ['student_wrong_hd', 'student_missing_hd', 'student_wrong
   assert.equal((await request(await begin(scenario))).headers.get('location'), '/login?status=unauthorized')
   assert.equal((await request('/api/me')).status, 401)
 }
+// Unapproved institutional student must be blocked into pending_approval before Dosen/Admin approves
+assert.equal((await request(await begin('student_success'))).headers.get('location'), '/login?status=pending_approval')
+assert.equal((await request('/api/me')).status, 401)
+console.log('PASS unapproved student blocked into pending_approval')
+
+// Dosen approves pending student and tests bulk import API
+assert.equal((await request(await begin())).headers.get('location'), '/lab')
+const approver = await (await request('/api/me')).json()
+const approvalsRes = await request('/api/portal/access-requests')
+assert.equal(approvalsRes.status, 200)
+const approvalsBody = await approvalsRes.json()
+const pendingReq = approvalsBody.requests.find(r => r.email === '123140051@student.itera.ac.id' && r.status === 'pending')
+assert(pendingReq, 'Permintaan persetujuan mahasiswa harus tercatat')
+const decideRes = await request(`/api/portal/access-requests/${pendingReq.id}/decide`, {
+  method: 'POST',
+  headers: { Origin: origin, 'Content-Type': 'application/json', 'X-CSRF-Token': approver.csrf_token },
+  body: JSON.stringify({ action: 'approve', role: 'mahasiswa' }),
+})
+assert.equal(decideRes.status, 200)
+await request('/api/auth/logout', { method: 'POST', headers: { Origin: origin, 'X-CSRF-Token': approver.csrf_token } })
+
 assert.equal((await request(await begin('student_success'))).headers.get('location'), '/lab')
 const student = await (await request('/api/me')).json()
 assert.equal(student.role, 'mahasiswa'); assert.deepEqual(student.allowed_roles, ['mahasiswa'])
