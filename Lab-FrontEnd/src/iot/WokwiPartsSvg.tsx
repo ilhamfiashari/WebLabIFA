@@ -351,14 +351,14 @@ export function WokwiExtendedPartSvg({
           <circle cx={48} cy={29} r={17} fill="#94a3b8" stroke="#475569" strokeWidth={2} />
           <circle cx={48} cy={29} r={11} fill="#64748b" strokeDasharray="2 2" stroke="#cbd5e1" />
           <text x={48} y={32} textAnchor="middle" fontSize="7" fontWeight={700} fill="#f8fafc">{ppm}ppm</text>
-          <foreignObject className="iot-interactive-control" x={12} y={49} width={72} height={18}>
+          <foreignObject className="iot-interactive-control" x={10} y={49} width={76} height={18}>
             <input
               type="range"
               min={50}
               max={2500}
               value={ppm}
               onChange={(e) => onUpdateProps(comp.id, { gasPpm: Number(e.target.value) })}
-              style={{ width: 70 }}
+              style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
               title="Gas MQ2 (ppm)"
             />
           </foreignObject>
@@ -381,14 +381,14 @@ export function WokwiExtendedPartSvg({
           <rect x={6} y={8} width={66} height={52} rx={6} fill="#b91c1c" stroke="#fca5a5" />
           <circle cx={39} cy={23} r={8} fill="#0f172a" stroke="#f8fafc" />
           <text x={39} y={40} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700}>NTC {comp.props.tempC ?? 25}°C</text>
-          <foreignObject className="iot-interactive-control" x={11} y={43} width={56} height={16}>
+          <foreignObject className="iot-interactive-control" x={10} y={42} width={58} height={16}>
             <input
               type="range"
               min={-10}
               max={85}
               value={comp.props.tempC ?? 25}
               onChange={(e) => onUpdateProps(comp.id, { tempC: Number(e.target.value) })}
-              style={{ width: 54 }}
+              style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
               title="Suhu NTC °C"
             />
           </foreignObject>
@@ -400,14 +400,14 @@ export function WokwiExtendedPartSvg({
           <rect x={4} y={6} width={94} height={60} rx={5} fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.4} />
           <rect x={39} y={19} width={20} height={18} rx={2} fill="#0f172a" stroke="#cbd5e1" />
           <text x={50} y={15} textAnchor="middle" fontSize="7.5" fill="#fff" fontWeight={700}>MPU-6050 · {comp.props.tiltDeg ?? 0}°</text>
-          <foreignObject className="iot-interactive-control" x={12} y={43} width={78} height={18}>
+          <foreignObject className="iot-interactive-control" x={10} y={43} width={82} height={18}>
             <input
               type="range"
               min={-90}
               max={90}
               value={comp.props.tiltDeg ?? 0}
               onChange={(e) => onUpdateProps(comp.id, { tiltDeg: Number(e.target.value) })}
-              style={{ width: 76 }}
+              style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
               title="Sudut kemiringan MPU-6050"
             />
           </foreignObject>
@@ -428,14 +428,14 @@ export function WokwiExtendedPartSvg({
           <rect x={4} y={6} width={98} height={70} rx={6} fill="#1d4ed8" stroke="#60a5fa" strokeWidth={1.5} />
           <circle cx={53} cy={34} r={18} fill="none" stroke="#93c5fd" strokeWidth={1.8} strokeDasharray="4 2" />
           <text x={53} y={28} textAnchor="middle" fontSize="7" fontWeight={700} fill="#fff">RC522</text>
-          <foreignObject className="iot-interactive-control" x={18} y={51} width={70} height={18}>
+          <foreignObject className="iot-interactive-control" x={16} y={50} width={74} height={20}>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onUpdateProps(comp.id, { rfidUid: comp.props.rfidUid ? null : 'E3 9A 4B 12' })
               }}
-              style={{ width: '100%', fontSize: 8.5, fontWeight: 700, borderRadius: 4, border: 0, cursor: 'pointer', background: comp.props.rfidUid ? '#16a34a' : '#e2e8f0', color: comp.props.rfidUid ? '#fff' : '#0f172a' }}
+              style={{ width: '100%', height: 18, padding: 0, lineHeight: '18px', fontSize: 8.5, fontWeight: 700, borderRadius: 4, border: 0, cursor: 'pointer', display: 'block', background: comp.props.rfidUid ? '#16a34a' : '#e2e8f0', color: comp.props.rfidUid ? '#fff' : '#0f172a' }}
             >
               {comp.props.rfidUid ? 'UID: E39A' : 'Tap RFID'}
             </button>
@@ -480,7 +480,7 @@ export function WokwiExtendedPartSvg({
               onChange={(e) => onUpdateProps(comp.id, { potPct: Number(e.target.value) })}
               title={`${comp.label}: ${pct}%`}
               aria-label={comp.label}
-              style={{ width: 88, height: 28, opacity: 0.02, cursor: 'ew-resize' }}
+              style={{ width: '100%', height: 28, margin: 0, display: 'block', opacity: 0.02, cursor: 'ew-resize' }}
             />
           </foreignObject>
           <text x={56} y={16} textAnchor="middle" fontSize="6.5" fill="#e0f2fe" fontWeight={700} style={{ pointerEvents: 'none' }}>{pct}%</text>
@@ -501,11 +501,11 @@ export function WokwiExtendedPartSvg({
             stroke="#0f172a"
             strokeWidth={3}
           />
-          <foreignObject className="iot-interactive-control" x={12} y={50} width={68} height={18}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-              <button type="button" onClick={() => onUpdateProps(comp.id, { encoderStep: step - 1 })} style={{ flex: 1, fontSize: 8.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer' }}>↺</button>
-              <button type="button" onClick={() => onUpdateProps(comp.id, { pressed: !comp.props.pressed })} style={{ flex: 1, fontSize: 7.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer', background: comp.props.pressed ? '#16a34a' : '#e2e8f0' }}>SW</button>
-              <button type="button" onClick={() => onUpdateProps(comp.id, { encoderStep: step + 1 })} style={{ flex: 1, fontSize: 8.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer' }}>↻</button>
+          <foreignObject className="iot-interactive-control" x={10} y={49} width={72} height={19}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 2, width: '100%', height: '100%' }}>
+              <button type="button" onClick={() => onUpdateProps(comp.id, { encoderStep: step - 1 })} style={{ flex: 1, minWidth: 0, height: 18, padding: 0, lineHeight: '18px', fontSize: 8.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer', background: '#e2e8f0', color: '#0f172a' }}>↺</button>
+              <button type="button" onClick={() => onUpdateProps(comp.id, { pressed: !comp.props.pressed })} style={{ flex: 1, minWidth: 0, height: 18, padding: 0, lineHeight: '18px', fontSize: 7.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer', background: comp.props.pressed ? '#16a34a' : '#e2e8f0', color: comp.props.pressed ? '#fff' : '#0f172a' }}>SW</button>
+              <button type="button" onClick={() => onUpdateProps(comp.id, { encoderStep: step + 1 })} style={{ flex: 1, minWidth: 0, height: 18, padding: 0, lineHeight: '18px', fontSize: 8.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer', background: '#e2e8f0', color: '#0f172a' }}>↻</button>
             </div>
           </foreignObject>
         </g>
@@ -517,7 +517,7 @@ export function WokwiExtendedPartSvg({
         <g>
           <rect x={4} y={4} width={104} height={106} rx={6} fill="#1e293b" stroke="#475569" strokeWidth={1.5} />
           <foreignObject className="iot-interactive-control" x={10} y={10} width={92} height={94}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 3, width: '100%' }}>
               {keys.map((k) => (
                 <button
                   key={k}
@@ -528,6 +528,9 @@ export function WokwiExtendedPartSvg({
                   }}
                   style={{
                     height: 20,
+                    minWidth: 0,
+                    padding: 0,
+                    lineHeight: '20px',
                     fontSize: 9,
                     fontWeight: 700,
                     borderRadius: 3,
@@ -582,7 +585,7 @@ export function WokwiExtendedPartSvg({
           <rect x={6} y={6} width={72} height={100} rx={10} fill="#18181b" stroke="#52525b" strokeWidth={1.5} />
           <circle cx={42} cy={14} r={3.5} fill="#ef4444" />
           <foreignObject className="iot-interactive-control" x={12} y={22} width={60} height={78}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 3, width: '100%' }}>
               {['PWR', 'UP', 'OK', '1', '2', '3', '4', '5', '6'].map((btn) => (
                 <button
                   key={btn}
@@ -591,7 +594,7 @@ export function WokwiExtendedPartSvg({
                     e.stopPropagation()
                     onUpdateProps(comp.id, { irHex: `0xFF_${btn}` })
                   }}
-                  style={{ height: 22, fontSize: 7.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer', background: btn === 'PWR' ? '#dc2626' : '#3f3f46', color: '#fff' }}
+                  style={{ height: 22, minWidth: 0, padding: 0, lineHeight: '22px', fontSize: 7.5, fontWeight: 700, border: 0, borderRadius: 3, cursor: 'pointer', background: btn === 'PWR' ? '#dc2626' : '#3f3f46', color: '#fff' }}
                 >
                   {btn}
                 </button>

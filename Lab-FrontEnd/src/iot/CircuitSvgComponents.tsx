@@ -844,29 +844,29 @@ export function ComponentHardwareView({
           <circle cx={32} cy={30} r={9} fill="#0f172a" />
           <circle cx={84} cy={30} r={16} fill="#cbd5e1" stroke="#475569" strokeWidth={2} />
           <circle cx={84} cy={30} r={9} fill="#0f172a" />
-          <foreignObject className="iot-interactive-control" x={10} y={50} width={96} height={24}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#fff', fontWeight: 600 }}>
+          <foreignObject className="iot-interactive-control" x={8} y={50} width={100} height={22}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 8.5, color: '#fff', fontWeight: 700, height: '100%' }}>
               <input
                 type="range"
                 min={2}
                 max={200}
                 value={comp.props.distanceCm ?? 40}
                 onChange={(e) => onUpdateProps(comp.id, { distanceCm: Number(e.target.value) })}
-                style={{ width: 62 }}
+                style={{ width: 60, minWidth: 0, height: 14, margin: 0, display: 'block', flex: '0 0 60px' }}
               />
-              <span>{comp.props.distanceCm ?? 40}cm</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{comp.props.distanceCm ?? 40}cm</span>
             </div>
           </foreignObject>
         </g>
       ) : comp.kind === 'dht22' ? (
         <g>
           <rect x={6} y={4} width={86} height={70} rx={6} fill="#f8fafc" stroke="#94a3b8" strokeWidth={1.5} />
-          <rect x={14} y={10} width={70} height={24} rx={3} fill="#e2e8f0" stroke="#cbd5e1" />
-          <text x={49} y={25} textAnchor="middle" fontSize="9" fontWeight={700} fill="#0f172a">
+          <rect x={14} y={10} width={70} height={22} rx={3} fill="#e2e8f0" stroke="#cbd5e1" />
+          <text x={49} y={24} textAnchor="middle" fontSize="9" fontWeight={700} fill="#0f172a">
             {comp.props.tempC ?? 28}°C · {comp.props.humidity ?? 60}%
           </text>
-          <foreignObject className="iot-interactive-control" x={10} y={36} width={78} height={36}>
-            <div style={{ display: 'grid', gap: 2 }}>
+          <foreignObject className="iot-interactive-control" x={10} y={35} width={78} height={36}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 3, width: '100%', height: '100%', padding: '1px 0', boxSizing: 'border-box' }}>
               <input
                 type="range"
                 min={0}
@@ -874,6 +874,8 @@ export function ComponentHardwareView({
                 value={comp.props.tempC ?? 28}
                 onChange={(e) => onUpdateProps(comp.id, { tempC: Number(e.target.value) })}
                 title="Suhu °C"
+                aria-label={`${comp.label} Suhu °C`}
+                style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
               />
               <input
                 type="range"
@@ -882,6 +884,8 @@ export function ComponentHardwareView({
                 value={comp.props.humidity ?? 60}
                 onChange={(e) => onUpdateProps(comp.id, { humidity: Number(e.target.value) })}
                 title="Kelembapan %"
+                aria-label={`${comp.label} Kelembapan %`}
+                style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
               />
             </div>
           </foreignObject>
@@ -939,7 +943,7 @@ export function ComponentHardwareView({
                   onChange={(e) => onUpdateProps(comp.id, { potPct: Number(e.target.value) })}
                   title={`${comp.label}: ${pct}%`}
                   aria-label={comp.label}
-                  style={{ width: 58, height: 14 }}
+                  style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
                 />
               </foreignObject>
             </g>
@@ -950,14 +954,14 @@ export function ComponentHardwareView({
           <rect x={9} y={6} width={70} height={62} rx={8} fill="#78350f" stroke="#f59e0b" strokeWidth={1.4} />
           <circle cx={44} cy={28} r={14} fill="#fde68a" stroke="#b45309" strokeWidth={1.5} />
           <path d="M36 28 Q40 21 44 28 T52 28" fill="none" stroke="#b45309" strokeWidth={2} />
-          <foreignObject className="iot-interactive-control" x={12} y={46} width={64} height={20}>
+          <foreignObject className="iot-interactive-control" x={12} y={46} width={64} height={18}>
             <input
               type="range"
               min={50}
               max={1000}
               value={comp.props.lux ?? 420}
               onChange={(e) => onUpdateProps(comp.id, { lux: Number(e.target.value) })}
-              style={{ width: 62 }}
+              style={{ width: '100%', height: 14, margin: 0, display: 'block' }}
               title="Cahaya Lux"
             />
           </foreignObject>
@@ -966,7 +970,7 @@ export function ComponentHardwareView({
         <g>
           <rect x={10} y={6} width={70} height={66} rx={8} fill="#0f766e" stroke="#5eead4" strokeWidth={1.4} />
           <circle cx={45} cy={30} r={18} fill={comp.props.motion ? '#f8fafc' : '#cbd5e1'} stroke="#64748b" />
-          <foreignObject className="iot-interactive-control" x={14} y={51} width={62} height={18}>
+          <foreignObject className="iot-interactive-control" x={14} y={50} width={62} height={19}>
             <button
               type="button"
               onClick={(e) => {
@@ -975,6 +979,9 @@ export function ComponentHardwareView({
               }}
               style={{
                 width: '100%',
+                height: 18,
+                padding: 0,
+                lineHeight: '18px',
                 fontSize: 8.5,
                 fontWeight: 700,
                 background: comp.props.motion ? '#ef4444' : '#1e293b',
@@ -982,6 +989,7 @@ export function ComponentHardwareView({
                 border: 'none',
                 borderRadius: 4,
                 cursor: 'pointer',
+                display: 'block',
               }}
             >
               {comp.props.motion ? 'GERAK ON' : 'PICU PIR'}
@@ -1204,12 +1212,15 @@ export function ComponentHardwareView({
             {showLabels ? (
               <text
                 x={rot.dx}
-                y={rot.dy + 13}
+                y={rot.dy < 16 ? rot.dy - 8 : rot.dy + 13}
                 textAnchor="middle"
                 fontSize="7.5"
                 fontFamily="monospace"
                 fontWeight={700}
                 fill={labelColor}
+                stroke={isDark ? '#0b1322' : '#fdf4e3'}
+                strokeWidth={2.8}
+                paintOrder="stroke"
                 style={{ pointerEvents: 'none' }}
               >
                 {shortTag}

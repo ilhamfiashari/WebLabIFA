@@ -98,7 +98,10 @@ function getEndpointGeometry(
     if (pin.dx < spec.width / 2) return { x, y, sx: x - 14, sy: y, side: 'left' }
     return { x, y, sx: x + 14, sy: y, side: 'right' }
   }
-  return { x, y, sx: x, sy: y + 12, side: 'down' }
+  if (!isBreadboardKind(comp.kind) && rot.dy < spec.height / 3) {
+    return { x, y, sx: x, sy: y - 16, side: 'up' }
+  }
+  return { x, y, sx: x, sy: y + 20, side: 'down' }
 }
 
 function findNearestPin(
@@ -2148,8 +2151,8 @@ export function CircuitCanvas({
             )
           }
 
-          const breadboards = components.filter((c) => c.kind === 'breadboard')
-          const interactiveComponents = components.filter((c) => c.kind !== 'mcu' && c.kind !== 'breadboard')
+          const breadboards = components.filter((c) => isBreadboardKind(c.kind))
+          const interactiveComponents = components.filter((c) => c.kind !== 'mcu' && !isBreadboardKind(c.kind))
 
           return (
             <>
