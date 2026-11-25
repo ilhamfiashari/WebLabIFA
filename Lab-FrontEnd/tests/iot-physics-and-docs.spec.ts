@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { compileArduinoSketch, createVmContext, stepSetup } from '../src/iot/firmwareVm'
 
 const student = {
   id: '00000000-0000-0000-0000-0000000000s1',
@@ -50,98 +51,92 @@ async function mockCommonApi(page: import('@playwright/test').Page, user: typeof
   )
 }
 
-test('Ohm law resistor-LED brightness scales smoothly on Anode & Cathode sides and supports Relay/Pushbutton switching', async ({ page }) => {
-  await page.goto('/login')
-  const metrics = await page.evaluate(async () => {
-    const modPath = '/src/iot/firmwareVm.ts'
-    const vmMod = await import(/* @vite-ignore */ modPath)
-
-    const code = `void setup() {
+test('Ohm law resistor-LED brightness scales smoothly on Anode & Cathode sides and supports Relay/Pushbutton switching', async () => {
+  const code = `void setup() {
   pinMode(2, OUTPUT);
   digitalWrite(2, HIGH);
 }
 void loop() {
   delay(100);
 }`
-    const compiled = vmMod.compileArduinoSketch(code)
+  const compiled = compileArduinoSketch(code)
 
-    const evalResistance = (ohms: number, cathodeSide = false) => {
-      const comps = [
-        { id: 'r1', kind: 'resistor' as const, x: 200, y: 100, label: `R1 (${ohms}Ω)`, ohms, props: {} },
-        { id: 'led1', kind: 'led' as const, x: 320, y: 100, label: 'LED1', color: 'red', props: {} },
-      ]
-      const wires = cathodeSide
-        ? [
-            { id: 'w1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#ef4444' },
-            { id: 'w2', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#1e293b' },
-            { id: 'w3', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
-          ]
-        : [
-            { id: 'w1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#ef4444' },
-            { id: 'w2', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#ef4444' },
-            { id: 'w3', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
-          ]
-      const ctx = vmMod.createVmContext('esp32-c3', compiled, comps, wires)
-      vmMod.stepSetup(ctx, comps, wires)
-      return { led: ctx.sim.ledBrightness.led1, alerts: ctx.sim.alerts }
-    }
-
-    const r220 = evalResistance(220, false)
-    const r1k = evalResistance(1000, false)
-    const r10k = evalResistance(10000, false)
-    const r1m = evalResistance(1000000, false)
-    const rCathode1k = evalResistance(1000, true)
-
-    // Test hardware pushbutton inline switching (3V3 -> Button -> 220Ω -> LED -> GND)
-    const btnComps = (pressed: boolean) => [
-      { id: 'btn1', kind: 'pushbutton' as const, x: 180, y: 100, label: 'BTN', props: { pressed } },
-      { id: 'r1', kind: 'resistor' as const, x: 260, y: 100, label: 'R1', ohms: 220, props: {} },
-      { id: 'led1', kind: 'led' as const, x: 360, y: 100, label: 'LED1', color: 'green', props: {} },
+  const evalResistance = (ohms: number, cathodeSide = false) => {
+    const comps = [
+      { id: 'r1', kind: 'resistor' as const, x: 200, y: 100, label: `R1 (${ohms}Ω)`, ohms, props: {} },
+      { id: 'led1', kind: 'led' as const, x: 320, y: 100, label: 'LED1', color: 'red', props: {} },
     ]
-    const btnWires = [
-      { id: 'bw1', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'btn1', pinId: 'OUT' }, color: '#ef4444' },
-      { id: 'bw2', from: { nodeId: 'btn1', pinId: 'GND' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#22c55e' },
-      { id: 'bw3', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#22c55e' },
-      { id: 'bw4', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
-    ]
-    const emptyCompiled = vmMod.compileArduinoSketch(`void setup() {
+    const wires = cathodeSide
+      ? [
+          { id: 'w1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#ef4444' },
+          { id: 'w2', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#1e293b' },
+          { id: 'w3', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+        ]
+      : [
+          { id: 'w1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#ef4444' },
+          { id: 'w2', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#ef4444' },
+          { id: 'w3', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+        ]
+    const ctx = createVmContext('esp32-c3', compiled, comps, wires)
+    stepSetup(ctx, comps, wires)
+    return { led: ctx.sim.ledBrightness.led1, alerts: ctx.sim.alerts }
+  }
+
+  const r220 = evalResistance(220, false)
+  const r1k = evalResistance(1000, false)
+  const r10k = evalResistance(10000, false)
+  const r1m = evalResistance(1000000, false)
+  const rCathode1k = evalResistance(1000, true)
+
+  // Test hardware pushbutton inline switching (3V3 -> Button -> 220Ω -> LED -> GND)
+  const btnComps = (pressed: boolean) => [
+    { id: 'btn1', kind: 'pushbutton' as const, x: 180, y: 100, label: 'BTN', props: { pressed } },
+    { id: 'r1', kind: 'resistor' as const, x: 260, y: 100, label: 'R1', ohms: 220, props: {} },
+    { id: 'led1', kind: 'led' as const, x: 360, y: 100, label: 'LED1', color: 'green', props: {} },
+  ]
+  const btnWires = [
+    { id: 'bw1', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'btn1', pinId: 'OUT' }, color: '#ef4444' },
+    { id: 'bw2', from: { nodeId: 'btn1', pinId: 'GND' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#22c55e' },
+    { id: 'bw3', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#22c55e' },
+    { id: 'bw4', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+  ]
+  const emptyCompiled = compileArduinoSketch(`void setup() {
 }
 void loop() {
   delay(100);
 }`)
-    const ctxOff = vmMod.createVmContext('esp32-c3', emptyCompiled, btnComps(false), btnWires)
-    vmMod.stepSetup(ctxOff, btnComps(false), btnWires)
-    const ctxOn = vmMod.createVmContext('esp32-c3', emptyCompiled, btnComps(true), btnWires)
-    vmMod.stepSetup(ctxOn, btnComps(true), btnWires)
+  const ctxOff = createVmContext('esp32-c3', emptyCompiled, btnComps(false), btnWires)
+  stepSetup(ctxOff, btnComps(false), btnWires)
+  const ctxOn = createVmContext('esp32-c3', emptyCompiled, btnComps(true), btnWires)
+  stepSetup(ctxOn, btnComps(true), btnWires)
 
-    // Test Relay COM -> NO switching an LED load
-    const relComps = [
-      { id: 'rel1', kind: 'relay' as const, x: 200, y: 100, label: 'REL', props: {} },
-      { id: 'r1', kind: 'resistor' as const, x: 310, y: 100, label: 'R1', ohms: 220, props: {} },
-      { id: 'led1', kind: 'led' as const, x: 400, y: 100, label: 'LED1', color: 'blue', props: {} },
-    ]
-    const relWires = [
-      { id: 'rw1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'rel1', pinId: 'IN' }, color: '#38bdf8' },
-      { id: 'rw2', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'rel1', pinId: 'COM' }, color: '#ef4444' },
-      { id: 'rw3', from: { nodeId: 'rel1', pinId: 'NO' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#38bdf8' },
-      { id: 'rw4', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#38bdf8' },
-      { id: 'rw5', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
-    ]
-    const ctxRel = vmMod.createVmContext('esp32-c3', compiled, relComps, relWires)
-    vmMod.stepSetup(ctxRel, relComps, relWires)
+  // Test Relay COM -> NO switching an LED load
+  const relComps = [
+    { id: 'rel1', kind: 'relay' as const, x: 200, y: 100, label: 'REL', props: {} },
+    { id: 'r1', kind: 'resistor' as const, x: 310, y: 100, label: 'R1', ohms: 220, props: {} },
+    { id: 'led1', kind: 'led' as const, x: 400, y: 100, label: 'LED1', color: 'blue', props: {} },
+  ]
+  const relWires = [
+    { id: 'rw1', from: { nodeId: 'board', pinId: 'GPIO2' }, to: { nodeId: 'rel1', pinId: 'IN' }, color: '#38bdf8' },
+    { id: 'rw2', from: { nodeId: 'board', pinId: '3V3' }, to: { nodeId: 'rel1', pinId: 'COM' }, color: '#ef4444' },
+    { id: 'rw3', from: { nodeId: 'rel1', pinId: 'NO' }, to: { nodeId: 'r1', pinId: 'P1' }, color: '#38bdf8' },
+    { id: 'rw4', from: { nodeId: 'r1', pinId: 'P2' }, to: { nodeId: 'led1', pinId: 'A' }, color: '#38bdf8' },
+    { id: 'rw5', from: { nodeId: 'led1', pinId: 'K' }, to: { nodeId: 'board', pinId: 'GND1' }, color: '#1e293b' },
+  ]
+  const ctxRel = createVmContext('esp32-c3', compiled, relComps, relWires)
+  stepSetup(ctxRel, relComps, relWires)
 
-    return {
-      r220: r220.led.r,
-      r1k: r1k.led.r,
-      r10k: r10k.led.r,
-      r1m: r1m.led.r,
-      rCathode1k: rCathode1k.led.r,
-      cathodeAlerts: rCathode1k.alerts.length,
-      btnOff: ctxOff.sim.ledBrightness.led1.g,
-      btnOn: ctxOn.sim.ledBrightness.led1.g,
-      relayLed: ctxRel.sim.ledBrightness.led1.b,
-    }
-  })
+  const metrics = {
+    r220: r220.led.r,
+    r1k: r1k.led.r,
+    r10k: r10k.led.r,
+    r1m: r1m.led.r,
+    rCathode1k: rCathode1k.led.r,
+    cathodeAlerts: rCathode1k.alerts.length,
+    btnOff: ctxOff.sim.ledBrightness.led1.g,
+    btnOn: ctxOn.sim.ledBrightness.led1.g,
+    relayLed: ctxRel.sim.ledBrightness.led1.b,
+  }
 
   expect(metrics.r220).toBeGreaterThan(0.9)
   expect(metrics.r1k).toBeLessThan(metrics.r220 - 0.35)

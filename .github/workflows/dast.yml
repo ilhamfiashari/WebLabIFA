@@ -5,6 +5,7 @@ on:
     paths:
       - "Lab-Backend/**"
       - "Lab-FrontEnd/src/**"
+      - "Lab-FrontEnd/tests/**"
       - "deploy/**"
       - "security/**"
       - ".github/workflows/dast.yml"
@@ -13,6 +14,7 @@ on:
     paths:
       - "Lab-Backend/**"
       - "Lab-FrontEnd/src/**"
+      - "Lab-FrontEnd/tests/**"
       - "deploy/**"
       - "security/**"
       - ".github/workflows/dast.yml"
