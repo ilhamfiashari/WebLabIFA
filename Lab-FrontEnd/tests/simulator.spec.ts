@@ -928,6 +928,9 @@ test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monito
   await expect(page.locator('.cm-content .tok-type').first()).toBeVisible()
   await expect(page.locator('.cm-content .tok-builtin').first()).toBeVisible()
   await expect(page.locator('.cm-content .tok-string').first()).toBeVisible()
+  await expect.poll(
+    () => page.locator('.cm-content .tok-preproc').first().evaluate((el) => getComputedStyle(el).color),
+  ).not.toBe('rgb(30, 41, 59)')
   const preprocColor = await page.locator('.cm-content .tok-preproc').first().evaluate((el) => getComputedStyle(el).color)
   const commentColor = await page.locator('.cm-content .tok-comment').first().evaluate((el) => getComputedStyle(el).color)
   expect(preprocColor).not.toBe('rgb(30, 41, 59)')
