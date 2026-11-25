@@ -7,6 +7,7 @@ import {
 import type { Identity } from '../api'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
+import { StudentAccessApprovalPanel } from '../shared/StudentAccessApprovalPanel'
 import { simApi, type AdminDashboardResponse } from '../simulator/api'
 import { AdminSecurityMonitorPanel } from './SecurityMonitorPanel'
 import { PlatformPolicySettings } from './PlatformPolicySettings'
@@ -166,6 +167,7 @@ function UsersPage({ live, csrf }: { live?: AdminDashboardResponse; csrf: string
   return <>
     <PageHead page="pengguna" live={Boolean(live)} actions={<button type="button" className="btn-primary" onClick={() => setPolicy(true)}><KeyRound size={17} aria-hidden="true" />Kebijakan &amp; Hak Akses</button>} />
     {accessNotice && <p className="status-ok" role="status">{accessNotice}</p>}
+    {live ? <StudentAccessApprovalPanel csrf={csrf} /> : null}
     {live ? (
       <section className="card table-card" aria-labelledby="live-users-title">
         <header className="table-head">

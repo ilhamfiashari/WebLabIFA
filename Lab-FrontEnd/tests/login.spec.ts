@@ -59,7 +59,7 @@ for (const width of [360, 390, 768, 1440]) {
       })
       expect(panelOwnsOverlap).toBe(true)
       await expect(button).toBeInViewport()
-      await expect(page.getByText('Gunakan akun Google yang terdaftar.', { exact: true })).toBeVisible()
+      await expect(page.getByText('Akses login memerlukan persetujuan Admin/Dosen atau impor daftar kelas.', { exact: true })).toBeVisible()
       await expect(page.getByTestId('login-atmosphere')).toBeHidden()
     }
     await page.screenshot({ path: `../docs/screenshots/login-${width}.png`, fullPage: true })
@@ -136,7 +136,7 @@ test('navigasi keyboard dan tautan informasi', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'lab@example.test' })).toHaveAttribute('href', 'mailto:lab@example.test')
 })
 
-for (const status of ['cancelled', 'expired', 'temporary', 'unauthorized']) {
+for (const status of ['cancelled', 'expired', 'temporary', 'pending_approval', 'rejected', 'unauthorized']) {
   test(`status login ${status}`, async ({ page }) => {
     await page.goto(`/login?status=${status}`)
     await expect(page.getByRole('status')).toBeVisible()

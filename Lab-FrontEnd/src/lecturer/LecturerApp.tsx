@@ -36,6 +36,7 @@ import { AnimatedMeterRow, AnimatedNumber, AnimatedProgressRing } from '../share
 import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
+import { StudentAccessApprovalPanel } from '../shared/StudentAccessApprovalPanel'
 import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
 import { WebDevStudio } from '../webdev/WebDevStudio'
 import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
@@ -424,6 +425,13 @@ function InstructorSimulatorView({
         <div className="card" style={{ borderColor: 'var(--good)', background: 'var(--good-soft)', padding: '12px 16px' }}>
           <strong style={{ color: 'var(--good)' }}>{seedNotice}</strong>
         </div>
+      ) : null}
+
+      {mode === 'kelas' ? (
+        <StudentAccessApprovalPanel
+          csrf={user.csrf_token}
+          defaultClassId={selectedClass && selectedClass !== 'ALL' ? selectedClass : (dash.classes[0]?.id ?? '')}
+        />
       ) : null}
 
       <section className="card sim-dash-hero" aria-label="Ringkasan Kelas & Ketuntasan">
