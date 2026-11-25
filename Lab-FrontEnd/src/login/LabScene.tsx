@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { SceneDescriptor } from './weatherTime'
 import { drawLabScreen, laptopSceneAt, LAPTOP_HEIGHT, LAPTOP_WIDTH } from './lab-animation'
+import { createIndoorFoliage } from './indoor-foliage'
 import type { LabWeather, StudioSettings } from './studio-model'
 import { createGreenLedDimmer, createRearInstruments, greenLedLevel, REAR_DISPLAYS } from './rear-instruments'
 
@@ -43,24 +44,26 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
     const screen = document.createElement('canvas'); screen.width = LAPTOP_WIDTH; screen.height = LAPTOP_HEIGHT
     const screenCtx = screen.getContext('2d')!
     const instruments = createRearInstruments()
+    const indoorFoliage = createIndoorFoliage()
     let greenDimmer: HTMLCanvasElement | null = null
     const foliage = document.createElement('canvas'); foliage.width = 318; foliage.height = 165
     const foliageCtx = foliage.getContext('2d', { willReadFrequently: true })!
     const photo = new Image()
     let sourcePixels: ImageData | null = null, movingPixels: ImageData | null = null, loadedSrc = '', leafFrame = -1
-    photo.onload = () => { foliageCtx.clearRect(0, 0, 318, 165); foliageCtx.drawImage(photo, 810, 0, 636, 330, 0, 0, 318, 165); sourcePixels = foliageCtx.getImageData(0, 0, 318, 165); movingPixels = foliageCtx.createImageData(318, 165); greenDimmer = createGreenLedDimmer(photo, ['night', 'sunset'].includes(current.current.scene.key)); leafFrame = -1; resume() }
+    photo.onload = () => { foliageCtx.clearRect(0, 0, 318, 165); foliageCtx.drawImage(photo, 810, 0, 636, 330, 0, 0, 318, 165); sourcePixels = foliageCtx.getImageData(0, 0, 318, 165); movingPixels = foliageCtx.createImageData(318, 165); indoorFoliage.load(photo); greenDimmer = createGreenLedDimmer(photo, ['night', 'sunset'].includes(current.current.scene.key)); leafFrame = -1; resume() }
     const reduce = matchMedia('(prefers-reduced-motion: reduce)')
     let elapsed = 0, previous = 0, last = 0, sampleAt = -1, frame = 0, disposed = false
     function paint() {
       if (!canvas || !ctx) return
       const { scene, weather, settings } = current.current
       const night = scene.key === 'night', warmAngle = night || scene.key === 'sunset', t = elapsed, w = canvas.clientWidth, h = canvas.clientHeight
-      if (loadedSrc !== scene.src) { loadedSrc = scene.src; sourcePixels = null; movingPixels = null; greenDimmer = null; photo.src = scene.src }
+      if (loadedSrc !== scene.src) { loadedSrc = scene.src; sourcePixels = null; movingPixels = null; greenDimmer = null; indoorFoliage.reset(); photo.src = scene.src }
       ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0); ctx.clearRect(0, 0, w, h)
       const scale = Math.max(w / 1446, h / 1087)
       // Same cover crop as the photograph: centered on mobile card, left-anchored on desktop so laptop is never clipped.
       const cropAlign = innerWidth < 900 ? .5 : 0
       ctx.translate((w - 1446 * scale) * cropAlign, 0); ctx.scale(scale, scale)
+      const indoorSway = settings.leaves && !reduce.matches ? indoorFoliage.draw(ctx, t) : 0
       drawLabScreen(screenCtx, t, settings.program, weather, settings.distance, settings.network)
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
       project(ctx, screen, warmAngle ? [[43, 248], [736, 281], [790, 665], [85, 730]] : [[43, 246], [752, 284], [802, 687], [87, 740]])
@@ -149,6 +152,7 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
       ctx.restore()
       canvas.dataset.frame = String(Math.floor(elapsed * 30)); canvas.dataset.program = settings.program; canvas.dataset.weather = weather
       canvas.dataset.greenLed = greenLevel.toFixed(3)
+      canvas.dataset.indoorLeafSway = indoorSway.toFixed(3)
       canvas.dataset.screenResolution = `${screen.width}x${screen.height}`
       const laptopScene = laptopSceneAt(t, settings.program)
       canvas.dataset.laptopScene = `${laptopScene.mode}-${laptopScene.variant}`
