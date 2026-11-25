@@ -459,48 +459,91 @@ export function compileArduinoSketch(code: string, extraFiles: SketchFile[] = []
   }
 }
 
+interface NetEdge {
+  to: WireEndpoint
+  ohms: number
+  isResistor: boolean
+}
+
 interface NetGraph {
-  adj: Map<string, WireEndpoint[]>
+  adj: Map<string, NetEdge[]>
+}
+
+interface ReachNode {
+  endpoint: WireEndpoint
+  ohms: number
+  crossedResistor: boolean
 }
 
 function epKey(e: WireEndpoint): string {
   return `${e.nodeId}:${e.pinId}`
 }
 
-function buildNetGraph(wires: Wire[], components: PlacedComponent[]): NetGraph {
-  const adj = new Map<string, WireEndpoint[]>()
-  const addEdge = (a: WireEndpoint, b: WireEndpoint) => {
+function buildNetGraph(
+  wires: Wire[],
+  components: PlacedComponent[],
+  relayClosed: Record<string, boolean> = {},
+): NetGraph {
+  const adj = new Map<string, NetEdge[]>()
+  const addEdge = (a: WireEndpoint, b: WireEndpoint, ohms = 0, isResistor = false) => {
     const ka = epKey(a)
     const kb = epKey(b)
-    adj.set(ka, [...(adj.get(ka) ?? []), b])
-    adj.set(kb, [...(adj.get(kb) ?? []), a])
+    const listA = adj.get(ka)
+    if (listA) listA.push({ to: b, ohms, isResistor })
+    else adj.set(ka, [{ to: b, ohms, isResistor }])
+    const listB = adj.get(kb)
+    if (listB) listB.push({ to: a, ohms, isResistor })
+    else adj.set(kb, [{ to: a, ohms, isResistor }])
   }
   const compKindMap = new Map(components.map((c) => [c.id, c.kind]))
   const normEp = (e: WireEndpoint): WireEndpoint => {
     const k = compKindMap.get(e.nodeId)
     return k && isBreadboardKind(k) ? { nodeId: e.nodeId, pinId: resolveBreadboardPinAlias(e.pinId) } : e
   }
-  for (const w of wires) addEdge(normEp(w.from), normEp(w.to))
+  for (const w of wires) addEdge(normEp(w.from), normEp(w.to), 0, false)
 
-  // Resistors & full breadboard conductive rails/columns
+  // Conductive internal paths: resistors, switches, relays, potentiometers, and breadboards
   for (const c of components) {
     if (c.kind === 'resistor') {
-      addEdge({ nodeId: c.id, pinId: 'P1' }, { nodeId: c.id, pinId: 'P2' })
+      const val = Math.max(0, Number(c.ohms ?? 220))
+      addEdge({ nodeId: c.id, pinId: 'P1' }, { nodeId: c.id, pinId: 'P2' }, val, true)
+    } else if (c.kind === 'pushbutton') {
+      if (c.props.pressed || c.props.latched) {
+        addEdge({ nodeId: c.id, pinId: 'OUT' }, { nodeId: c.id, pinId: 'GND' }, 0, false)
+      }
+    } else if (c.kind === 'slide-switch') {
+      const isRight = Boolean(c.props.latched || c.props.pressed)
+      addEdge({ nodeId: c.id, pinId: '2' }, { nodeId: c.id, pinId: isRight ? '3' : '1' }, 0, false)
+    } else if (c.kind === 'dip-switch') {
+      const bits = c.props.dipBits ?? [0, 0, 0, 0, 0, 0, 0, 0]
+      if (bits[0]) addEdge({ nodeId: c.id, pinId: 'IN1' }, { nodeId: c.id, pinId: 'GND' }, 0, false)
+      if (bits[1]) addEdge({ nodeId: c.id, pinId: 'IN2' }, { nodeId: c.id, pinId: 'GND' }, 0, false)
+      if (bits[2]) addEdge({ nodeId: c.id, pinId: 'IN3' }, { nodeId: c.id, pinId: 'GND' }, 0, false)
+    } else if (c.kind === 'relay') {
+      const closed = Boolean(relayClosed[c.id])
+      addEdge({ nodeId: c.id, pinId: 'COM' }, { nodeId: c.id, pinId: closed ? 'NO' : 'NC' }, 0, false)
+    } else if (c.kind === 'potentiometer' || c.kind === 'slide-pot') {
+      // 10kΩ variable rheostat/divider: turning knob smoothly varies series resistance when wired inline
+      const pct = Math.max(0, Math.min(100, c.props.potPct ?? 50))
+      const rTop = Math.max(20, Math.round(((100 - pct) / 100) * 10000))
+      const rBot = Math.max(20, Math.round((pct / 100) * 10000))
+      addEdge({ nodeId: c.id, pinId: 'VCC' }, { nodeId: c.id, pinId: 'SIG' }, rTop, true)
+      addEdge({ nodeId: c.id, pinId: 'SIG' }, { nodeId: c.id, pinId: 'GND' }, rBot, true)
     } else if (isBreadboardKind(c.kind)) {
       const cols = c.kind === 'breadboard-mini' ? 17 : c.kind === 'breadboard-large' ? 63 : 30
       for (let col = 1; col <= cols; col++) {
         const topStrip = ['a', 'b', 'c', 'd', 'e'] as const
         const botStrip = ['f', 'g', 'h', 'i', 'j'] as const
         for (let r = 0; r < topStrip.length - 1; r++) {
-          addEdge({ nodeId: c.id, pinId: `c${col}_${topStrip[r]}` }, { nodeId: c.id, pinId: `c${col}_${topStrip[r + 1]}` })
-          addEdge({ nodeId: c.id, pinId: `c${col}_${botStrip[r]}` }, { nodeId: c.id, pinId: `c${col}_${botStrip[r + 1]}` })
+          addEdge({ nodeId: c.id, pinId: `c${col}_${topStrip[r]}` }, { nodeId: c.id, pinId: `c${col}_${topStrip[r + 1]}` }, 0, false)
+          addEdge({ nodeId: c.id, pinId: `c${col}_${botStrip[r]}` }, { nodeId: c.id, pinId: `c${col}_${botStrip[r + 1]}` }, 0, false)
         }
       }
       if (c.kind === 'breadboard' || c.kind === 'breadboard-large') {
         const railLen = c.kind === 'breadboard-large' ? 50 : 25
         for (const prefix of ['tp_', 'tn_', 'bp_', 'bn_'] as const) {
           for (let i = 1; i < railLen; i++) {
-            addEdge({ nodeId: c.id, pinId: `${prefix}${i}` }, { nodeId: c.id, pinId: `${prefix}${i + 1}` })
+            addEdge({ nodeId: c.id, pinId: `${prefix}${i}` }, { nodeId: c.id, pinId: `${prefix}${i + 1}` }, 0, false)
           }
         }
       }
@@ -509,47 +552,71 @@ function buildNetGraph(wires: Wire[], components: PlacedComponent[]): NetGraph {
   return { adj }
 }
 
-function traceReachable(
+/**
+ * Shortest-resistance path search (Dijkstra) across wires, breadboards, closed switches, and resistors.
+ * Tracks exact cumulative series resistance along the path and only marks `crossedResistor`
+ * when traversing a true resistive element (never a breadboard trace).
+ */
+function traceElectricPaths(
   graph: NetGraph,
   start: WireEndpoint,
-  components: PlacedComponent[] = [],
-): { endpoints: WireEndpoint[]; crossedResistor: boolean; minResistorOhms: number | null } {
-  const visited = new Set<string>([epKey(start)])
-  const queue: WireEndpoint[] = [start]
-  const endpoints: WireEndpoint[] = []
-  let crossedResistor = false
-  let minResistorOhms: number | null = null
+  options?: { allowResistive?: boolean },
+): ReachNode[] {
+  const allowResistive = options?.allowResistive ?? true
+  const startKey = epKey(start)
+  const best = new Map<string, ReachNode>([
+    [startKey, { endpoint: start, ohms: 0, crossedResistor: false }],
+  ])
+  const queue: ReachNode[] = [{ endpoint: start, ohms: 0, crossedResistor: false }]
 
   while (queue.length > 0) {
-    const cur = queue.shift()!
-    endpoints.push(cur)
-    const neighbors = graph.adj.get(epKey(cur)) ?? []
-    for (const next of neighbors) {
-      if (next.nodeId === cur.nodeId) {
-        crossedResistor = true
-        const comp = components.find((c) => c.id === cur.nodeId)
-        if (comp?.kind === 'resistor') {
-          const val = comp.ohms ?? 220
-          minResistorOhms = minResistorOhms === null ? val : Math.min(minResistorOhms, val)
-        }
-      }
-      const nk = epKey(next)
-      if (!visited.has(nk)) {
-        visited.add(nk)
-        queue.push(next)
+    // Small graph: pop lowest-resistance node
+    let bestIdx = 0
+    for (let i = 1; i < queue.length; i++) {
+      if (queue[i].ohms < queue[bestIdx].ohms) bestIdx = i
+    }
+    const cur = queue.splice(bestIdx, 1)[0]
+    const curKey = epKey(cur.endpoint)
+    const recorded = best.get(curKey)
+    if (recorded && cur.ohms > recorded.ohms) continue
+
+    const neighbors = graph.adj.get(curKey) ?? []
+    for (const edge of neighbors) {
+      if (!allowResistive && edge.isResistor) continue
+      const nextOhms = cur.ohms + edge.ohms
+      const nextCrossed = cur.crossedResistor || edge.isResistor
+      const nk = epKey(edge.to)
+      const prev = best.get(nk)
+      if (!prev || nextOhms < prev.ohms || (nextOhms === prev.ohms && !nextCrossed && prev.crossedResistor)) {
+        const node: ReachNode = { endpoint: edge.to, ohms: nextOhms, crossedResistor: nextCrossed }
+        best.set(nk, node)
+        queue.push(node)
       }
     }
   }
-  return { endpoints, crossedResistor, minResistorOhms }
+  return Array.from(best.values())
+}
+
+function traceReachable(
+  graph: NetGraph,
+  start: WireEndpoint,
+): { endpoints: WireEndpoint[]; crossedResistor: boolean; minResistorOhms: number | null; nodes: ReachNode[] } {
+  const nodes = traceElectricPaths(graph, start, { allowResistive: true })
+  const endpoints = nodes.map((n) => n.endpoint)
+  const resistive = nodes.filter((n) => n.crossedResistor)
+  const crossedResistor = resistive.length > 0
+  const minResistorOhms = resistive.length > 0 ? Math.min(...resistive.map((n) => n.ohms)) : null
+  return { endpoints, crossedResistor, minResistorOhms, nodes }
 }
 
 export function analyzeCircuitSafety(
   boardId: BoardId,
   components: PlacedComponent[],
   wires: Wire[],
+  relayClosed: Record<string, boolean> = {},
 ): HardwareAlert[] {
   const alerts: HardwareAlert[] = []
-  const graph = buildNetGraph(wires, components)
+  const graph = buildNetGraph(wires, components, relayClosed)
   const boardNodes = getBoardInstances(boardId, components)
 
   // Check Power <-> GND direct short circuit across every placed MCU
@@ -558,13 +625,17 @@ export function analyzeCircuitSafety(
     const powerPins = board.pins.filter((p) => p.kind === 'power')
     const gndPins = board.pins.filter((p) => p.kind === 'gnd')
     for (const pwr of powerPins) {
-      const reach = traceReachable(graph, { nodeId: inst.nodeId, pinId: pwr.id }, components)
-      const hitsGnd = reach.endpoints.some((e) => {
-        const eb = resolveNodeBoardId(boardId, components, e.nodeId)
+      const nodes = traceElectricPaths(graph, { nodeId: inst.nodeId, pinId: pwr.id })
+      const directGnd = nodes.find((n) => {
+        if (n.crossedResistor) return false
+        const eb = resolveNodeBoardId(boardId, components, n.endpoint.nodeId)
         if (!eb) return false
-        return getBoardPin(eb, e.pinId)?.kind === 'gnd' || (e.nodeId === inst.nodeId && gndPins.some((g) => g.id === e.pinId))
+        return (
+          getBoardPin(eb, n.endpoint.pinId)?.kind === 'gnd' ||
+          (n.endpoint.nodeId === inst.nodeId && gndPins.some((g) => g.id === n.endpoint.pinId))
+        )
       })
-      if (hitsGnd && !reach.crossedResistor) {
+      if (directGnd) {
         alerts.push({
           id: `short-${inst.nodeId}-${pwr.id}`,
           severity: 'error',
@@ -573,10 +644,11 @@ export function analyzeCircuitSafety(
         })
       }
       if (pwr.voltage === 5 && board.logicVoltage === 3.3) {
-        const hitsGpio = reach.endpoints.some((e) => {
-          const eb = resolveNodeBoardId(boardId, components, e.nodeId)
+        const hitsGpio = nodes.some((n) => {
+          if (n.crossedResistor && n.ohms >= 1000) return false
+          const eb = resolveNodeBoardId(boardId, components, n.endpoint.nodeId)
           if (!eb) return false
-          const bp = getBoardPin(eb, e.pinId)
+          const bp = getBoardPin(eb, n.endpoint.pinId)
           return bp && bp.gpio !== undefined && BOARDS[eb].logicVoltage === 3.3
         })
         if (hitsGpio) {
@@ -591,25 +663,44 @@ export function analyzeCircuitSafety(
     }
   }
 
-  // Check LED missing or undersized current-limiting resistor
+  // Check LED missing or undersized current-limiting resistor (supports Anode OR Cathode side resistor!)
   for (const c of components) {
     if (c.kind === 'led') {
-      const reachA = traceReachable(graph, { nodeId: c.id, pinId: 'A' }, components)
-      const hitsSource = reachA.endpoints.some((e) => resolveNodeBoardId(boardId, components, e.nodeId) !== null)
-      if (hitsSource && !reachA.crossedResistor) {
-        alerts.push({
-          id: `no-res-${c.id}`,
-          severity: 'warn',
-          messageId: `${c.label} belum memakai resistor seri (220Ω). Tambahkan resistor agar arus aman.`,
-          messageEn: `${c.label} lacks a series 220Ω resistor. Add one to limit LED current.`,
-        })
-      } else if (hitsSource && reachA.minResistorOhms !== null && reachA.minResistorOhms < 47) {
-        alerts.push({
-          id: `low-res-${c.id}`,
-          severity: 'warn',
-          messageId: `Nilai resistor seri pada ${c.label} terlalu kecil (${reachA.minResistorOhms}Ω < 47Ω) — berisiko arus berlebih!`,
-          messageEn: `Series resistor on ${c.label} is too low (${reachA.minResistorOhms}Ω < 47Ω) — risk of over-current!`,
-        })
+      const anodePin = c.props.flip ? 'K' : 'A'
+      const cathodePin = c.props.flip ? 'A' : 'K'
+      const nodesA = traceElectricPaths(graph, { nodeId: c.id, pinId: anodePin })
+      const nodesK = traceElectricPaths(graph, { nodeId: c.id, pinId: cathodePin })
+
+      const sourceNode = nodesA.find((n) => {
+        const eb = resolveNodeBoardId(boardId, components, n.endpoint.nodeId)
+        if (!eb) return false
+        const bp = getBoardPin(eb, n.endpoint.pinId)
+        return Boolean(bp && (bp.kind === 'power' || bp.gpio !== undefined))
+      })
+      const gndNode = nodesK.find((n) => {
+        const eb = resolveNodeBoardId(boardId, components, n.endpoint.nodeId)
+        if (!eb) return false
+        return getBoardPin(eb, n.endpoint.pinId)?.kind === 'gnd'
+      })
+
+      if (sourceNode && gndNode) {
+        const hasRes = sourceNode.crossedResistor || gndNode.crossedResistor
+        const totalOhms = (sourceNode.crossedResistor ? sourceNode.ohms : 0) + (gndNode.crossedResistor ? gndNode.ohms : 0)
+        if (!hasRes) {
+          alerts.push({
+            id: `no-res-${c.id}`,
+            severity: 'warn',
+            messageId: `${c.label} belum memakai resistor seri (220Ω). Tambahkan resistor di sisi Anoda atau Katoda agar arus aman.`,
+            messageEn: `${c.label} lacks a series 220Ω resistor. Add one on either the Anode or Cathode leg to limit LED current.`,
+          })
+        } else if (totalOhms < 47) {
+          alerts.push({
+            id: `low-res-${c.id}`,
+            severity: 'warn',
+            messageId: `Nilai resistor seri pada ${c.label} terlalu kecil (${Math.round(totalOhms)}Ω < 47Ω) — berisiko arus berlebih!`,
+            messageEn: `Series resistor on ${c.label} is too low (${Math.round(totalOhms)}Ω < 47Ω) — risk of over-current!`,
+          })
+        }
       }
     }
   }
@@ -957,7 +1048,7 @@ function findConnectedComponent(
   kind?: PlacedComponent['kind'],
 ): PlacedComponent | undefined {
   for (const pid of gpioPinIds(ctx.boardId, gpio)) {
-    const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, components)
+    const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: pid })
     for (const ep of reach.endpoints) {
       if (ep.nodeId === ctx.nodeId) continue
       const comp = components.find((c) => c.id === ep.nodeId && (!kind || c.kind === kind))
@@ -1040,18 +1131,60 @@ function evalExpr(
     if (fn === 'Serial.readString') return ctx.serialRxQueue.shift() ?? ''
     if (fn === 'digitalRead') {
       const gpio = Number(args[0] ?? 0)
-      const btn = findConnectedComponent(ctx, components, gpio, 'pushbutton') ?? findConnectedComponent(ctx, components, gpio, 'slide-switch')
-      if (btn) return btn.props.pressed || btn.props.latched ? 0 : 1
-      const pir = findConnectedComponent(ctx, components, gpio, 'pir')
-      if (pir) return pir.props.motion ? 1 : 0
-      // Check wired peer MCU output signals driving this pin
+      const pinModeState = ctx.localGpio[gpio]?.mode ?? 'INPUT'
+      // Check connected switches & digital sensors with true electrical polarity awareness
       for (const pid of gpioPinIds(ctx.boardId, gpio)) {
-        const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, components)
-        for (const ep of reach.endpoints) {
-          if (ep.nodeId === ctx.nodeId) continue
-          const peer = ctx.allNodes?.get(ep.nodeId)
+        const directNodes = traceElectricPaths(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, { allowResistive: false })
+        const allNodes = traceElectricPaths(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, { allowResistive: true })
+        for (const n of directNodes) {
+          if (n.endpoint.nodeId === ctx.nodeId) continue
+          const comp = components.find((c) => c.id === n.endpoint.nodeId)
+          if (!comp) continue
+          if (comp.kind === 'pushbutton') {
+            const otherPin = n.endpoint.pinId === 'OUT' ? 'GND' : 'OUT'
+            const otherReach = traceElectricPaths(ctx.graph, { nodeId: comp.id, pinId: otherPin })
+            const wiredToPower = otherReach.some((r) => {
+              const rb = resolveNodeBoardId(ctx.boardId, components, r.endpoint.nodeId)
+              return rb ? getBoardPin(rb, r.endpoint.pinId)?.kind === 'power' : false
+            })
+            const down = Boolean(comp.props.pressed || comp.props.latched)
+            return wiredToPower ? (down ? 1 : 0) : down ? 0 : 1
+          }
+          if (comp.kind === 'slide-switch') {
+            // If COM conducts to power -> HIGH, to GND -> LOW; otherwise match latch state
+            const hitPwr = directNodes.some((r) => {
+              const rb = resolveNodeBoardId(ctx.boardId, components, r.endpoint.nodeId)
+              return rb ? getBoardPin(rb, r.endpoint.pinId)?.kind === 'power' : false
+            })
+            const hitGnd = directNodes.some((r) => {
+              const rb = resolveNodeBoardId(ctx.boardId, components, r.endpoint.nodeId)
+              return rb ? getBoardPin(rb, r.endpoint.pinId)?.kind === 'gnd' : false
+            })
+            if (hitPwr && !hitGnd) return 1
+            if (hitGnd && !hitPwr) return 0
+            return comp.props.latched || comp.props.pressed ? 0 : 1
+          }
+          if (comp.kind === 'dip-switch') {
+            const bits = comp.props.dipBits ?? [0, 0, 0, 0, 0, 0, 0, 0]
+            const idx = n.endpoint.pinId === 'IN1' ? 0 : n.endpoint.pinId === 'IN2' ? 1 : n.endpoint.pinId === 'IN3' ? 2 : -1
+            if (idx >= 0) return pinModeState === 'INPUT_PULLUP' ? (bits[idx] ? 0 : 1) : bits[idx] ? 1 : 0
+          }
+          if (comp.kind === 'rotary-encoder' && n.endpoint.pinId === 'SW') {
+            return comp.props.pressed ? 0 : 1
+          }
+          if (comp.kind === 'pir') return comp.props.motion ? 1 : 0
+          if (comp.kind === 'mq2' && n.endpoint.pinId === 'DO') return (comp.props.gasPpm ?? 280) >= 600 ? 1 : 0
+          if (comp.kind === 'ldr' && n.endpoint.pinId === 'AO') {
+            const thr = comp.props.ldrThreshold ?? 500
+            return (comp.props.lux ?? 500) < thr ? 1 : 0
+          }
+        }
+        // Check wired peer MCU output or direct power/GND rail driving this pin
+        for (const n of allNodes) {
+          if (n.endpoint.nodeId === ctx.nodeId) continue
+          const peer = ctx.allNodes?.get(n.endpoint.nodeId)
           if (!peer) continue
-          const peerPin = getBoardPin(peer.boardId, ep.pinId)
+          const peerPin = getBoardPin(peer.boardId, n.endpoint.pinId)
           if (peerPin?.kind === 'power') return 1
           if (peerPin?.gpio !== undefined) {
             const pgs = peer.localGpio[peerPin.gpio]
@@ -1061,15 +1194,50 @@ function evalExpr(
           }
         }
       }
+      if (pinModeState === 'INPUT_PULLUP') return 1
       return ctx.localGpio[gpio]?.digital ?? 0
     }
     if (fn === 'analogRead') {
       const gpio = Number(args[0] ?? 0)
       const maxAdc = BOARDS[ctx.boardId].logicVoltage === 5 ? 1023 : 4095
+      // Distinguish exact connected pin (e.g. Joystick HORZ vs VERT, Potentiometer SIG, LDR, NTC, MQ2)
+      for (const pid of gpioPinIds(ctx.boardId, gpio)) {
+        const direct = traceElectricPaths(ctx.graph, { nodeId: ctx.nodeId, pinId: pid }, { allowResistive: false })
+        for (const n of direct) {
+          if (n.endpoint.nodeId === ctx.nodeId) continue
+          const comp = components.find((c) => c.id === n.endpoint.nodeId)
+          if (!comp) continue
+          if (comp.kind === 'potentiometer' || comp.kind === 'slide-pot') {
+            return Math.round(((comp.props.potPct ?? 50) / 100) * maxAdc)
+          }
+          if (comp.kind === 'joystick') {
+            const axisVal = n.endpoint.pinId === 'VERT' ? (comp.props.joyY ?? 512) : (comp.props.joyX ?? 512)
+            return Math.round((axisVal / 1023) * maxAdc)
+          }
+          if (comp.kind === 'ldr') {
+            // Wokwi LDR physics: higher lux -> lower resistance -> higher voltage divider reading
+            const lux = Math.max(0.1, comp.props.lux ?? 500)
+            const rl10 = (comp.props.ldrRl10 ?? 50) * 1000
+            const gamma = comp.props.ldrGamma ?? 0.7
+            const rLdr = rl10 * Math.pow(10 / lux, gamma)
+            const vRatio = 10000 / (10000 + rLdr)
+            return Math.round(Math.max(0, Math.min(1, vRatio)) * maxAdc)
+          }
+          if (comp.kind === 'mq2') {
+            return Math.round((Math.min(2500, comp.props.gasPpm ?? 280) / 2500) * maxAdc)
+          }
+          if (comp.kind === 'ntc') {
+            // Wokwi NTC Beta equation: higher temp -> lower thermistor resistance
+            const beta = comp.props.ntcBeta ?? 3950
+            const tempK = (comp.props.tempC ?? 25) + 273.15
+            const rNtc = 10000 * Math.exp(beta * (1 / tempK - 1 / 298.15))
+            const ratio = 1 / (1 + rNtc / 10000)
+            return Math.round(Math.max(0, Math.min(1, ratio)) * maxAdc)
+          }
+        }
+      }
       const pot = findConnectedComponent(ctx, components, gpio, 'potentiometer') ?? findConnectedComponent(ctx, components, gpio, 'slide-pot')
       if (pot) return Math.round(((pot.props.potPct ?? 50) / 100) * maxAdc)
-      const joy = findConnectedComponent(ctx, components, gpio, 'joystick')
-      if (joy) return Math.round(((joy.props.joyX ?? 512) / 1023) * maxAdc)
       const ldr = findConnectedComponent(ctx, components, gpio, 'ldr')
       if (ldr) return Math.round(((ldr.props.lux ?? 500) / 1000) * maxAdc)
       const mq2 = findConnectedComponent(ctx, components, gpio, 'mq2')
@@ -1221,7 +1389,7 @@ function extractPlotMetrics(text: string): Record<string, number> | null {
   return null
 }
 
-function pushSerial(ctx: VmContext, text: string, components: PlacedComponent[] = []) {
+function pushSerial(ctx: VmContext, text: string) {
   const isMulti = (ctx.allNodes?.size ?? 1) > 1
   const formatted = isMulti ? `[${ctx.label}] ${text}` : text
   const entry: SerialEntry = {
@@ -1240,7 +1408,7 @@ function pushSerial(ctx: VmContext, text: string, components: PlacedComponent[] 
     const uartPins = BOARDS[ctx.boardId].pins.filter((p) => p.kind === 'uart' || p.id.includes('TX'))
     const delivered = new Set<string>()
     for (const up of uartPins) {
-      const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: up.id }, components)
+      const reach = traceReachable(ctx.graph, { nodeId: ctx.nodeId, pinId: up.id })
       for (const ep of reach.endpoints) {
         if (ep.nodeId === ctx.nodeId || delivered.has(ep.nodeId)) continue
         const peer = ctx.allNodes.get(ep.nodeId)
@@ -1361,7 +1529,7 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
         ctx.localGpio[gpio] = { ...ctx.localGpio[gpio], mode: 'PWM', digital: 1, pwmDuty: Math.round((angle / 180) * 255) }
       }
     } else if (fn === 'Serial.println' || fn === 'Serial.print') {
-      pushSerial(ctx, String(args[0] ?? ''), components)
+      pushSerial(ctx, String(args[0] ?? ''))
     } else if (fn === 'oled.begin') {
       ctx.oledStarted = true
     } else if (fn === 'oled.clear') {
@@ -1512,80 +1680,229 @@ function runStatements(stmts: ParsedStatement[], ctx: VmContext, components: Pla
   return delayAccum
 }
 
-function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wires: Wire[]) {
-  ctx.graph = buildNetGraph(wires, components)
-  ctx.sim.alerts = analyzeCircuitSafety(ctx.boardId, components, wires)
+function computeLedForwardVoltage(color: string): number {
+  switch (color) {
+    case 'red':
+    case 'orange':
+    case 'yellow':
+      return 1.85
+    case 'green':
+      return 2.05
+    default:
+      return 2.35
+  }
+}
 
-  const readPinDuty = (ep: WireEndpoint): { duty: number; hasResistor: boolean; minResistorOhms: number | null } => {
-    const reach = traceReachable(ctx.graph, ep, components)
-    let duty = 0
-    for (const r of reach.endpoints) {
-      const rb = resolveNodeBoardId(ctx.boardId, components, r.nodeId)
+function computeOhmicLedLevel(
+  supplyVoltage: number,
+  duty: number,
+  hasResistor: boolean,
+  totalOhms: number,
+  color: string,
+): { level: number; currentMa: number; burned: boolean; seriesOhms: number | null } {
+  if (duty <= 0 || supplyVoltage <= 0) {
+    return { level: 0, currentMa: 0, burned: false, seriesOhms: hasResistor ? Math.round(totalOhms) : null }
+  }
+  const vf = computeLedForwardVoltage(color)
+  const vHeadroom = Math.max(0.1, supplyVoltage - vf)
+  if (!hasResistor) {
+    const overMa = Math.round(vHeadroom * 35 * duty * 10) / 10
+    return { level: duty, currentMa: overMa, burned: true, seriesOhms: null }
+  }
+  if (totalOhms < 47) {
+    const overMa = Math.round((vHeadroom / Math.max(1, totalOhms)) * 1000 * duty * 10) / 10
+    return { level: duty, currentMa: overMa, burned: true, seriesOhms: Math.round(totalOhms) }
+  }
+  // Real Ohm's law current: I = (Vs - Vf) / R_total
+  const iPeakMa = (vHeadroom / totalOhms) * 1000
+  const iAvgMa = iPeakMa * duty
+  // Nominal bright LED current scales with board supply (6.5mA @ 3.3V / 220Ω, 14mA @ 5V / 220Ω)
+  const nominalMa = supplyVoltage >= 4.5 ? 14 : 6.5
+  const ratio = Math.max(0, Math.min(1, iPeakMa / nominalMa))
+  // Perceptual brightness curve (human vision is non-linear; clearly separates 220Ω, 470Ω, 1kΩ, 4.7kΩ, 10kΩ, 100kΩ, 1MΩ)
+  const perceptual = ratio < 0.0008 ? 0 : Math.pow(ratio, 0.58)
+  const level = Math.max(0, Math.min(1, perceptual * duty))
+  return {
+    level,
+    currentMa: Math.round(iAvgMa * 100) / 100,
+    burned: false,
+    seriesOhms: Math.round(totalOhms),
+  }
+}
+
+export function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wires: Wire[]) {
+  // Pass 1: Evaluate relay coil states first so relay COM<->NO/NC switches conduct for downstream loads!
+  const baseGraph = buildNetGraph(wires, components, ctx.sim.relayClosed)
+
+  const readPinSourceFromGraph = (
+    graph: NetGraph,
+    ep: WireEndpoint,
+  ): { duty: number; voltage: number; hasResistor: boolean; seriesOhms: number } => {
+    const nodes = traceElectricPaths(graph, ep, { allowResistive: true })
+    let bestDuty = 0
+    let bestVoltage = 0
+    let bestHasRes = false
+    let bestOhms = 0
+    let bestScore = -1
+
+    for (const n of nodes) {
+      const rb = resolveNodeBoardId(ctx.boardId, components, n.endpoint.nodeId)
       if (!rb) continue
-      const bp = getBoardPin(rb, r.pinId)
+      const bp = getBoardPin(rb, n.endpoint.pinId)
       if (!bp) continue
-      if (bp.kind === 'power') duty = Math.max(duty, 1)
-      else if (bp.gpio !== undefined) {
-        const owner = ctx.allNodes?.get(r.nodeId)
-        const gs = owner ? owner.localGpio[bp.gpio] : r.nodeId === 'board' ? ctx.sim.gpioStates[bp.gpio] : undefined
-        if (gs && gs.mode === 'OUTPUT') duty = Math.max(duty, gs.digital)
-        else if (gs && gs.mode === 'PWM') duty = Math.max(duty, gs.pwmDuty / 255)
+      let duty = 0
+      let voltage = 0
+      if (bp.kind === 'power') {
+        duty = 1
+        voltage = bp.voltage || BOARDS[rb].logicVoltage
+      } else if (bp.gpio !== undefined) {
+        const owner = ctx.allNodes?.get(n.endpoint.nodeId)
+        const gs = owner ? owner.localGpio[bp.gpio] : n.endpoint.nodeId === 'board' ? ctx.sim.gpioStates[bp.gpio] : undefined
+        if (gs && gs.mode === 'OUTPUT' && gs.digital === 1) {
+          duty = 1
+          voltage = BOARDS[rb].logicVoltage
+        } else if (gs && gs.mode === 'PWM' && gs.pwmDuty > 0) {
+          duty = gs.pwmDuty / 255
+          voltage = BOARDS[rb].logicVoltage
+        }
+      }
+      if (duty > 0) {
+        // Prefer strongest source (highest voltage / lowest path resistance)
+        const score = duty * voltage * 100000 - n.ohms
+        if (score > bestScore) {
+          bestScore = score
+          bestDuty = duty
+          bestVoltage = voltage
+          bestHasRes = n.crossedResistor
+          bestOhms = n.ohms
+        }
       }
     }
-    return { duty, hasResistor: reach.crossedResistor, minResistorOhms: reach.minResistorOhms }
+    return { duty: bestDuty, voltage: bestVoltage, hasResistor: bestHasRes, seriesOhms: bestOhms }
   }
 
-  const hitsGround = (ep: WireEndpoint): boolean => {
-    const reach = traceReachable(ctx.graph, ep, components)
-    return reach.endpoints.some((r) => {
-      const rb = resolveNodeBoardId(ctx.boardId, components, r.nodeId)
-      if (!rb) return false
-      const bp = getBoardPin(rb, r.pinId)
-      return bp?.kind === 'gnd'
-    })
+  for (const c of components) {
+    if (c.kind === 'relay') {
+      const sig = readPinSourceFromGraph(baseGraph, { nodeId: c.id, pinId: 'IN' })
+      ctx.sim.relayClosed[c.id] = c.props.relayTransistor === 'pnp' ? sig.duty < 0.5 : sig.duty > 0.5
+    }
+  }
+
+  // Pass 2: Rebuild graph with updated relay contacts so loads wired through COM->NO/NC update immediately
+  ctx.graph = buildNetGraph(wires, components, ctx.sim.relayClosed)
+  ctx.sim.alerts = analyzeCircuitSafety(ctx.boardId, components, wires, ctx.sim.relayClosed)
+
+  const readPinSource = (ep: WireEndpoint) => readPinSourceFromGraph(ctx.graph, ep)
+
+  const readGroundPath = (ep: WireEndpoint): { grounded: boolean; hasResistor: boolean; seriesOhms: number } => {
+    const nodes = traceElectricPaths(ctx.graph, ep, { allowResistive: true })
+    let best: { grounded: boolean; hasResistor: boolean; seriesOhms: number } | null = null
+    for (const n of nodes) {
+      const rb = resolveNodeBoardId(ctx.boardId, components, n.endpoint.nodeId)
+      if (!rb) continue
+      const bp = getBoardPin(rb, n.endpoint.pinId)
+      if (bp?.kind === 'gnd') {
+        if (!best || n.ohms < best.seriesOhms) {
+          best = { grounded: true, hasResistor: n.crossedResistor, seriesOhms: n.ohms }
+        }
+      }
+    }
+    return best ?? { grounded: false, hasResistor: false, seriesOhms: 0 }
   }
 
   const nextBuzzers: Record<string, { freq: number; active: boolean }> = {}
+  const nextBarGraph: Record<string, number> = {}
   const nowMs = Date.now()
+
   for (const c of components) {
     if (c.kind === 'led') {
       const anodePin = c.props.flip ? 'K' : 'A'
       const cathodePin = c.props.flip ? 'A' : 'K'
-      const a = readPinDuty({ nodeId: c.id, pinId: anodePin })
-      const kGnd = hitsGround({ nodeId: c.id, pinId: cathodePin })
-      const baseLevel = kGnd ? a.duty : 0
-      const ohms = a.minResistorOhms ?? 220
-      const resistorScale =
-        !a.hasResistor || ohms < 47 ? 1 : ohms <= 470 ? 1 : ohms <= 2200 ? 0.65 : ohms <= 10000 ? 0.35 : 0.16
-      const level = baseLevel * resistorScale
+      const src = readPinSource({ nodeId: c.id, pinId: anodePin })
+      const gnd = readGroundPath({ nodeId: c.id, pinId: cathodePin })
       const clr = c.color ?? 'red'
-      ctx.sim.ledBrightness[c.id] = {
-        r: clr === 'red' || clr === 'yellow' || clr === 'orange' || clr === 'white' || clr === 'purple' ? level : 0,
-        g: clr === 'green' || clr === 'yellow' || clr === 'cyan' || clr === 'white' ? level : clr === 'orange' ? level * 0.5 : 0,
-        b: clr === 'blue' || clr === 'cyan' || clr === 'white' || clr === 'purple' ? level : 0,
-        burned: baseLevel > 0 && (!a.hasResistor || (a.minResistorOhms !== null && a.minResistorOhms < 47)),
+      if (!gnd.grounded || src.duty <= 0) {
+        const anyRes = src.hasResistor || gnd.hasResistor
+        const anyOhms = (src.hasResistor ? src.seriesOhms : 0) + (gnd.hasResistor ? gnd.seriesOhms : 0)
+        ctx.sim.ledBrightness[c.id] = {
+          r: 0,
+          g: 0,
+          b: 0,
+          burned: false,
+          currentMa: 0,
+          seriesOhms: anyRes ? Math.round(anyOhms) : null,
+        }
+      } else {
+        const hasResistor = src.hasResistor || gnd.hasResistor
+        const totalOhms = (src.hasResistor ? src.seriesOhms : 0) + (gnd.hasResistor ? gnd.seriesOhms : 0)
+        const opt = computeOhmicLedLevel(src.voltage, src.duty, hasResistor, totalOhms, clr)
+        const level = opt.level
+        ctx.sim.ledBrightness[c.id] = {
+          r: clr === 'red' || clr === 'yellow' || clr === 'orange' || clr === 'white' || clr === 'purple' ? level : 0,
+          g: clr === 'green' || clr === 'yellow' || clr === 'cyan' || clr === 'white' ? level : clr === 'orange' ? level * 0.5 : 0,
+          b: clr === 'blue' || clr === 'cyan' || clr === 'white' || clr === 'purple' ? level : 0,
+          burned: opt.burned,
+          currentMa: opt.currentMa,
+          seriesOhms: opt.seriesOhms,
+        }
       }
     } else if (c.kind === 'rgb-led') {
       const isCommonAnode = c.props.common === 'anode'
       if (isCommonAnode) {
-        const comPwr = readPinDuty({ nodeId: c.id, pinId: 'GND' }).duty > 0.5
-        const r = comPwr ? 1 - readPinDuty({ nodeId: c.id, pinId: 'R' }).duty : 0
-        const g = comPwr ? 1 - readPinDuty({ nodeId: c.id, pinId: 'G' }).duty : 0
-        const b = comPwr ? 1 - readPinDuty({ nodeId: c.id, pinId: 'B' }).duty : 0
-        ctx.sim.ledBrightness[c.id] = { r, g, b }
+        const com = readPinSource({ nodeId: c.id, pinId: 'GND' })
+        const evalCh = (pinId: 'R' | 'G' | 'B', color: string) => {
+          if (com.duty <= 0.5) return { level: 0, currentMa: 0, burned: false, seriesOhms: null }
+          const chSrc = readPinSource({ nodeId: c.id, pinId })
+          const chGnd = readGroundPath({ nodeId: c.id, pinId })
+          const sinkDuty = chSrc.duty > 0 ? Math.max(0, 1 - chSrc.duty) : chGnd.grounded ? 1 : 0
+          if (sinkDuty <= 0) return { level: 0, currentMa: 0, burned: false, seriesOhms: null }
+          const hasRes = com.hasResistor || chSrc.hasResistor || chGnd.hasResistor
+          const ohms = (com.hasResistor ? com.seriesOhms : 0) + (chSrc.hasResistor ? chSrc.seriesOhms : chGnd.hasResistor ? chGnd.seriesOhms : 0)
+          return computeOhmicLedLevel(com.voltage || 5, sinkDuty, hasRes, ohms, color)
+        }
+        const r = evalCh('R', 'red')
+        const g = evalCh('G', 'green')
+        const b = evalCh('B', 'blue')
+        ctx.sim.ledBrightness[c.id] = {
+          r: r.level,
+          g: g.level,
+          b: b.level,
+          currentMa: Math.round((r.currentMa + g.currentMa + b.currentMa) * 100) / 100,
+          seriesOhms: r.seriesOhms ?? g.seriesOhms ?? b.seriesOhms,
+        }
       } else {
-        const kGnd = hitsGround({ nodeId: c.id, pinId: 'GND' })
-        const r = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'R' }).duty : 0
-        const g = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'G' }).duty : 0
-        const b = kGnd ? readPinDuty({ nodeId: c.id, pinId: 'B' }).duty : 0
-        ctx.sim.ledBrightness[c.id] = { r, g, b }
+        const gnd = readGroundPath({ nodeId: c.id, pinId: 'GND' })
+        const evalCh = (pinId: 'R' | 'G' | 'B', color: string) => {
+          if (!gnd.grounded) return { level: 0, currentMa: 0, burned: false, seriesOhms: null }
+          const ch = readPinSource({ nodeId: c.id, pinId })
+          if (ch.duty <= 0) return { level: 0, currentMa: 0, burned: false, seriesOhms: null }
+          const hasRes = ch.hasResistor || gnd.hasResistor
+          const ohms = (ch.hasResistor ? ch.seriesOhms : 0) + (gnd.hasResistor ? gnd.seriesOhms : 0)
+          return computeOhmicLedLevel(ch.voltage, ch.duty, hasRes, ohms, color)
+        }
+        const r = evalCh('R', 'red')
+        const g = evalCh('G', 'green')
+        const b = evalCh('B', 'blue')
+        ctx.sim.ledBrightness[c.id] = {
+          r: r.level,
+          g: g.level,
+          b: b.level,
+          currentMa: Math.round((r.currentMa + g.currentMa + b.currentMa) * 100) / 100,
+          seriesOhms: r.seriesOhms ?? g.seriesOhms ?? b.seriesOhms,
+        }
       }
-    } else if (c.kind === 'relay') {
-      const sig = readPinDuty({ nodeId: c.id, pinId: 'IN' })
-      ctx.sim.relayClosed[c.id] = c.props.relayTransistor === 'pnp' ? sig.duty < 0.5 : sig.duty > 0.5
+    } else if (c.kind === 'led-bar-graph') {
+      const src = readPinSource({ nodeId: c.id, pinId: 'IN' })
+      const gnd = readGroundPath({ nodeId: c.id, pinId: 'GND' })
+      if (gnd.grounded && src.duty > 0) {
+        const opt = computeOhmicLedLevel(src.voltage, src.duty, src.hasResistor || gnd.hasResistor, src.seriesOhms + gnd.seriesOhms, 'green')
+        nextBarGraph[c.id] = Math.max(0, Math.min(10, Math.round(opt.level * 10)))
+      } else {
+        nextBarGraph[c.id] = 0
+      }
     } else if (c.kind === 'buzzer') {
       const readPinToneFreq = (ep: WireEndpoint): number => {
-        const reach = traceReachable(ctx.graph, ep, components)
+        const reach = traceReachable(ctx.graph, ep)
         let f = 0
         for (const r of reach.endpoints) {
           const rb = resolveNodeBoardId(ctx.boardId, components, r.nodeId)
@@ -1603,12 +1920,12 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
         }
         return f
       }
-      const posSig = readPinDuty({ nodeId: c.id, pinId: 'POS' })
+      const posSig = readPinSource({ nodeId: c.id, pinId: 'POS' })
       const posTone = readPinToneFreq({ nodeId: c.id, pinId: 'POS' })
-      const gndOk = hitsGround({ nodeId: c.id, pinId: 'GND' })
-      const swapSig = readPinDuty({ nodeId: c.id, pinId: 'GND' })
+      const gndOk = readGroundPath({ nodeId: c.id, pinId: 'GND' }).grounded
+      const swapSig = readPinSource({ nodeId: c.id, pinId: 'GND' })
       const swapTone = readPinToneFreq({ nodeId: c.id, pinId: 'GND' })
-      const swapGndOk = hitsGround({ nodeId: c.id, pinId: 'POS' })
+      const swapGndOk = readGroundPath({ nodeId: c.id, pinId: 'POS' }).grounded
       const forwardActive = gndOk && (posTone > 0 || posSig.duty > 0)
       const reverseActive = swapGndOk && (swapTone > 0 || swapSig.duty > 0)
       const active = forwardActive || reverseActive
@@ -1617,6 +1934,7 @@ function syncCircuitActuators(ctx: VmContext, components: PlacedComponent[], wir
     }
   }
   ctx.sim.buzzerActive = nextBuzzers
+  ctx.sim.barGraphLevels = nextBarGraph
 
   // Record 8-channel digital logic sample for Wokwi Logic Analyzer & VCD export
   const channels: Record<number, 0 | 1> = {}
@@ -1996,8 +2314,8 @@ export function verifyCircuitAndCode(
       if (c.kind !== 'led') return false
       const anodePin = c.props.flip ? 'K' : 'A'
       const cathodePin = c.props.flip ? 'A' : 'K'
-      const reachA = traceReachable(graph, { nodeId: c.id, pinId: anodePin }, components)
-      const reachK = traceReachable(graph, { nodeId: c.id, pinId: cathodePin }, components)
+      const reachA = traceReachable(graph, { nodeId: c.id, pinId: anodePin })
+      const reachK = traceReachable(graph, { nodeId: c.id, pinId: cathodePin })
       const aHitsGnd = reachA.endpoints.some(isBoardGnd)
       const kHitsPwr = reachK.endpoints.some(isBoardPwrOrGpio)
       return aHitsGnd && kHitsPwr
@@ -2005,7 +2323,7 @@ export function verifyCircuitAndCode(
     const ungroundedLed = activeParts.find((c) => {
       if (c.kind !== 'led') return false
       const cathodePin = c.props.flip ? 'A' : 'K'
-      const reach = traceReachable(graph, { nodeId: c.id, pinId: cathodePin }, components)
+      const reach = traceReachable(graph, { nodeId: c.id, pinId: cathodePin })
       return !reach.endpoints.some(isBoardGnd)
     })
     if (reversedLed) {

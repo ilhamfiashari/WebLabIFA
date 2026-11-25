@@ -2037,3 +2037,14 @@
   font-size: 12px;
   color: var(--ink-2);
 }
+
+/* Responsive IoT Documentation layout */
+@media (max-width: 860px) {
+  .iot-docs-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .iot-docs-layout aside {
+    position: static !important;
+    max-height: none !important;
+  }
+}

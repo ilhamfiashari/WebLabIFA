@@ -430,29 +430,45 @@ export function ComponentHardwareView({
   const oledText = sim.oledLines[comp.id] ?? ['SSD1306 128x64', 'Menunggu data...']
   const lcdText = sim.lcdRows[comp.id] ?? ['LCD 16x2 I2C    ', 'Siap...         ']
 
-  const LED_PALETTE: Record<string, { dim: string; off: string; on: string }> = {
-    red: { dim: '#dc2626', off: '#991b1b', on: '#ef4444' },
-    green: { dim: '#16a34a', off: '#166534', on: '#22c55e' },
-    blue: { dim: '#2563eb', off: '#1e40af', on: '#38bdf8' },
-    yellow: { dim: '#ca8a04', off: '#854d0e', on: '#facc15' },
-    orange: { dim: '#ea580c', off: '#9a3412', on: '#fb923c' },
-    purple: { dim: '#9333ea', off: '#581c87', on: '#c084fc' },
-    cyan: { dim: '#0891b2', off: '#155e75', on: '#22d3ee' },
-    white: { dim: '#cbd5e1', off: '#94a3b8', on: '#ffffff' },
+  const LED_PALETTE: Record<string, { dim: string; off: string; on: string; core: string }> = {
+    red: { dim: '#881313', off: '#5c1414', on: '#ff3b3b', core: '#fecaca' },
+    green: { dim: '#14532d', off: '#0f3d21', on: '#22ff66', core: '#dcfce7' },
+    blue: { dim: '#1e3a8a', off: '#172554', on: '#38bdf8', core: '#e0f2fe' },
+    yellow: { dim: '#713f12', off: '#4d2e0b', on: '#fde047', core: '#fefce8' },
+    orange: { dim: '#7c2d12', off: '#521e0c', on: '#fb923c', core: '#ffedd5' },
+    purple: { dim: '#581c87', off: '#3b0764', on: '#c084fc', core: '#f3e8ff' },
+    cyan: { dim: '#155e75', off: '#0e3f4f', on: '#22d3ee', core: '#ecfeff' },
+    white: { dim: '#64748b', off: '#475569', on: '#ffffff', core: '#ffffff' },
   }
 
+  const mixHex = (hexA: string, hexB: string, t: number): string => {
+    const clamped = Math.max(0, Math.min(1, t))
+    const a = parseInt(hexA.slice(1), 16)
+    const b = parseInt(hexB.slice(1), 16)
+    const r = Math.round(((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * clamped)
+    const g = Math.round(((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * clamped)
+    const bl = Math.round((a & 255) + ((b & 255) - (a & 255)) * clamped)
+    return `rgb(${r}, ${g}, ${bl})`
+  }
+
+  const ledLevel = led ? Math.max(0, Math.min(1, Math.max(led.r, led.g, led.b))) : 0
+  const ledPal = LED_PALETTE[comp.color ?? 'red'] ?? LED_PALETTE.red
   const ledFill = (() => {
-    const pal = LED_PALETTE[comp.color ?? 'red'] ?? LED_PALETTE.red
-    if (!led) return pal.dim
-    const lvl = Math.max(led.r, led.g, led.b)
-    if (lvl <= 0.05) return pal.off
+    if (!led) return ledPal.dim
+    if (ledLevel <= 0.005) return ledPal.off
     if (comp.kind === 'rgb-led') {
-      return `rgb(${Math.round(led.r * 255)}, ${Math.round(led.g * 255)}, ${Math.round(led.b * 255)})`
+      const r = Math.round(40 + led.r * 215)
+      const g = Math.round(40 + led.g * 215)
+      const b = Math.round(40 + led.b * 215)
+      return `rgb(${r}, ${g}, ${b})`
     }
-    return pal.on
+    return mixHex(ledPal.off, ledPal.on, ledLevel)
   })()
 
-  const isGlowing = Boolean(led && Math.max(led.r, led.g, led.b) > 0.05)
+  const isGlowing = ledLevel > 0.015
+  const glowRadius = Math.round(2 + ledLevel * 18)
+  const haloOpacity = Math.max(0, Math.min(0.85, ledLevel * ledLevel * 0.85))
+  const coreOpacity = Math.max(0, Math.min(0.92, (ledLevel - 0.15) * 1.1))
   const labelColor = isDark ? '#e2e8f0' : '#1e293b'
 
   return (
@@ -480,22 +496,61 @@ export function ComponentHardwareView({
 
         {comp.kind === 'led' || comp.kind === 'rgb-led' ? (
         <g transform={comp.kind === 'led' && comp.props.flip ? `translate(${spec.width}, 0) scale(-1, 1)` : undefined}>
+          {/* Soft outer optical glow halo scaled smoothly by Ohm's law current */}
+          {isGlowing ? (
+            <circle
+              cx={spec.width / 2}
+              cy={28}
+              r={12 + ledLevel * 18}
+              fill={ledFill}
+              opacity={haloOpacity * 0.45}
+              style={{ pointerEvents: 'none' }}
+            />
+          ) : null}
           {/* Metallic bent LED wire legs */}
           <path d={`M ${spec.width / 2 - 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
           <path d={`M ${spec.width / 2 + 8} 48 V 72`} stroke="#94a3b8" strokeWidth={2.5} />
-          {/* Realistic 3D Glossy LED Dome */}
+          {/* Realistic 3D Glossy LED Dome with continuous brightness */}
           <path
             d={`M ${spec.width / 2 - 14} 44 V 24 A 14 14 0 0 1 ${spec.width / 2 + 14} 24 V 44 Z`}
             fill={ledFill}
-            stroke={isGlowing ? '#fef08a' : '#7f1d1d'}
+            stroke={isGlowing ? mixHex('#475569', '#fef08a', ledLevel) : '#475569'}
             strokeWidth={1.5}
-            style={isGlowing ? { filter: `drop-shadow(0 0 14px ${ledFill})` } : undefined}
+            style={
+              isGlowing
+                ? { filter: `drop-shadow(0 0 ${glowRadius}px ${ledFill})` }
+                : undefined
+            }
           />
+          {/* Inner semiconductor die core glow (brightens intensely at high current, vanishes when dim) */}
+          {coreOpacity > 0.02 ? (
+            <ellipse
+              cx={spec.width / 2}
+              cy={29}
+              rx={4 + ledLevel * 4.5}
+              ry={5 + ledLevel * 5.5}
+              fill={comp.kind === 'rgb-led' ? '#ffffff' : ledPal.core}
+              opacity={coreOpacity * 0.72}
+              style={{ pointerEvents: 'none' }}
+            />
+          ) : null}
           <rect x={spec.width / 2 - 17} y={42} width={34} height={6} rx={2} fill={ledFill} stroke="#475569" strokeWidth={0.8} />
           <ellipse cx={spec.width / 2 - 5} cy={22} rx={3.5} ry={7} fill="rgba(255,255,255,0.42)" />
           {led?.burned ? (
             <text x={spec.width / 2} y={8} textAnchor="middle" fontSize="8" fill="#ef4444" fontWeight={700}>
-              ! NO RES
+              ! OVERCURRENT
+            </text>
+          ) : sim.running && led && (led.currentMa ?? 0) > 0 ? (
+            <text
+              x={spec.width / 2}
+              y={8}
+              textAnchor="middle"
+              fontSize="7"
+              fontFamily="monospace"
+              fill={isDark ? '#cbd5e1' : '#334155'}
+              fontWeight={700}
+            >
+              {led.currentMa! >= 1 ? `${led.currentMa!.toFixed(1)}mA` : `${Math.round(led.currentMa! * 1000)}µA`} · {Math.round(ledLevel * 100)}%
             </text>
           ) : null}
         </g>

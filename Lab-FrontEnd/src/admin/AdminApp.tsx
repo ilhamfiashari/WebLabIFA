@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowRight, ArrowRightLeft, BookOpenCheck, CalendarDays, Check, ClipboardList, Database, Download, Ellipsis, FlaskConical, GraduationCap,
+  ArrowRight, ArrowRightLeft, BookOpen, BookOpenCheck, CalendarDays, Check, ClipboardList, Database, Download, Ellipsis, FlaskConical, GraduationCap,
   House, KeyRound, Layers, Monitor, Moon, Search, Settings, ShieldCheck, Sun, UserCog, Users,
 } from 'lucide-react'
 import type { Identity } from '../api'
+import { IotDocsPage } from '../iot/IotDocsPage'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { StudentAccessApprovalPanel } from '../shared/StudentAccessApprovalPanel'
@@ -24,13 +25,14 @@ import { usePath, useTheme, type Theme } from '../portal/hooks'
 import { Badge, Drawer, Kpi, NavLink, Popover, Select, type Tone } from '../portal/ui'
 
 const BASE = ADMIN_BASE
-type PageKey = 'beranda' | 'pengguna' | 'kelas' | 'katalog' | 'audit' | 'pengaturan'
+type PageKey = 'beranda' | 'pengguna' | 'kelas' | 'katalog' | 'audit' | 'dokumentasi' | 'pengaturan'
 const PAGES: Array<{ key: PageKey; path: string; label: string; icon: typeof House; description: string }> = [
   { key: 'beranda', path: BASE, label: 'Beranda', icon: House, description: 'Ringkasan aktivitas dan publikasi IFA Lab.' },
   { key: 'pengguna', path: `${BASE}/pengguna`, label: 'Pengguna & Akses', icon: Users, description: 'Kelola akun, peran, dan status akses IFA Lab.' },
   { key: 'kelas', path: `${BASE}/kelas`, label: 'Kelas', icon: GraduationCap, description: 'Kelas aktif, dosen pengampu, dan progres praktikum.' },
   { key: 'katalog', path: `${BASE}/katalog`, label: 'Katalog & Publikasi', icon: Layers, description: 'Modul lab, alur review, dan cakupan OWASP Top 10:2025.' },
   { key: 'audit', path: `${BASE}/audit`, label: 'Audit Log', icon: ClipboardList, description: 'Jejak perubahan akses, kelas, publikasi, dan sesi.' },
+  { key: 'dokumentasi', path: `${BASE}/dokumentasi`, label: 'Dokumentasi', icon: BookOpen, description: 'Dokumentasi referensi IoT Simulator, komponen Wokwi, dan fisika rangkaian.' },
   { key: 'pengaturan', path: `${BASE}/pengaturan`, label: 'Pengaturan', icon: Settings, description: 'Kebijakan sesi, akses, dan preferensi tampilan.' },
 ]
 
@@ -555,6 +557,7 @@ function PageHead({ page, actions, live }: { page: PageKey; actions?: ReactNode;
     kelas: 'Active classes, instructors, and lab completion progress.',
     katalog: 'Lab modules, review pipeline, and OWASP Top 10 coverage.',
     audit: 'Access trails, active sessions, anomaly alerts, and user activity logs.',
+    dokumentasi: 'Complete Wokwi-aligned IoT Simulator docs, part pinouts, and Ohm’s Law guides.',
     pengaturan: 'MFA authenticator QR, passkeys, backup codes, sessions, and backup export.',
   }
   const label = lang === 'en' ? (page === 'beranda' ? 'Admin Home' : tr.nav.admin[page]) : (page === 'beranda' ? 'Beranda Admin' : p.label)
@@ -577,6 +580,7 @@ export function AdminApp({ user, onLogout, loggingOut, onSwitchRole, switching, 
       kelas: tr.nav.admin.kelas,
       katalog: tr.nav.admin.katalog,
       audit: tr.nav.admin.audit,
+      dokumentasi: tr.nav.admin.dokumentasi,
       pengaturan: tr.nav.admin.pengaturan,
     }
     return { ...p, label: labelMap[p.key] ?? p.label }
@@ -590,6 +594,7 @@ export function AdminApp({ user, onLogout, loggingOut, onSwitchRole, switching, 
     {page.key === 'kelas' && <ClassesPage live={live} csrf={user.csrf_token} />}
     {page.key === 'katalog' && <CatalogPage live={live} csrf={user.csrf_token} />}
     {page.key === 'audit' && <AuditPage live={live} csrf={user.csrf_token} />}
+    {page.key === 'dokumentasi' && <IotDocsPage role="admin" />}
     {page.key === 'pengaturan' && <SettingsPage theme={theme} setTheme={setTheme} user={user} live={live} />}
   </Shell>
 }

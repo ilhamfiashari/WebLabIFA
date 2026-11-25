@@ -280,7 +280,11 @@ export interface SimulationState {
   elapsedMs: number
   compileError: string | null
   gpioStates: Record<number, GpioRuntime>
-  ledBrightness: Record<string, { r: number; g: number; b: number; burned?: boolean }>
+  ledBrightness: Record<
+    string,
+    { r: number; g: number; b: number; burned?: boolean; currentMa?: number; seriesOhms?: number | null }
+  >
+  barGraphLevels?: Record<string, number>
   servoAngles: Record<string, number>
   buzzerActive: Record<string, { freq: number; active: boolean }>
   relayClosed: Record<string, boolean>

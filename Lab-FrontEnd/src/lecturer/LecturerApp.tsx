@@ -37,6 +37,7 @@ import { ErrorView } from '../shared/errors/ErrorView'
 import { useI18n } from '../shared/i18n'
 import { SecuritySettingsPage } from '../shared/settings/SecuritySettingsPage'
 import { StudentAccessApprovalPanel } from '../shared/StudentAccessApprovalPanel'
+import { IotDocsPage } from '../iot/IotDocsPage'
 import { IotSimulatorStudio } from '../iot/IotSimulatorStudio'
 import { WebDevStudio } from '../webdev/WebDevStudio'
 import { LabDetailPage, PanduanPage, WebCatalogPage } from '../simulator/CatalogViews'
@@ -55,6 +56,7 @@ const PAGES: NavPage[] = [
   { key: 'progres', path: '/lab/dosen/progres', label: 'Progres & Nilai', icon: BarChart3 },
   { key: 'latihan', path: '/lab/dosen/latihan', label: 'Bank latihan', icon: BookOpenCheck },
   { key: 'panduan', path: '/lab/dosen/panduan', label: 'Panduan', icon: BookOpen },
+  { key: 'dokumentasi', path: '/lab/dosen/dokumentasi', label: 'Dokumentasi', icon: BookOpen },
   { key: 'pengaturan', path: '/lab/dosen/pengaturan', label: 'Pengaturan', icon: Settings },
 ]
 
@@ -92,6 +94,7 @@ export function LecturerApp(props: Props) {
       progres: tr.nav.lecturer.progres,
       latihan: tr.nav.lecturer.latihan,
       panduan: tr.nav.lecturer.panduan,
+      dokumentasi: tr.nav.lecturer.dokumentasi,
       pengaturan: tr.nav.lecturer.pengaturan,
     }
     return { ...p, label: labelMap[p.key] ?? p.label }
@@ -134,9 +137,11 @@ export function LecturerApp(props: Props) {
                 ? 'progres'
                 : path.startsWith('/lab/dosen/panduan')
                   ? 'panduan'
-                  : path.startsWith('/lab/dosen/pengaturan')
-                    ? 'pengaturan'
-                    : 'beranda'
+                  : path.startsWith('/lab/dosen/dokumentasi')
+                    ? 'dokumentasi'
+                    : path.startsWith('/lab/dosen/pengaturan')
+                      ? 'pengaturan'
+                      : 'beranda'
 
   const data = catalogQ.data
   const detail =
@@ -201,6 +206,8 @@ export function LecturerApp(props: Props) {
         <IotSimulatorStudio csrf={props.user.csrf_token} initialLabId={iotLabId} mode="dosen" />
       ) : active === 'panduan' ? (
         <PanduanPage role="dosen" />
+      ) : active === 'dokumentasi' ? (
+        <IotDocsPage role="dosen" onOpenStudio={() => go('/lab/dosen/iot')} />
       ) : active === 'pengaturan' ? (
         <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'minmax(0, 1fr)' }}>
           <PageHead

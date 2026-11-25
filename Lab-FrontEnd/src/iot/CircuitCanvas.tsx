@@ -1171,6 +1171,32 @@ export function CircuitCanvas({
                   <span className="iot-res-val">{formatOhms(ohms)} ±5%</span>
                 </div>
 
+                <label className="iot-pop-field">
+                  <span>{en ? 'Resistance (Ω) — Ohm\'s Law' : 'Nilai Hambatan (Ω) — Hukum Ohm'}</span>
+                  <input
+                    type="number"
+                    className="input"
+                    min={1}
+                    max={10000000}
+                    step={10}
+                    value={ohms}
+                    style={{ minHeight: 28, fontSize: 12, padding: '2px 8px' }}
+                    onChange={(e) => {
+                      const parsed = Math.max(1, Math.min(10000000, Math.round(Number(e.target.value) || 1)))
+                      const base = inspectedComp.label.split(' (')[0] || 'R'
+                      onUpdateComponent(inspectedComp.id, {
+                        ohms: parsed,
+                        label: `${base} (${formatOhms(parsed)})`,
+                      })
+                    }}
+                  />
+                </label>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'var(--ink-soft)', lineHeight: 1.35 }}>
+                  {en
+                    ? 'Higher Ω reduces LED current I = (V−Vf)/R and dims the LED.'
+                    : 'Semakin besar Ω → arus LED I = (V−Vf)/R makin kecil → cahaya LED makin redup.'}
+                </p>
+
                 <div className="iot-pop-field">
                   <span>{en ? 'Band 1 (1st digit)' : 'Gelang 1 (Digit 1)'}</span>
                   <div className="iot-swatch-row">
@@ -1243,33 +1269,64 @@ export function CircuitCanvas({
             )
           })() : null}
 
-          {inspectedComp?.kind === 'led' ? (
-            <div className="iot-popover-body">
-              <div className="iot-pop-field">
-                <span>{en ? 'LED Color (color)' : 'Warna LED (color)'}</span>
-                <div className="iot-pop-quick-vals">
-                  {(['red', 'green', 'yellow', 'blue', 'orange', 'purple', 'cyan', 'white'] as const).map((clr) => (
-                    <button
-                      key={clr}
-                      type="button"
-                      className={`iot-quick-val ${(inspectedComp.color ?? 'red') === clr ? 'is-active' : ''}`}
-                      onClick={() => onUpdateComponent(inspectedComp.id, { color: clr })}
-                    >
-                      {clr.toUpperCase()}
-                    </button>
-                  ))}
+          {inspectedComp?.kind === 'led' ? (() => {
+            const ledStat = sim.ledBrightness[inspectedComp.id]
+            const lvl = ledStat ? Math.max(ledStat.r, ledStat.g, ledStat.b) : 0
+            return (
+              <div className="iot-popover-body">
+                {ledStat ? (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      padding: '5px 8px',
+                      borderRadius: 6,
+                      background: ledStat.burned ? 'rgba(239,68,68,0.14)' : 'var(--bg-soft)',
+                      border: `1px solid ${ledStat.burned ? '#ef4444' : 'var(--line)'}`,
+                      display: 'grid',
+                      gap: 2,
+                    }}
+                  >
+                    <strong>
+                      {en ? 'Brightness' : 'Kecerahan'}: {Math.round(lvl * 100)}%
+                      {ledStat.currentMa !== undefined
+                        ? ` · I = ${ledStat.currentMa >= 1 ? `${ledStat.currentMa.toFixed(1)} mA` : `${Math.round(ledStat.currentMa * 1000)} µA`}`
+                        : ''}
+                    </strong>
+                    <span style={{ color: 'var(--ink-soft)' }}>
+                      {ledStat.seriesOhms !== null && ledStat.seriesOhms !== undefined
+                        ? `${en ? 'Series resistor' : 'Resistor seri'}: ${formatOhms(ledStat.seriesOhms)}`
+                        : en
+                          ? 'No series resistor detected!'
+                          : 'Belum ada resistor seri!'}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="iot-pop-field">
+                  <span>{en ? 'LED Color (color)' : 'Warna LED (color)'}</span>
+                  <div className="iot-pop-quick-vals">
+                    {(['red', 'green', 'yellow', 'blue', 'orange', 'purple', 'cyan', 'white'] as const).map((clr) => (
+                      <button
+                        key={clr}
+                        type="button"
+                        className={`iot-quick-val ${(inspectedComp.color ?? 'red') === clr ? 'is-active' : ''}`}
+                        onClick={() => onUpdateComponent(inspectedComp.id, { color: clr })}
+                      >
+                        {clr.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(inspectedComp.props.flip)}
+                    onChange={(e) => onUpdateProps(inspectedComp.id, { flip: e.target.checked })}
+                  />
+                  <span>{en ? 'Flip pins horizontally (flip)' : 'Balik polaritas kaki horizontal (flip)'}</span>
+                </label>
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(inspectedComp.props.flip)}
-                  onChange={(e) => onUpdateProps(inspectedComp.id, { flip: e.target.checked })}
-                />
-                <span>{en ? 'Flip pins horizontally (flip)' : 'Balik polaritas kaki horizontal (flip)'}</span>
-              </label>
-            </div>
-          ) : null}
+            )
+          })() : null}
 
           {inspectedComp?.kind === 'rgb-led' ? (
             <div className="iot-popover-body">
