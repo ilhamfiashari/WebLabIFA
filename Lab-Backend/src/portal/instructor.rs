@@ -603,8 +603,8 @@ pub async fn create_assignment(
     if rubric_vec.len() > 10 {
         return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
     }
-    let mut clean_rubric = Vec::with_capacity(rubric_vec.len());
-    for r in rubric_vec {
+    let mut clean_rubric = Vec::with_capacity(10);
+    for r in rubric_vec.into_iter().take(10) {
         let crit = r.criterion.trim();
         if crit.is_empty() || crit.len() > 120 || !(1..=100).contains(&r.weight) {
             return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY));
