@@ -1,91 +1,108 @@
 # WebLabIFA
 
-**WebLabIFA** is an interactive virtual laboratory and practicum platform for **Keamanan Web** (`OWASP Top 10:2025`, classes `IF-3A` & `IF-3B`) and **IoT** (`ESP32-C3`, `ESP32`, `Arduino Uno`, `Arduino Mega`, `Raspberry Pi Pico W`, class `IF-4A`) in the Informatics Engineering program. Students learn security concepts and embedded hardware engineering in a safe sandboxed simulator without exposing unsafe infrastructure to the host runtime.
+**WebLabIFA** is an interactive virtual laboratory and practicum platform for **Cyber Security (`OWASP Top 10:2025`)**, **Web Application Development**, and **Internet of Things (`ESP32-C3`, `ESP32`, `Arduino Uno`, `Arduino Mega`, `Raspberry Pi Pico W`)**. Learners practice offensive/defensive web security, full-stack web engineering, and embedded hardware simulation inside isolated, CSP-safe browser sandboxes without exposing host infrastructure.
 
 ---
 
-## Key Capabilities
+## Key Features
 
-- **Two Enforced Practicum Tracks**
-  - **Keamanan Web (`Cyber Security`)**: Step-by-step OWASP Top 10 labs (hypothesis, baseline, controlled probe, root-cause diagnosis, code patching, regression verification, and reflection) with progressive Easy -> Impossible unlocking for students.
-  - **Web App Development Virtual Lab (`/lab/web-dev`, `/lab/dosen/web-dev`)**:
-    - Dedicated dual-pane interactive Web coding & live rendering studio covering HTML5, CSS3 Flexbox/Grid, Forms/Tables/Media, JavaScript DOM & ES6+, React JSX (`useState`), Python & OOP, FastAPI REST endpoints, PostgreSQL schema/queries, and AI web integration (`P1–P16`), built 100% inside a strict CSP-safe sandbox (`DOMParser`, safe CSS-to-style mapping, and in-browser interpreters without `eval` or unsafe inline execution).
-    - Features a minimalist single-row collapsible Mission strip with progressive **XP Experience** & prerequisite enforcement for Students (`Mahasiswa`), while unlocking all 14 curriculum missions & student project inspection in **Lecturer (`Dosen`)** mode.
-  - **IoT Hardware & ESP32 Simulator (`/lab/iot`, `/lab/dosen/iot`)**:
-    - **New File (`Blank Canvas`)** toolbar action & customizable board templates (`ESP32-C3`, `ESP32 DevKit`, `Arduino Uno`, `Arduino Mega`, `Pi Pico W`, Multi-MCU workspaces).
-    - **Simulated IoT WebServer & Interactive Web Browser (`web-browser` component)**: Drag a live `Web Browser` client onto the circuit canvas, serve custom multi-file `index.html` templates (`{{TEMP}}`, `{{HUMIDITY}}`, `{{LED_STATE}}`) or ESP32 `WebServer` routes (`server.on`, `server.send`), inspect real-time canvas sensor telemetry over HTTP/JSON, and trigger two-way actuator control routes safely inside a CSP-compliant DOM sandbox.
-    - **10 Guided IoT Missions & 5 Achievement Badges**: Strictly staged sequential unlocking (`Misi 1 -> Misi 10`) and admin permission enforcement (`can_access_iot_studio`, `can_submit_assignments`) for students, with server-side payload, hardware wiring, firmware token, and `mqtts://` TLS verification + tampering telemetry. All 10 missions and 9 interactive Wokwi teaching projects are unlocked in **Lecturer (`Dosen`)** mode.
-    - **Multi-File Synchronization for Large Projects**: Synchronized `Main.ino`, `.h`/`.hpp`/`.cpp`/`.c`/`.ino` modules, automatic companion module linking, cross-file VS Code-style C++ autocomplete & parameter hints, real-time `diagram.json` canvas synchronization, and PostgreSQL persistence (`iot_projects.files_json`).
-    - **Saved Projects & Student Files Explorer**: Browse, preview inline files, reopen, or delete saved multi-file projects; Lecturers can browse and load saved student IoT projects from their classes (`/api/dosen/iot-projects`).
-- **Moodle LMS Question Bank & Practicum Assignments**
-  - Bilingual practice banks restricted strictly to **Cyber Security** and **IoT**, supporting Moodle **XML**, **GIFT**, and **Aiken** import with XXE/DOCTYPE blocking, XSS sanitization, role-gated lecturer bank actions, detailed assignment briefs/rubrics, and deadline/attempt locks.
-- **Admin RBAC, Granular Permissions & Live Security Monitor (`/lab/admin`)**
-  - Full Admin control to assign multi-roles (`mahasiswa`, `dosen`, `admin`), manage class enrollments (`IF-3A`, `IF-3B`, `IF-4A` limited to `Keamanan Web` & `IoT`), and configure granular 7-flag `user_access_rights` (`/api/admin/users/{user_id}/access`) backed by immediate session revocation when roles change and last-active-admin protection.
-  - Active session tracking, confirmed security anomaly review (`iot_submission_tampering`, `iot_sequential_bypass_attempt`, etc.), activity audit logs, and sanitized backups.
-- **Account Security & Recovery**
-  - Google OIDC authentication with institutional email allowlists, rotating session cookies, exact-origin CSRF verification, Authenticator App MFA (**TOTP**), **Argon2id**-hashed single-use backup codes, passkeys, and vulnerability disclosure policy in [`.github/SECURITY.md`](.github/SECURITY.md).
-- **Usability & Accessibility**
-  - Bilingual **Indonesian (`id`)** and **English (`en`)** interface, responsive mobile drawer navigation, light/dark themes, and consistent 10-item pagination.
+### 1. Cyber Security Practicum (`OWASP Top 10:2025`)
+- Guided step-by-step security labs covering hypothesis formulation, baseline capture, controlled exploitation probing, root-cause diagnosis, code patching, regression verification, and reflection.
+- Progressive difficulty levels (`Easy -> Medium -> Hard -> Impossible`) with rubric-based scoring, unlockable hints, evidence inspection, and lecturer feedback.
+
+### 2. Web App Development Studio (`/lab/web-dev`, `/lab/dosen/web-dev`)
+- Dual-pane interactive coding IDE powered by **CodeMirror 6** with full HTML5, SVG, CSS3/4, JavaScript/TypeScript/JSX, Python, SQL, and JSON syntax highlighting, live diagnostics, formatting, and VS Code-style context-aware autocomplete.
+- CSP-safe live DOM renderer built on `parse5` AST parsing with browser-standard HTML typography, sanitized attributes, inline/stylesheet CSS resolution, and simulated HTTP/FastAPI/PostgreSQL panes—with zero `eval` or unsafe `innerHTML`.
+- Multi-file workspace, progressive XP missions, and lecturer review of saved student projects.
+
+### 3. IoT Hardware & Firmware Simulator (`/lab/iot`, `/lab/dosen/iot`)
+- Interactive circuit canvas supporting **ESP32-C3**, **ESP32 DevKit**, **Arduino Uno**, **Arduino Mega**, **Raspberry Pi Pico W**, and multi-MCU workspaces with blank canvas and preset templates.
+- Multi-file C/C++ Arduino editor (`Main.ino`, `.h`, `.hpp`, `.c`, `.cpp`, `.html`, `.css`, `.js`) with cross-file autocomplete, firmware VM execution, `diagram.json` synchronization, and an embedded simulated **Web Browser** component for testing IoT WebServer routes and live sensor telemetry.
+- Staged IoT missions, achievement badges, server-side wiring/firmware/`mqtts://` TLS validation, and tamper detection telemetry.
+
+### 4. Moodle LMS Question Bank & Practicum Assignments
+- Bilingual practice banks for Cyber Security and IoT supporting **Moodle XML**, **GIFT**, **Aiken**, and bounded **JSON** import/export with XXE/DOCTYPE blocking and HTML sanitization.
+- Assignment builder with custom rubrics, attempt limits, deadline locks, leaderboard tracking, and formula-injection-safe CSV score export.
+
+### 5. Strict Access Control, Approval Workflow & Security Monitor
+- **Approval-First Google OIDC Login**: All non-bootstrap accounts (including institutional domains) require explicit **Admin** or **Lecturer** approval or **Excel (`.xlsx`) / CSV (`.csv`)** bulk pre-registration before a session can be issued.
+- **Role-Based Access Control (RBAC)**: Multi-role support (`mahasiswa`, `dosen`, `admin`), granular 7-flag `user_access_rights`, immediate session revocation on role/status changes, and last-active-admin protection.
+- **Account & Session Security**: Rotating `HttpOnly` + `Secure` + `SameSite=Lax` cookies, exact-origin CSRF validation, Authenticator App MFA (**TOTP**), **Argon2id**-hashed backup codes, WebAuthn passkeys, live security anomaly monitoring, audit logs, and sanitized backups. See [`.github/SECURITY.md`](.github/SECURITY.md) for vulnerability disclosure.
+
+### 6. Accessibility & Experience
+- Bilingual **Indonesian (`id`)** and **English (`en`)** interface, light/dark themes, responsive mobile navigation, and consistent pagination across portal tables.
 
 ---
 
-## Architecture & Repository Structure
+## Technology Stack
+
+| Layer | Technologies |
+| --- | --- |
+| **Backend API** | Rust, Axum, Tokio, Tower / Tower-HTTP, SQLx, OpenID Connect (`openidconnect`), Argon2id, SHA-256 |
+| **Database** | PostgreSQL 17 with versioned SQLx migrations |
+| **Frontend SPA** | React 19, TypeScript, Vite, Tailwind CSS v4, TanStack Query, Lucide Icons |
+| **Code Editors & Sandboxes** | CodeMirror 6 (`@codemirror/*`), Lezer grammars, `parse5` HTML5 AST parser, zero-dependency `.xlsx`/`.csv` spreadsheet parser |
+| **Testing & Quality** | Cargo `test` / `clippy` / `rustfmt`, ESLint, TypeScript `tsc`, Playwright E2E, GitHub CodeQL |
+| **Deployment** | Multi-stage Dockerfiles (minimal Rust runtime + non-root Nginx SPA proxy), Docker Compose |
+
+---
+
+## Repository Structure
 
 ```text
 WebLabIFA/
-├── .github/SECURITY.md     # Repository vulnerability disclosure policy
-├── Lab-Backend/            # Rust + Axum REST API & PostgreSQL migrations
+├── .github/SECURITY.md        # Vulnerability disclosure policy
+├── Lab-Backend/               # Rust + Axum REST API & PostgreSQL migrations
 │   ├── src/
-│   │   ├── config.rs       # Environment-driven OIDC, DB, and session config
-│   │   ├── oidc.rs         # Google OIDC discovery, state/nonce/PKCE verification
-│   │   ├── lib.rs          # Router wiring, CSP/security headers, public OpenAPI JSON
-│   │   ├── moodle.rs       # Moodle XML/GIFT/Aiken parser & XXE/XSS sanitizer
-│   │   ├── latihan.rs      # Cyber Security & IoT practice engine and settings
-│   │   ├── seed.rs         # Demo student cohorts, assignments & multi-file IoT projects
-│   │   ├── portal/         # Student, Lecturer, Admin RBAC, IoT & Web Dev endpoints
-│   │   ├── simulator/      # Safe simulated request/patch evaluation engine
+│   │   ├── config.rs          # Environment-driven OIDC, DB, and session config
+│   │   ├── oidc.rs            # Google OIDC discovery & state/nonce/PKCE validation
+│   │   ├── lib.rs             # Router wiring, approval gate, CSP/security headers
+│   │   ├── moodle.rs          # Moodle XML/GIFT/Aiken & bounded JSON parser
+│   │   ├── latihan.rs         # Practice question engine & platform settings
+│   │   ├── portal/            # Student, Lecturer, Admin RBAC, Access Approval, IoT & Web Dev APIs
+│   │   ├── simulator/         # Safe OWASP request/patch evaluation engine
 │   │   ├── simulator_catalog/ # Structured OWASP Web & IoT lab scenarios
-│   │   └── security_account/  # TOTP, Argon2id backup codes, passkeys, monitor & backups
-│   ├── migrations/         # PostgreSQL SQLx schema migrations (0001..0015)
-│   └── Dockerfile          # Multi-stage minimal Rust runtime container
-├── Lab-FrontEnd/           # React 19 + TypeScript + Vite SPA
+│   │   └── security_account/  # TOTP MFA, Argon2id backup codes, passkeys & monitor
+│   ├── migrations/            # Versioned PostgreSQL SQLx migrations
+│   └── Dockerfile             # Multi-stage minimal Rust runtime image
+├── Lab-FrontEnd/              # React 19 + TypeScript + Vite SPA
 │   ├── src/
-│   │   ├── admin/          # Admin portal, UserAccessModal & live security monitor
-│   │   ├── lecturer/       # Lecturer analytics, Moodle bank importer & IoT studio
-│   │   ├── student/        # Student dashboard, assignments, achievements & history
-│   │   ├── webdev/         # Web App Dev Virtual Lab IDE & CSP-safe live renderer
-│   │   ├── iot/            # Multi-file C++ IDE, firmware VM, Wokwi canvas & explorer
-│   │   ├── simulator/      # OWASP Top 10 interactive pentest & patching simulator
-│   │   ├── shared/         # Bilingual i18n, animated charts, errors & MFA settings
-│   │   └── portal/         # Shared shell, pagination component & responsive CSS
-│   ├── tests/              # Playwright E2E test suites
-│   └── Dockerfile          # Non-root Nginx container serving built SPA + API proxy
-├── compose.yaml            # Full stack (postgres, migrate, backend, frontend)
-└── security/               # Baseline security policies and configuration
+│   │   ├── login/             # Interactive atmospheric login scene & OIDC entry
+│   │   ├── admin/             # Admin portal, RBAC modal & live security monitor
+│   │   ├── lecturer/          # Lecturer analytics, Moodle bank & class management
+│   │   ├── student/           # Student dashboard, assignments, achievements & history
+│   │   ├── webdev/            # Web App Dev Studio (CodeMirror 6 + parse5 live preview)
+│   │   ├── iot/               # Multi-file C++ IDE, firmware VM & circuit canvas
+│   │   ├── simulator/         # OWASP Top 10 interactive pentest & patching studio
+│   │   └── shared/            # i18n, approval & Excel/CSV import UI, MFA settings
+│   ├── tests/                 # Playwright E2E test suites
+│   └── Dockerfile             # Non-root Nginx container serving SPA + API proxy
+├── compose.yaml               # Full stack orchestration (postgres, migrate, backend, frontend)
+└── security/                  # Baseline security policies and configuration
 ```
 
 ---
 
 ## Running with Docker Compose
 
-1. Create an untracked environment file (for example `.env`) from your deployment settings with PostgreSQL credentials, `APP_BASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `ALLOWED_EMAILS`.
-2. Build and start PostgreSQL, database migrations, the Rust backend, and the Nginx frontend:
+1. Create an untracked `.env` file with PostgreSQL credentials, `APP_BASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `ALLOWED_EMAILS`.
+2. Build and start all services:
 
 ```sh
 docker compose --profile app up --build -d
 ```
 
-By default, the web interface is exposed on `http://localhost:8080` and the backend health/API service on `127.0.0.1:3008`.
+By default, the web interface is exposed on `http://localhost:8080` and the backend API on `127.0.0.1:3008`.
 
 ---
 
-## Running Locally for Development
+## Local Development
 
 ### Prerequisites
 
 - **Rust** toolchain (`cargo`, `clippy`, `rustfmt`)
 - **Node.js** 22+ & `npm`
-- **PostgreSQL** 17 (can be started alone via `docker compose up -d postgres`)
+- **PostgreSQL** 17 (can be started standalone via `docker compose up -d postgres`)
 
 ### Backend
 
@@ -106,7 +123,7 @@ IFA_API_URL=http://127.0.0.1:3008 npm --prefix Lab-FrontEnd run dev -- --port 51
 
 ## Verification & Quality Checks
 
-### Backend (Formatting, Linting & Unit Tests)
+### Backend
 
 ```sh
 cargo fmt --manifest-path Lab-Backend/Cargo.toml --check
@@ -114,7 +131,7 @@ cargo clippy --manifest-path Lab-Backend/Cargo.toml --locked --all-targets -- -D
 cargo test --manifest-path Lab-Backend/Cargo.toml --locked
 ```
 
-### Frontend (Typecheck, ESLint, Build & Playwright E2E)
+### Frontend
 
 ```sh
 npm --prefix Lab-FrontEnd run typecheck
