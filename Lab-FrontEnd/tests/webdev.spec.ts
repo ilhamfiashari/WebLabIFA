@@ -476,4 +476,18 @@ test('CodeMirror Web Dev memberikan saran dan diagnostik sesuai grammar file', a
     await expect.poll(async () => (await readDoc()).endsWith('\n')).toBe(true)
     await expect(status, file).toContainText('0 Error')
   }
+
+  // Pastikan ukuran default heading HTML (h1 > h2 > p) tampil berbeda di Live Preview
+  await page.getByRole('tab', { name: 'index.html' }).click()
+  await editor.fill('<html>\n  <h1>Mmaa</h1>\n  <h2>Mxssd</h2>\n  <p>Paragraf</p>\n</html>')
+  await page.getByRole('tab', { name: 'style.css' }).click()
+  await editor.fill('')
+  await page.getByRole('button', { name: /Jalankan|Run/i }).first().click()
+
+  const preview = page.getByTestId('webdev-rendered-preview')
+  const h1Size = await preview.locator('h1').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  const h2Size = await preview.locator('h2').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  const pSize = await preview.locator('p').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  expect(h1Size).toBeGreaterThan(h2Size)
+  expect(h2Size).toBeGreaterThan(pSize)
 })
