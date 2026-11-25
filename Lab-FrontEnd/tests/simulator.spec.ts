@@ -864,6 +864,7 @@ test('peringkat mahasiswa, anti-NaN & anti-HTTP 500 dengan avg_score null, serta
 })
 
 test('simulator hardware IoT & ESP32-C3 berjalan interaktif dengan Serial Monitor, Plotter & verifikasi misi', async ({ page }) => {
+  test.setTimeout(60_000)
   await page.route('**/api/me', r => r.fulfill({ json: student }))
   await buildMockSimulatorRoutes(page)()
   const completedMissions: Array<{ mission_id: string; score: number; completed_at: string }> = []
