@@ -31,6 +31,7 @@ for (const width of [360, 390, 768, 1440]) {
     await expect(page.getByText('OWASP Top 10:2025', { exact: true })).toBeVisible()
     await expect(page.getByText('Wokwi · Arduino C++', { exact: true })).toBeVisible()
     await expect(page.getByText('W3C · HTML5 · SQL', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Rust · Axum · React 19/)).toHaveCount(0)
     const button = page.getByRole('button', { name: 'Masuk dengan Google', exact: true })
     await expect(button).toBeVisible()
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44)

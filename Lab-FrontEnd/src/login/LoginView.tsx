@@ -250,9 +250,6 @@ export function LoginView() {
                 </div>
               </li>
             </ul>
-            <p className="login-v2-tech-strip">
-              Rust · Axum · React 19 · PostgreSQL 17 · Google OIDC · MFA/Passkeys
-            </p>
           </section>
 
           <div aria-live="polite" className="login-feedback">

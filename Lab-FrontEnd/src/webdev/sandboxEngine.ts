@@ -1,4 +1,10 @@
 import type { CSSProperties } from 'react'
+import {
+  createJsSandboxSession,
+  type JsElementPatch,
+  type JsSandboxSession,
+  type VirtualElementDescriptor,
+} from './jsRuntime'
 import type { WebDevFastApiRoute, WebDevFile, WebDevSqlTable } from './types'
 
 const ALLOWED_CSS_PROPS = new Map<string, keyof CSSProperties>([
@@ -152,14 +158,31 @@ const ALLOWED_CSS_PROPS = new Map<string, keyof CSSProperties>([
   ['z-index', 'zIndex'],
 ])
 
-export function parseSafeInlineStyle(rawStyle: string | undefined): CSSProperties {
+function resolveCssVars(val: string, cssVars: Record<string, string>, depth = 0): string {
+  if (depth > 4 || !val.includes('var(')) return val
+  return val.replace(/var\(\s*(--[a-zA-Z0-9_-]+)\s*(?:,\s*([^)]+))?\)/g, (_m, varName: string, fallback?: string) => {
+    const resolved = cssVars[varName] ?? fallback?.trim() ?? ''
+    return resolved ? resolveCssVars(resolved, cssVars, depth + 1) : ''
+  })
+}
+
+export function parseSafeInlineStyle(
+  rawStyle: string | undefined,
+  cssVars: Record<string, string> = {},
+): CSSProperties {
   if (!rawStyle) return {}
   const styleObj: Record<string, string> = {}
   for (const decl of rawStyle.split(';')) {
     const colonIdx = decl.indexOf(':')
     if (colonIdx <= 0) continue
     const prop = decl.slice(0, colonIdx).trim().toLowerCase()
-    const val = decl.slice(colonIdx + 1).trim()
+    const rawVal = decl.slice(colonIdx + 1).trim()
+    if (!rawVal) continue
+    if (prop.startsWith('--')) {
+      cssVars[prop] = resolveCssVars(rawVal, cssVars)
+      continue
+    }
+    const val = resolveCssVars(rawVal, cssVars)
     if (!val || /url\s*\(|expression\s*\(|javascript:/i.test(val)) continue
     const camelProp = ALLOWED_CSS_PROPS.get(prop)
     if (camelProp) styleObj[camelProp] = val
@@ -170,27 +193,207 @@ export function parseSafeInlineStyle(rawStyle: string | undefined): CSSPropertie
 export interface ParsedCssRule {
   selector: string
   style: CSSProperties
+  isHover?: boolean
+  specificity?: [number, number, number]
+}
+
+export interface AncestorDescriptor {
+  tag: string
+  classAttr: string | null
+  idAttr: string | null
+}
+
+function collectRawCssBlocks(cssText: string, parentSelector = ''): Array<{ selector: string; body: string }> {
+  const out: Array<{ selector: string; body: string }> = []
+  let i = 0
+  const len = cssText.length
+  while (i < len) {
+    while (i < len && /\s/.test(cssText[i])) i++
+    if (i >= len) break
+    const braceOpen = cssText.indexOf('{', i)
+    if (braceOpen === -1) break
+    const header = cssText.slice(i, braceOpen).trim()
+    let depth = 1
+    let j = braceOpen + 1
+    while (j < len && depth > 0) {
+      if (cssText[j] === '{') depth++
+      else if (cssText[j] === '}') depth--
+      j++
+    }
+    const inner = cssText.slice(braceOpen + 1, Math.max(braceOpen + 1, j - 1))
+    i = j
+    if (!header) continue
+    if (/^@(?:keyframes|-webkit-keyframes|font-face|import|charset|namespace)/i.test(header)) {
+      continue
+    }
+    if (/^@(?:media|layer|container|supports)/i.test(header)) {
+      out.push(...collectRawCssBlocks(inner, parentSelector))
+      continue
+    }
+    const resolvedHeaders = header.split(',').map((h) => h.trim()).filter(Boolean).map((h) => {
+      if (!parentSelector) return h
+      return h.includes('&') ? h.replace(/&/g, parentSelector) : `${parentSelector} ${h}`
+    })
+    let declText = ''
+    let scan = 0
+    while (scan < inner.length) {
+      const nextBrace = inner.indexOf('{', scan)
+      const nextSemi = inner.indexOf(';', scan)
+      if (nextBrace !== -1 && (nextSemi === -1 || nextBrace < nextSemi)) {
+        let subDepth = 1
+        let k = nextBrace + 1
+        while (k < inner.length && subDepth > 0) {
+          if (inner[k] === '{') subDepth++
+          else if (inner[k] === '}') subDepth--
+          k++
+        }
+        const nestedRaw = inner.slice(scan, k)
+        for (const rh of resolvedHeaders) {
+          out.push(...collectRawCssBlocks(nestedRaw, rh))
+        }
+        scan = k
+      } else {
+        const end = nextSemi === -1 ? inner.length : nextSemi + 1
+        declText += inner.slice(scan, end)
+        scan = end
+      }
+    }
+    if (declText.trim()) {
+      for (const rh of resolvedHeaders) {
+        out.push({ selector: rh, body: declText })
+      }
+    }
+  }
+  return out
+}
+
+function selectorSpecificity(selector: string): [number, number, number] {
+  const cleaned = selector.replace(/:{1,2}[a-zA-Z-]+(?:\([^)]*\))?/g, '')
+  const ids = (cleaned.match(/#[a-zA-Z0-9_-]+/g) ?? []).length
+  const classes = (cleaned.match(/\.[a-zA-Z0-9_-]+/g) ?? []).length + (selector.includes(':hover') ? 1 : 0)
+  const tags = (cleaned
+    .split(/[\s>+~]+/)
+    .map((p) => p.replace(/[#.][a-zA-Z0-9_-]+/g, '').trim())
+    .filter((t) => t && t !== '*')).length
+  return [ids, classes, tags]
 }
 
 export function parseSafeCssRules(cssText: string): ParsedCssRule[] {
   const cleaned = cssText.replace(/\/\*[\s\S]*?\*\//g, '')
+  const rawBlocks = collectRawCssBlocks(cleaned)
+  const cssVars: Record<string, string> = {}
   const rules: ParsedCssRule[] = []
-  const ruleRe = /([^{}]+)\{([^{}]*)\}/g
-  let m: RegExpExecArray | null
-  while ((m = ruleRe.exec(cleaned)) !== null) {
-    const selectorsRaw = m[1].trim()
-    const body = m[2].trim()
-    if (!selectorsRaw || !body) continue
-    const styleObj = parseSafeInlineStyle(body)
-    if (Object.keys(styleObj).length === 0) continue
-    for (const sel of selectorsRaw.split(',')) {
-      const trimmed = sel.trim()
-      if (trimmed) {
-        rules.push({ selector: trimmed, style: styleObj })
-      }
+
+  for (const blk of rawBlocks) {
+    if (/^(?::root|html|body|\*)$/i.test(blk.selector.trim())) {
+      parseSafeInlineStyle(blk.body, cssVars)
     }
   }
+
+  for (const blk of rawBlocks) {
+    const styleObj = parseSafeInlineStyle(blk.body, cssVars)
+    if (Object.keys(styleObj).length === 0) continue
+    const sel = blk.selector.trim()
+    if (/^(?::root|html)$/i.test(sel)) continue
+    if (/:{2}|:(?:focus|active|visited|before|after|placeholder)/i.test(sel)) continue
+    const isHover = /:hover\b/i.test(sel)
+    rules.push({
+      selector: sel,
+      style: styleObj,
+      isHover,
+      specificity: selectorSpecificity(sel),
+    })
+  }
   return rules
+}
+
+function matchesSingleCompound(
+  compound: string,
+  tag: string,
+  classes: Set<string>,
+  idAttr: string | null,
+): boolean {
+  const leaf = compound.replace(/:{1,2}[a-zA-Z-]+(?:\([^)]*\))?/g, '').trim()
+  if (!leaf) return false
+  if (leaf === '*') return true
+  const tagMatch = /^[a-zA-Z0-9-]+/.exec(leaf)?.[0]?.toLowerCase() ?? ''
+  if (tagMatch && tag !== tagMatch) return false
+  for (const idM of leaf.matchAll(/#([a-zA-Z0-9_-]+)/g)) {
+    if (!idAttr || idM[1] !== idAttr) return false
+  }
+  for (const clsM of leaf.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+    if (!classes.has(clsM[1])) return false
+  }
+  return true
+}
+
+function matchesSelectorWithAncestors(
+  selector: string,
+  tag: string,
+  classes: Set<string>,
+  idAttr: string | null,
+  ancestors: AncestorDescriptor[],
+): boolean {
+  const tokens = selector.trim().replace(/\s*>\s*/g, ' > ').split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return false
+  const leaf = tokens[tokens.length - 1]
+  if (!matchesSingleCompound(leaf, tag, classes, idAttr)) return false
+  if (tokens.length === 1) return true
+
+  let ancIdx = ancestors.length - 1
+  for (let i = tokens.length - 2; i >= 0; i--) {
+    const part = tokens[i]
+    if (part === '>') {
+      i--
+      if (i < 0 || ancIdx < 0) return false
+      const parent = ancestors[ancIdx--]
+      const pClasses = new Set((parent.classAttr ?? '').split(/\s+/).filter(Boolean))
+      if (!matchesSingleCompound(tokens[i], parent.tag, pClasses, parent.idAttr)) return false
+      continue
+    }
+    let matchedAnc = false
+    while (ancIdx >= 0) {
+      const anc = ancestors[ancIdx--]
+      const aClasses = new Set((anc.classAttr ?? '').split(/\s+/).filter(Boolean))
+      if (matchesSingleCompound(part, anc.tag, aClasses, anc.idAttr)) {
+        matchedAnc = true
+        break
+      }
+    }
+    if (!matchedAnc) return false
+  }
+  return true
+}
+
+export function matchElementStyles(
+  rules: ParsedCssRule[],
+  tag: string,
+  classAttr: string | null,
+  idAttr: string | null,
+  ancestors: AncestorDescriptor[] = [],
+): { style: CSSProperties; hoverStyle: CSSProperties } {
+  const classes = new Set((classAttr ?? '').split(/\s+/).filter(Boolean))
+  const matched = rules
+    .map((rule, order) => ({ rule, order }))
+    .filter(({ rule }) => matchesSelectorWithAncestors(rule.selector, tag, classes, idAttr, ancestors))
+    .sort((a, b) => {
+      const sa = a.rule.specificity ?? [0, 0, 0]
+      const sb = b.rule.specificity ?? [0, 0, 0]
+      if (sa[0] !== sb[0]) return sa[0] - sb[0]
+      if (sa[1] !== sb[1]) return sa[1] - sb[1]
+      if (sa[2] !== sb[2]) return sa[2] - sb[2]
+      return a.order - b.order
+    })
+
+  const baseStyle: Record<string, unknown> = {}
+  const hoverStyle: Record<string, unknown> = {}
+  for (const { rule } of matched) {
+    Object.assign(rule.isHover ? hoverStyle : baseStyle, rule.style)
+  }
+  return {
+    style: baseStyle as CSSProperties,
+    hoverStyle: hoverStyle as CSSProperties,
+  }
 }
 
 export function matchElementCss(
@@ -198,34 +401,9 @@ export function matchElementCss(
   tag: string,
   classAttr: string | null,
   idAttr: string | null,
+  ancestors: AncestorDescriptor[] = [],
 ): CSSProperties {
-  const classes = new Set((classAttr ?? '').split(/\s+/).filter(Boolean))
-  const merged: Record<string, unknown> = {}
-  for (const r of rules) {
-    const parts = r.selector.trim().split(/\s+/)
-    const rawLeaf = parts[parts.length - 1]
-    if (!rawLeaf) continue
-    const leaf = rawLeaf.replace(/:{1,2}[a-zA-Z-]+(?:\([^)]*\))?/g, '')
-    if (!leaf) continue
-    let matched = false
-    if (leaf === tag || leaf === '*') {
-      matched = true
-    } else if (leaf.startsWith('.') && leaf.slice(1).split('.').every((c) => classes.has(c))) {
-      matched = true
-    } else if (leaf.startsWith('#') && idAttr && leaf.slice(1) === idAttr) {
-      matched = true
-    } else if (leaf.includes('#')) {
-      const [lTag, lId] = leaf.split('#')
-      if ((lTag === '' || lTag === tag) && idAttr && lId === idAttr) matched = true
-    } else if (leaf.includes('.')) {
-      const [lTag, ...lClasses] = leaf.split('.')
-      if ((lTag === '' || lTag === tag) && lClasses.every((c) => classes.has(c))) matched = true
-    }
-    if (matched) {
-      Object.assign(merged, r.style)
-    }
-  }
-  return merged as CSSProperties
+  return matchElementStyles(rules, tag, classAttr, idAttr, ancestors).style
 }
 
 function splitTopLevelValues(raw: string): string[] {
@@ -638,80 +816,33 @@ export interface ReactComponentModel {
 export function analyzeJavaScriptAndReact(
   jsFiles: WebDevFile[],
   jsxFiles: WebDevFile[],
+  virtualElements: VirtualElementDescriptor[] = [],
+  inlineScripts: string[] = [],
 ): {
   consoleLines: string[]
   initialDomUpdates: Record<string, string>
+  initialPatches: Record<string, JsElementPatch>
+  jsSession: JsSandboxSession
   bindings: JsDomBinding[]
   reactModel: ReactComponentModel | null
 } {
-  const consoleLines: string[] = []
+  const jsSources = [...jsFiles.map((f) => f.content), ...inlineScripts]
+  const jsSession = createJsSandboxSession(jsSources, virtualElements)
+  const consoleLines = [...jsSession.initialEffects.logs]
+  const initialPatches = jsSession.initialEffects.patches
   const initialDomUpdates: Record<string, string> = {}
-  const bindings: JsDomBinding[] = []
-  const env: Record<string, unknown> = {}
-
-  const evalSimpleJs = (raw: string): unknown => {
-    const s = raw.trim().replace(/;$/, '')
-    if (s.startsWith('`') && s.endsWith('`')) {
-      return s.slice(1, -1).replace(/\$\{([^}]+)\}/g, (_m, expr: string) =>
-        String(evalSimpleJs(expr) ?? ''),
-      )
+  const elByKey = new Map(virtualElements.map((el) => [el.key, el]))
+  for (const [key, patch] of Object.entries(initialPatches)) {
+    const id = elByKey.get(key)?.id
+    if (id && patch.text !== undefined) {
+      initialDomUpdates[id] = patch.text
     }
-    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-      return s.slice(1, -1)
-    }
-    if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s)
-    if (s === 'true') return true
-    if (s === 'false') return false
-    if (s in env) return env[s]
-    if (s.startsWith('[') && s.endsWith(']')) {
-      const inner = s.slice(1, -1).trim()
-      return inner ? splitTopLevelValues(inner).map((item) => evalSimpleJs(item)) : []
-    }
-    const mapM = /^([a-zA-Z_]\w*)\.map\(\(\s*([a-zA-Z_]\w*)\s*\)\s*=>\s*(.+)\)$/.exec(s)
-    if (mapM && Array.isArray(env[mapM[1]])) {
-      const arr = env[mapM[1]] as unknown[]
-      return arr.map((el) => {
-        env[mapM[2]] = el
-        return evalSimpleJs(mapM[3])
-      })
-    }
-    if (s.includes('+')) {
-      const parts = splitTopLevelValues(s.replace(/\+/g, ','))
-      if (parts.length > 1) {
-        const vals = parts.map(evalSimpleJs)
-        if (vals.every((v) => typeof v === 'number')) {
-          return vals.reduce((a, b) => Number(a) + Number(b), 0)
-        }
-        return vals.map((v) => String(v)).join('')
-      }
-    }
-    return s
   }
+  const bindings: JsDomBinding[] = []
 
+  // Preserve lightweight legacy bindings metadata for diagnostics & backward compatibility
   for (const jf of jsFiles) {
     const text = jf.content
-    for (const line of text.split('\n')) {
-      const t = line.trim()
-      if (!t || t.startsWith('//')) continue
-      const varM = /^(?:const|let|var)\s+([a-zA-Z_]\w*)\s*=\s*(.+?);?$/.exec(t)
-      if (varM && !varM[2].includes('addEventListener') && !varM[2].startsWith('document.')) {
-        env[varM[1]] = evalSimpleJs(varM[2])
-        continue
-      }
-      const logM = /^console\.log\((.+)\);?$/.exec(t)
-      if (logM) {
-        const v = evalSimpleJs(logM[1])
-        consoleLines.push(typeof v === 'object' ? JSON.stringify(v) : String(v))
-        continue
-      }
-      const domDirectM = /^document\.getElementById\(\s*['"]([^'"]+)['"]\s*\)\.(?:textContent|innerText)\s*=\s*(.+);?$/.exec(t)
-      if (domDirectM) {
-        initialDomUpdates[domDirectM[1]] = String(evalSimpleJs(domDirectM[2]))
-      }
-    }
-
-    // Parse simple interactive listeners: btn?.addEventListener("click", () => { ... })
-    // or document.getElementById("btn")?.addEventListener("click", ...)
     const listenerRe = /(?:document\.getElementById\(\s*['"]([^'"]+)['"]\s*\)|([a-zA-Z_]\w*))\s*(?:\?\.)?addEventListener\(\s*['"](click|submit)['"]\s*,\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{([\s\S]*?)\}\s*\)/g
     let lm: RegExpExecArray | null
     while ((lm = listenerRe.exec(text)) !== null) {
@@ -720,21 +851,7 @@ export function analyzeJavaScriptAndReact(
         const declRe = new RegExp(`(?:const|let|var)\\s+${lm[2]}\\s*=\\s*document\\.getElementById\\(\\s*['"]([^'"]+)['"]\\s*\\)`)
         targetId = declRe.exec(text)?.[1] ?? lm[2]
       }
-      const event = lm[3] as 'click' | 'submit'
-      const body = lm[4]
-      const domUpdates: Record<string, string> = {}
-      let logMessage: string | undefined
-      let fetchPath: string | undefined
-
-      for (const stmt of body.split('\n')) {
-        const dM = /document\.getElementById\(\s*['"]([^'"]+)['"]\s*\)\.(?:textContent|innerText)\s*=\s*(.+?);?$/.exec(stmt.trim())
-        if (dM) domUpdates[dM[1]] = String(evalSimpleJs(dM[2]))
-        const cM = /console\.log\((.+)\);?$/.exec(stmt.trim())
-        if (cM) logMessage = String(evalSimpleJs(cM[1]))
-        const fM = /fetch\(\s*['"]([^'"]+)['"]/.exec(stmt.trim())
-        if (fM) fetchPath = fM[1]
-      }
-      bindings.push({ targetId, event, domUpdates, logMessage, fetchPath })
+      bindings.push({ targetId, event: lm[3] as 'click' | 'submit', domUpdates: {} })
     }
   }
 
@@ -767,7 +884,14 @@ export function analyzeJavaScriptAndReact(
     }
   }
 
-  return { consoleLines, initialDomUpdates, bindings, reactModel }
+  return {
+    consoleLines,
+    initialDomUpdates,
+    initialPatches,
+    jsSession,
+    bindings,
+    reactModel,
+  }
 }
 
 export function invokeVirtualFastApi(

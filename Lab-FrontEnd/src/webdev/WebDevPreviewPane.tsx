@@ -9,14 +9,24 @@ import {
   Tablet,
   Terminal,
 } from 'lucide-react'
-import { Fragment, createElement, useCallback, useMemo, useState, type ReactNode } from 'react'
-import { parse, type DefaultTreeAdapterTypes as HtmlAst } from 'parse5'
+import { Fragment, createElement, useCallback, useMemo, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Badge } from '../portal/ui'
+import {
+  parseHtmlPreview,
+  parseMarkupToAst,
+  parseTagAttrs,
+  SVG_TAGS,
+  VOID_TAGS,
+  type MarkupAstNode,
+} from './htmlAst'
+import type { JsElementPatch, JsSandboxSession } from './jsRuntime'
 import {
   invokeVirtualFastApi,
   matchElementCss,
+  matchElementStyles,
   parseSafeCssRules,
   parseSafeInlineStyle,
+  type AncestorDescriptor,
   type JsDomBinding,
   type ParsedCssRule,
   type ReactComponentModel,
@@ -30,216 +40,10 @@ import type {
 
 export type PreviewSubTab = 'preview' | 'console' | 'api' | 'db'
 
-const ALLOWED_WEB_TAGS = new Set([
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hgroup',
-  'p', 'div', 'section', 'header', 'nav', 'main', 'footer', 'article', 'aside', 'search',
-  'span', 'strong', 'em', 'b', 'i', 'u', 's', 'small', 'mark', 'time', 'abbr', 'address',
-  'cite', 'q', 'del', 'ins', 'sub', 'sup', 'kbd', 'samp', 'var', 'dfn', 'bdi', 'bdo',
-  'ruby', 'rt', 'rp', 'data', 'code', 'pre',
-  'ul', 'ol', 'li', 'dl', 'dt', 'dd',
-  'table', 'thead', 'tbody', 'tfoot', 'caption', 'colgroup', 'col', 'tr', 'th', 'td',
-  'form', 'fieldset', 'legend', 'label', 'input', 'textarea', 'select', 'optgroup', 'option',
-  'datalist', 'button', 'output', 'progress', 'meter',
-  'details', 'summary', 'dialog',
-  'a', 'hr', 'br', 'wbr', 'blockquote', 'figure', 'figcaption', 'img', 'picture',
-  'svg', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'g', 'defs', 'text', 'tspan',
-])
-
-const VOID_TAGS = new Set(['br', 'hr', 'input', 'img', 'wbr', 'col'])
-
-const SVG_TAGS = new Set([
-  'svg', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'g', 'defs', 'text', 'tspan',
-])
-
 function isSafeImageSrc(src: string | undefined): boolean {
   if (!src) return false
   const trimmed = src.trim()
   return /^(?:https?:\/\/|\/|data:image\/(?:png|jpeg|jpg|gif|webp);base64,)/i.test(trimmed)
-}
-
-interface MarkupAstNode {
-  kind: 'text' | 'element'
-  text?: string
-  tag?: string
-  attrs?: Record<string, string>
-  hasReactClick?: boolean
-  children?: MarkupAstNode[]
-}
-
-/** Convert only the visible HTML body into preview nodes. The parser never creates live DOM elements. */
-function parseHtmlPreview(markup: string): { nodes: MarkupAstNode[]; styles: string[] } {
-  const findElement = (children: HtmlAst.ChildNode[], name: string) =>
-    children.find((child): child is HtmlAst.Element => 'tagName' in child && child.tagName === name)
-  const document = parse(markup)
-  const html = findElement(document.childNodes, 'html')
-  const head = html && findElement(html.childNodes, 'head')
-  const body = html && findElement(html.childNodes, 'body')
-  const styles: string[] = []
-
-  const convert = (children: HtmlAst.ChildNode[]): MarkupAstNode[] => children.flatMap((child): MarkupAstNode[] => {
-    if (child.nodeName === '#text' && 'value' in child) return [{ kind: 'text', text: child.value }]
-    if (!('tagName' in child)) return []
-    const isHtmlNs = child.namespaceURI === 'http://www.w3.org/1999/xhtml'
-    const isSvgNs = child.namespaceURI === 'http://www.w3.org/2000/svg' && SVG_TAGS.has(child.tagName)
-    if (!isHtmlNs && !isSvgNs) return []
-    if (child.tagName === 'style') {
-      for (const text of child.childNodes) {
-        if (text.nodeName === '#text' && 'value' in text) styles.push(text.value)
-      }
-      return []
-    }
-    if (['script', 'title', 'template', 'iframe', 'object', 'noscript'].includes(child.tagName)) return []
-    const visibleChildren = convert(child.childNodes)
-    if (!ALLOWED_WEB_TAGS.has(child.tagName)) return visibleChildren
-    return [{
-      kind: 'element',
-      tag: child.tagName,
-      attrs: Object.fromEntries(child.attrs.map(({ name, value }) => [name, value])),
-      children: visibleChildren,
-    }]
-  })
-
-  // Collect style elements in source order without adding head elements to the rendered tree.
-  if (head) convert(head.childNodes)
-  const nodes = body ? convert(body.childNodes) : []
-  return { nodes, styles }
-}
-
-function parseTagAttrs(rawAttrs: string): { attrs: Record<string, string>; hasReactClick: boolean } {
-  const attrs: Record<string, string> = {}
-  let hasReactClick = false
-  let i = 0
-  const len = rawAttrs.length
-  while (i < len) {
-    while (i < len && /\s/.test(rawAttrs[i])) i++
-    if (i >= len) break
-    let name = ''
-    while (i < len && /[a-zA-Z0-9_:-]/.test(rawAttrs[i])) {
-      name += rawAttrs[i]
-      i++
-    }
-    if (!name) {
-      i++
-      continue
-    }
-    while (i < len && /\s/.test(rawAttrs[i])) i++
-    if (rawAttrs[i] !== '=') {
-      attrs[name.toLowerCase()] = ''
-      continue
-    }
-    i++
-    while (i < len && /\s/.test(rawAttrs[i])) i++
-    if (i >= len) break
-    const ch = rawAttrs[i]
-    if (ch === '"' || ch === "'") {
-      const q = ch
-      i++
-      let val = ''
-      while (i < len && rawAttrs[i] !== q) {
-        val += rawAttrs[i]
-        i++
-      }
-      if (rawAttrs[i] === q) i++
-      attrs[name.toLowerCase()] = val
-    } else if (ch === '{') {
-      let depth = 1
-      i++
-      while (i < len && depth > 0) {
-        if (rawAttrs[i] === '{') depth++
-        else if (rawAttrs[i] === '}') depth--
-        i++
-      }
-      if (name === 'onClick' || name === 'onclick') hasReactClick = true
-    } else {
-      let val = ''
-      while (i < len && !/\s/.test(rawAttrs[i])) {
-        val += rawAttrs[i]
-        i++
-      }
-      attrs[name.toLowerCase()] = val
-    }
-  }
-  return { attrs, hasReactClick }
-}
-
-/**
- * Pure TypeScript HTML/JSX tokenizer into an immutable AST without DOMParser/innerHTML,
- * ensuring DOM text is never reinterpreted as browser HTML.
- */
-function parseMarkupToAst(markup: string): MarkupAstNode[] {
-  const root: MarkupAstNode[] = []
-  const stack: Array<{ tag: string; children: MarkupAstNode[] }> = [{ tag: '__root__', children: root }]
-  let i = 0
-  const len = markup.length
-
-  const pushNode = (node: MarkupAstNode) => {
-    stack[stack.length - 1].children.push(node)
-  }
-
-  while (i < len) {
-    if (markup.startsWith('<!--', i)) {
-      const endComment = markup.indexOf('-->', i + 4)
-      i = endComment === -1 ? len : endComment + 3
-      continue
-    }
-    if (markup[i] === '<') {
-      if (markup[i + 1] === '/') {
-        const closeEnd = markup.indexOf('>', i + 2)
-        if (closeEnd === -1) break
-        const closeTag = markup.slice(i + 2, closeEnd).trim().toLowerCase()
-        for (let s = stack.length - 1; s >= 1; s--) {
-          if (stack[s].tag === closeTag) {
-            stack.length = s
-            break
-          }
-        }
-        i = closeEnd + 1
-        continue
-      }
-      if (/[a-zA-Z]/.test(markup[i + 1] ?? '')) {
-        let j = i + 1
-        let quote: string | null = null
-        let braceDepth = 0
-        while (j < len) {
-          const ch = markup[j]
-          if (quote) {
-            if (ch === quote && markup[j - 1] !== '\\') quote = null
-          } else {
-            if (ch === '"' || ch === "'") quote = ch
-            else if (ch === '{') braceDepth++
-            else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1)
-            else if (ch === '>' && braceDepth === 0) break
-          }
-          j++
-        }
-        if (j >= len) break
-        let tagHeader = markup.slice(i + 1, j).trim()
-        const selfClosing = tagHeader.endsWith('/')
-        if (selfClosing) tagHeader = tagHeader.slice(0, -1).trim()
-        const spaceIdx = tagHeader.search(/\s/)
-        const tag = (spaceIdx === -1 ? tagHeader : tagHeader.slice(0, spaceIdx)).toLowerCase()
-        const rawAttrs = spaceIdx === -1 ? '' : tagHeader.slice(spaceIdx + 1)
-        const { attrs, hasReactClick } = parseTagAttrs(rawAttrs)
-        const children: MarkupAstNode[] = []
-        if (ALLOWED_WEB_TAGS.has(tag)) {
-          pushNode({ kind: 'element', tag, attrs, hasReactClick, children })
-          if (!selfClosing && !VOID_TAGS.has(tag)) {
-            stack.push({ tag, children })
-          }
-        }
-        i = j + 1
-        continue
-      }
-    }
-
-    const nextLt = markup.indexOf('<', i + 1)
-    const cut = nextLt === -1 ? len : nextLt
-    const txt = markup.slice(i, cut)
-    if (txt) pushNode({ kind: 'text', text: txt })
-    i = cut
-  }
-
-  return root
 }
 
 function extractReactArrays(fullSource: string): Record<string, string[]> {
@@ -277,7 +81,7 @@ function renderReactTextChunks(
     if (mapM) {
       const [, arrName, , tag, rawAttrs] = mapM
       const items = arrayVars[arrName] ?? []
-      const safeTag = ALLOWED_WEB_TAGS.has(tag.toLowerCase()) ? tag.toLowerCase() : 'span'
+      const safeTag = tag.toLowerCase()
       const { attrs } = parseTagAttrs(rawAttrs)
       const cls = attrs.class || attrs.classname
       const style = matchElementCss(cssRules, safeTag, cls || null, attrs.id || null)
@@ -305,20 +109,46 @@ function renderReactTextChunks(
   return parts
 }
 
-function renderAstNodes(
-  nodes: MarkupAstNode[],
-  keyPrefix: string,
-  cssRules: ParsedCssRule[],
-  domOverrides: Record<string, string>,
-  bindings: JsDomBinding[],
-  onInvokeBinding: (binding: JsDomBinding) => void,
-  onNavigatePath: (path: string) => void,
+interface AstRenderContext {
+  cssRules: ParsedCssRule[]
+  domOverrides: Record<string, string>
+  domPatches: Record<string, JsElementPatch>
+  jsSession?: JsSandboxSession | null
+  bindings: JsDomBinding[]
+  hoveredKey: string | null
+  onHoverKey: (key: string | null) => void
+  onInputValueChange: (key: string, idAttr: string | null, value: string) => void
+  onInvokeElementEvent: (key: string, event: 'click' | 'submit', onclickAttr?: string) => void
+  onInvokeBinding: (binding: JsDomBinding) => void
+  onNavigatePath: (path: string) => void
   reactOpts?: {
     arrayVars: Record<string, string[]>
     stateVal: string | number | boolean | unknown[]
     onReactClick: () => void
-  },
+  }
+}
+
+function renderAstNodes(
+  nodes: MarkupAstNode[],
+  keyPrefix: string,
+  ctx: AstRenderContext,
+  ancestors: AncestorDescriptor[] = [],
 ): ReactNode[] {
+  const {
+    cssRules,
+    domOverrides,
+    domPatches,
+    jsSession,
+    bindings,
+    hoveredKey,
+    onHoverKey,
+    onInputValueChange,
+    onInvokeElementEvent,
+    onInvokeBinding,
+    onNavigatePath,
+    reactOpts,
+  } = ctx
+
   return nodes.map((node, idx) => {
     const key = `${keyPrefix}-${idx}`
     if (node.kind === 'text') {
@@ -332,10 +162,24 @@ function renderAstNodes(
     const tag = node.tag ?? 'div'
     const attrs = node.attrs ?? {}
     const idAttr = attrs.id || null
-    const classAttr = attrs.class || attrs.classname || null
-    const computedStyle = {
-      ...matchElementCss(cssRules, tag, classAttr, idAttr),
+    const patch = domPatches[key]
+    const classAttr = patch
+      ? patch.classes.join(' ') || null
+      : attrs.class || attrs.classname || null
+    const { style: matchedStyle, hoverStyle } = matchElementStyles(
+      cssRules,
+      tag,
+      classAttr,
+      idAttr,
+      ancestors,
+    )
+    const hasHover = Object.keys(hoverStyle).length > 0
+    const isHovered = hasHover && hoveredKey === key
+    const computedStyle: Record<string, unknown> = {
+      ...matchedStyle,
       ...parseSafeInlineStyle(attrs.style),
+      ...(isHovered ? hoverStyle : {}),
+      ...(patch?.styles ?? {}),
     }
 
     const commonProps: Record<string, unknown> = {
@@ -346,7 +190,11 @@ function renderAstNodes(
       dir: attrs.dir === 'ltr' || attrs.dir === 'rtl' || attrs.dir === 'auto' ? attrs.dir : undefined,
       lang: attrs.lang || undefined,
       role: attrs.role || undefined,
-      hidden: 'hidden' in attrs ? true : undefined,
+      hidden: patch?.hidden ?? ('hidden' in attrs ? true : undefined),
+    }
+    if (hasHover) {
+      commonProps.onMouseEnter = () => onHoverKey(key)
+      commonProps.onMouseLeave = () => onHoverKey(null)
     }
     for (const [k, v] of Object.entries(attrs)) {
       if (/^aria-[a-z-]+$/.test(k)) commonProps[k] = v
@@ -368,6 +216,8 @@ function renderAstNodes(
           min: attrs.min || undefined,
           max: attrs.max || undefined,
           step: attrs.step || undefined,
+          onChange: (e: ChangeEvent<HTMLInputElement>) =>
+            onInputValueChange(key, idAttr, e.target.value),
         })
       }
       if (tag === 'img') {
@@ -383,20 +233,21 @@ function renderAstNodes(
       return createElement(tag, commonProps)
     }
 
-    const overrideText = idAttr && idAttr in domOverrides ? domOverrides[idAttr] : null
+    const nextAncestors = [...ancestors, { tag, classAttr, idAttr }]
+    const overrideText = patch?.text !== undefined
+      ? patch.text
+      : idAttr && idAttr in domOverrides
+        ? domOverrides[idAttr]
+        : null
     const children =
-      overrideText !== null
-        ? overrideText
-        : renderAstNodes(
-            node.children ?? [],
-            key,
-            cssRules,
-            domOverrides,
-            bindings,
-            onInvokeBinding,
-            onNavigatePath,
-            reactOpts,
-          )
+      patch?.innerHtml !== undefined
+        ? renderAstNodes(parseMarkupToAst(patch.innerHtml), `${key}-ih`, ctx, nextAncestors)
+        : overrideText !== null
+          ? overrideText
+          : renderAstNodes(node.children ?? [], key, ctx, nextAncestors)
+
+    const onclickAttr = attrs.onclick
+    const hasJsClick = jsSession?.hasClickHandler(key, onclickAttr) ?? false
 
     if (tag === 'button') {
       const bound = idAttr ? bindings.find((b) => b.targetId === idAttr && b.event === 'click') : undefined
@@ -407,9 +258,13 @@ function renderAstNodes(
           type="button"
           className={classAttr ? `wd-btn ${classAttr}` : 'wd-btn'}
           style={computedStyle}
+          onMouseEnter={hasHover ? () => onHoverKey(key) : undefined}
+          onMouseLeave={hasHover ? () => onHoverKey(null) : undefined}
           onClick={() => {
             if (node.hasReactClick && reactOpts) {
               reactOpts.onReactClick()
+            } else if (hasJsClick) {
+              onInvokeElementEvent(key, 'click', onclickAttr)
             } else if (bound) {
               onInvokeBinding(bound)
             }
@@ -428,8 +283,11 @@ function renderAstNodes(
           type="button"
           className={classAttr ? `wd-link ${classAttr}` : 'wd-link'}
           style={computedStyle}
+          onMouseEnter={hasHover ? () => onHoverKey(key) : undefined}
+          onMouseLeave={hasHover ? () => onHoverKey(null) : undefined}
           onClick={() => {
-            if (href.startsWith('/')) onNavigatePath(href)
+            if (hasJsClick) onInvokeElementEvent(key, 'click', onclickAttr)
+            else if (href.startsWith('/')) onNavigatePath(href)
           }}
         >
           {children}
@@ -447,6 +305,7 @@ function renderAstNodes(
           style={computedStyle}
           onSubmit={(e) => {
             e.preventDefault()
+            if (jsSession) onInvokeElementEvent(key, 'submit')
             if (bound) onInvokeBinding(bound)
           }}
         >
@@ -465,12 +324,18 @@ function renderAstNodes(
       if ('disabled' in attrs) extraProps.disabled = true
       if ('required' in attrs) extraProps.required = true
       if ('readonly' in attrs) extraProps.readOnly = true
+      extraProps.onChange = (e: ChangeEvent<HTMLTextAreaElement>) =>
+        onInputValueChange(key, idAttr, e.target.value)
     }
     if (tag === 'select' || tag === 'option') {
       if (attrs.name) extraProps.name = attrs.name
-      if (attrs.value) extraProps.value = attrs.value
+      if (attrs.value) extraProps.defaultValue = attrs.value
       if ('disabled' in attrs) extraProps.disabled = true
       if ('multiple' in attrs) extraProps.multiple = true
+      if (tag === 'select') {
+        extraProps.onChange = (e: ChangeEvent<HTMLSelectElement>) =>
+          onInputValueChange(key, idAttr, e.target.value)
+      }
     }
     if (tag === 'th' || tag === 'td') {
       if (attrs.colspan) extraProps.colSpan = Number(attrs.colspan) || undefined
@@ -494,6 +359,10 @@ function renderAstNodes(
         if (mapped) extraProps[mapped] = v
       }
     }
+    if (hasJsClick) {
+      extraProps.onClick = () => onInvokeElementEvent(key, 'click', onclickAttr)
+      if (!computedStyle.cursor) computedStyle.cursor = 'pointer'
+    }
 
     return createElement(
       tag,
@@ -510,12 +379,15 @@ function renderAstNodes(
 export interface WebDevPreviewPaneProps {
   files: WebDevFile[]
   lang: 'id' | 'en'
+  execRunId?: number
   renderReady: boolean
   activeSubTab: PreviewSubTab
   onSubTabChange: (tab: PreviewSubTab) => void
   consoleLines: string[]
   pythonLines: string[]
   initialDomUpdates: Record<string, string>
+  initialPatches?: Record<string, JsElementPatch>
+  jsSession?: JsSandboxSession | null
   bindings: JsDomBinding[]
   reactModel: ReactComponentModel | null
   apiRoutes: WebDevFastApiRoute[]
@@ -530,12 +402,15 @@ export interface WebDevPreviewPaneProps {
 export function WebDevPreviewPane({
   files,
   lang,
+  execRunId = 0,
   renderReady,
   activeSubTab,
   onSubTabChange,
   consoleLines,
   pythonLines,
   initialDomUpdates,
+  initialPatches,
+  jsSession = null,
   bindings,
   reactModel,
   apiRoutes,
@@ -552,11 +427,26 @@ export function WebDevPreviewPane({
   const [urlInput, setUrlInput] = useState('http://localhost:3000/')
   const [activePath, setActivePath] = useState('/')
   const [domOverrides, setDomOverrides] = useState<Record<string, string>>({})
+  const [patchState, setPatchState] = useState<{
+    runId: number
+    patches: Record<string, JsElementPatch>
+    alertMsg: string | null
+  }>(() => ({ runId: execRunId, patches: initialPatches ?? {}, alertMsg: null }))
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+  const [liveInputValues, setLiveInputValues] = useState<Record<string, string>>({})
   const [reactCounter, setReactCounter] = useState<string | number | boolean | unknown[]>(
     () => reactModel?.initialValue ?? 0,
   )
   const [apiJsonView, setApiJsonView] = useState<{ status: number; path: string; body: unknown } | null>(null)
   const [aiPrompt, setAiPrompt] = useState('Optimasi query PostgreSQL dan komponen React')
+
+  const activePatches = useMemo(
+    () => (patchState.runId === execRunId ? patchState.patches : (initialPatches ?? {})),
+    [execRunId, initialPatches, patchState.patches, patchState.runId],
+  )
+  const activeAlertMsg = patchState.runId === execRunId
+    ? patchState.alertMsg
+    : jsSession?.initialEffects.alerts.at(-1) ?? null
 
   const cssText = useMemo(
     () =>
@@ -619,6 +509,34 @@ export function WebDevPreviewPane({
     [handleTestRoute, onConsoleLogAdded],
   )
 
+  const handleInputValueChange = useCallback(
+    (key: string, idAttr: string | null, value: string) => {
+      setLiveInputValues((prev) => ({
+        ...prev,
+        [key]: value,
+        ...(idAttr ? { [idAttr]: value } : {}),
+      }))
+    },
+    [],
+  )
+
+  const handleInvokeElementEvent = useCallback(
+    (key: string, event: 'click' | 'submit', onclickAttr?: string) => {
+      if (!jsSession) return
+      const effects = jsSession.triggerEvent(key, event, liveInputValues, onclickAttr)
+      setPatchState({
+        runId: execRunId,
+        patches: effects.patches,
+        alertMsg: effects.alerts.at(-1) ?? null,
+      })
+      for (const line of effects.logs) onConsoleLogAdded(line)
+      for (const path of effects.fetchPaths) {
+        handleTestRoute(path.includes('/ai') ? 'POST' : 'GET', path, true)
+      }
+    },
+    [execRunId, handleTestRoute, jsSession, liveInputValues, onConsoleLogAdded],
+  )
+
   const combinedDom = useMemo(
     () => ({ ...initialDomUpdates, ...domOverrides }),
     [initialDomUpdates, domOverrides],
@@ -627,26 +545,36 @@ export function WebDevPreviewPane({
   const renderedNodes = useMemo(() => {
     if (!renderReady) return null
 
+    const navigatePath = (p: string) => {
+      if (p === '/') {
+        setActivePath('/')
+        setApiJsonView(null)
+        setUrlInput('http://localhost:3000/')
+      } else {
+        handleTestRoute('GET', p, false)
+      }
+    }
+
+    const baseCtx: AstRenderContext = {
+      cssRules,
+      domOverrides: combinedDom,
+      domPatches: activePatches,
+      jsSession,
+      bindings,
+      hoveredKey,
+      onHoverKey: setHoveredKey,
+      onInputValueChange: handleInputValueChange,
+      onInvokeElementEvent: handleInvokeElementEvent,
+      onInvokeBinding: handleInvokeBinding,
+      onNavigatePath: navigatePath,
+    }
+
     if (jsxFile && reactModel) {
       const ast = parseMarkupToAst(reactModel.jsxTemplate)
       const arrayVars = extractReactArrays(jsxFile.content)
-      return renderAstNodes(
-        ast,
-        'wd-react',
-        cssRules,
-        combinedDom,
-        bindings,
-        handleInvokeBinding,
-        (p) => {
-          if (p === '/') {
-            setActivePath('/')
-            setApiJsonView(null)
-            setUrlInput('http://localhost:3000/')
-          } else {
-            handleTestRoute('GET', p, false)
-          }
-        },
-        {
+      return renderAstNodes(ast, 'wd-react', {
+        ...baseCtx,
+        reactOpts: {
           arrayVars,
           stateVal: reactCounter,
           onReactClick: () => {
@@ -658,34 +586,23 @@ export function WebDevPreviewPane({
             })
           },
         },
-      )
+      })
     }
 
     if (!htmlPreview) return null
-    return renderAstNodes(
-      htmlPreview.nodes,
-      'wd-html',
-      cssRules,
-      combinedDom,
-      bindings,
-      handleInvokeBinding,
-      (p) => {
-        if (p === '/') {
-          setActivePath('/')
-          setApiJsonView(null)
-          setUrlInput('http://localhost:3000/')
-        } else {
-          handleTestRoute('GET', p, false)
-        }
-      },
-    )
+    return renderAstNodes(htmlPreview.nodes, 'wd-html', baseCtx)
   }, [
+    activePatches,
     bindings,
     combinedDom,
     cssRules,
+    handleInputValueChange,
     handleInvokeBinding,
+    handleInvokeElementEvent,
     handleTestRoute,
+    hoveredKey,
     htmlPreview,
+    jsSession,
     jsxFile,
     onConsoleLogAdded,
     reactCounter,
@@ -866,6 +783,11 @@ export function WebDevPreviewPane({
             ) : renderedNodes ? (
               <div className="wd-rendered-dom">
                 {renderedNodes}
+                {activeAlertMsg && (
+                  <div className="wd-last-http-banner" role="status">
+                    <span>alert(): {activeAlertMsg}</span>
+                  </div>
+                )}
                 {httpLogs.length > 0 && (
                   <div className="wd-last-http-banner">
                     <span>
