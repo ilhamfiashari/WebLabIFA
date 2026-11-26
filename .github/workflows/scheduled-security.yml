@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Filesystem vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: fs
           scan-ref: .
@@ -136,7 +136,7 @@ jobs:
           test -n "$(docker inspect --format '{{.Config.User}}' ifa-lab-frontend:scheduled)"
 
       - name: Backend container vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ifa-lab-backend:scheduled
           format: table
@@ -145,7 +145,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Frontend container vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ifa-lab-frontend:scheduled
           format: table

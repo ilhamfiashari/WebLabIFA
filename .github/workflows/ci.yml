@@ -109,7 +109,7 @@ jobs:
           test "$(docker inspect --format '{{.Config.User}}' ifa-lab-backend:ci)" = "10001:10001"
           test -n "$(docker inspect --format '{{.Config.User}}' ifa-lab-frontend:ci)"
       - name: Container vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ifa-lab-backend:ci
           format: table
@@ -117,7 +117,7 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
       - name: Frontend container vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ifa-lab-frontend:ci
           format: table
