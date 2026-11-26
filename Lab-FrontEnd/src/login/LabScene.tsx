@@ -50,8 +50,8 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
         if (active) { ctx.save(); ctx.globalCompositeOperation = 'screen'; const g = ctx.createRadialGradient(x, y, 0, x, y, radius * 5); g.addColorStop(0, color + 'b0'); g.addColorStop(1, color + '00'); ctx.fillStyle = g; ctx.fillRect(x - radius * 5, y - radius * 5, radius * 10, radius * 10); ctx.restore() }
       }
       const packet = settings.network > 0 && (t % (3 - settings.network * .018)) < .17
-      led(night ? 960 : 982, night ? 683 : 699, '#ff4437', reduce.matches || t % 2 < .2 || (t % 2 > .35 && t % 2 < .48), 3.2)
-      led(night ? 943 : 945, night ? 680 : 700, '#659cff', true, 2)
+      led(warmAngle ? 960 : 982, warmAngle ? 683 : 699, '#ff4437', reduce.matches || t % 2 < .2 || (t % 2 > .35 && t % 2 < .48), 3.2)
+      led(warmAngle ? 943 : 945, warmAngle ? 680 : 700, '#659cff', true, 2)
       const greenLevel = greenLedLevel(t, settings.distance, reduce.matches)
       if (greenDimmer) { ctx.save(); ctx.globalAlpha = 1 - greenLevel; ctx.drawImage(greenDimmer, 1110, 674); ctx.restore() }
       // The painted bulb and the desk reflection share the same light envelope.
@@ -63,13 +63,13 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
         reflection.addColorStop(0, '#68ff6438'); reflection.addColorStop(1, '#68ff6400')
         ctx.fillStyle = reflection; ctx.fillRect(-35, -35, 70, 70); ctx.restore()
       }
-      for (let i = 0; i < 7; i++) led((night ? 670 : 685) + i * 4.6, (night ? 154 : 158) + i * .46, '#7efb76', i === 0 || (settings.network > 0 && (t * (1 + settings.network / 45) + i * .24) % 1.7 < 1.1), 1.35)
+      for (let i = 0; i < 7; i++) led((warmAngle ? 668 : 685) + i * (warmAngle ? 4.4 : 4.6), (warmAngle ? 154 : 158) + i * .46, '#7efb76', i === 0 || (settings.network > 0 && (t * (1 + settings.network / 45) + i * .24) % 1.7 < 1.1), 1.35)
       for (let i = 0; i < 20; i++) led(196 + i * 7.5, 91 + i * .66, '#a0ed56', i === 0 || (settings.network > 0 && (t * 1.7 + i * .17) % 2 < .8), 1.4)
       if (settings.network > 0) for (let i = 0; i < 8; i++) {
         const p = (t * (.25 + settings.network / 120) + i * .19) % 1
         ctx.save(); ctx.globalAlpha = Math.sin(p * Math.PI) * .8; ctx.fillStyle = '#85e7ff'; ctx.beginPath(); ctx.ellipse(207 + i * 9 + Math.sin(p * Math.PI) * 11, 173 + p * 51, 1.4, 2.1, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
       }
-      if (packet) { ctx.save(); ctx.globalAlpha = .35; ctx.strokeStyle = '#9be8d3'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(night ? 672 : 698, 146, 15 + (t % 1) * 15, 4 + (t % 1) * 5, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.restore() }
+      if (packet) { ctx.save(); ctx.globalAlpha = .35; ctx.strokeStyle = '#9be8d3'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(warmAngle ? 672 : 698, 146, 15 + (t % 1) * 15, 4 + (t % 1) * 5, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.restore() }
       // Ultrasonic echo leaves the transducer in a short burst rather than floating through the room.
       if (laptopSceneAt(t, settings.program).mode === 'iot' && !reduce.matches) {
         ctx.save(); ctx.globalAlpha = (1 - t % 1.6 / 1.6) * .22; ctx.strokeStyle = '#79d2df'; ctx.lineWidth = 1.2
