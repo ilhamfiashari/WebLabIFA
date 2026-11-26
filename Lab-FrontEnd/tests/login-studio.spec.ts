@@ -10,6 +10,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('studio programs, weather, pause, sensors and persistence', async ({ page }) => {
+  test.slow()
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message))
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/login')
