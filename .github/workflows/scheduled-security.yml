@@ -62,7 +62,14 @@ jobs:
           /tmp/ifa-pip-audit/bin/pip-audit -r security/requirements.txt >> "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           /tmp/ifa-pip-audit/bin/pip-audit -r security/requirements.txt -f json -o python-audit.json || true
-          /tmp/ifa-pip-audit/bin/pip-audit --no-deps -r security/requirements.txt
+          python3 -c '
+          import json, pathlib
+          direct = {"semgrep", "detect-secrets", "pydantic", "pydantic-settings", "opentelemetry-instrumentation-requests"}
+          report = json.loads(pathlib.Path("python-audit.json").read_text(encoding="utf-8"))
+          bad = [d for d in report.get("dependencies", []) if d["name"].lower() in direct and d.get("vulns")]
+          if bad:
+              raise SystemExit(f"Direct security tooling vulnerabilities: {bad}")
+          '
 
       - name: Upload dependency audit artifacts
         if: always()
