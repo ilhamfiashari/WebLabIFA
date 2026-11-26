@@ -9,7 +9,7 @@ RUN npm ci
 COPY Lab-FrontEnd/ ./
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 USER root
 RUN apk update && apk upgrade --no-cache
 USER 101:101
