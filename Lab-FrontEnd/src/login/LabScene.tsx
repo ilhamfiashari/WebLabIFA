@@ -43,9 +43,19 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
       const indoorSway = settings.leaves && !reduce.matches ? indoorFoliage.draw(ctx, t) : 0
       drawLabScreen(screenCtx, t, settings.program, weather, settings.distance, settings.network)
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
-      projector.project(ctx, screen, warmAngle ? [[43, 248], [736, 281], [790, 665], [85, 730]] : [[43, 246], [752, 284], [802, 687], [87, 740]])
-      const led = (x: number, y: number, color: string, active: boolean, radius = 2) => {
-        if (!active) { ctx.save(); const dim = ctx.createRadialGradient(x, y, 0, x, y, radius * 4); dim.addColorStop(0, 'rgba(5,8,9,.7)'); dim.addColorStop(1, 'rgba(5,8,9,0)'); ctx.fillStyle = dim; ctx.fillRect(x - radius * 4, y - radius * 4, radius * 8, radius * 8); ctx.restore() }
+      projector.project(
+        ctx,
+        screen,
+        warmAngle ? [[42, 247], [741, 280], [791, 667], [84, 731]] : [[42, 245], [758, 283], [810, 687], [85, 741]],
+        10,
+        8,
+        [9, 9, 4, 4],
+      )
+      const led = (x: number, y: number, color: string, active: boolean, radius = 2, softDim = false) => {
+        if (!active) {
+          if (softDim) return
+          ctx.save(); const dim = ctx.createRadialGradient(x, y, 0, x, y, radius * 4); dim.addColorStop(0, 'rgba(5,8,9,.7)'); dim.addColorStop(1, 'rgba(5,8,9,0)'); ctx.fillStyle = dim; ctx.fillRect(x - radius * 4, y - radius * 4, radius * 8, radius * 8); ctx.restore()
+        }
         ctx.fillStyle = active ? color : '#243a2c'; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill()
         if (active) { ctx.save(); ctx.globalCompositeOperation = 'screen'; const g = ctx.createRadialGradient(x, y, 0, x, y, radius * 5); g.addColorStop(0, color + 'b0'); g.addColorStop(1, color + '00'); ctx.fillStyle = g; ctx.fillRect(x - radius * 5, y - radius * 5, radius * 10, radius * 10); ctx.restore() }
       }
@@ -64,7 +74,13 @@ export function LabScene({ scene, weather, settings, en, onSample }: { scene: Sc
         ctx.fillStyle = reflection; ctx.fillRect(-35, -35, 70, 70); ctx.restore()
       }
       for (let i = 0; i < 7; i++) led((warmAngle ? 668 : 685) + i * (warmAngle ? 4.4 : 4.6), (warmAngle ? 154 : 158) + i * .46, '#7efb76', i === 0 || (settings.network > 0 && (t * (1 + settings.network / 45) + i * .24) % 1.7 < 1.1), 1.35)
-      for (let i = 0; i < 20; i++) led(196 + i * 7.5, 91 + i * .66, '#a0ed56', i === 0 || (settings.network > 0 && (t * 1.7 + i * .17) % 2 < .8), 1.4)
+      // Rack switch LEDs mapped strictly to the physical left port bank, right top indicators, and right port bank (skipping the blank center panel).
+      const swLeftX = [195, 207, 219, 232, 244, 256]
+      swLeftX.forEach((lx, i) => led(lx, (warmAngle ? 92 : 90) + i * 1.15, '#a0ed56', i === 0 || (settings.network > 0 && (t * 1.7 + i * .29) % 2 < .85), 1.3, true))
+      const swRightTopX = [285, 297, 309, 320, 331]
+      swRightTopX.forEach((rx, i) => led(rx, (warmAngle ? 90 : 88) + i * 1.4, '#8ee86c', i === 0 || (settings.network > 0 && (t * 1.4 + i * .37) % 2.1 < .95), 1.2, true))
+      const swRightX = [280, 291, 302, 312, 322, 332, 342]
+      swRightX.forEach((rx, i) => led(rx, (warmAngle ? 102 : 100) + i * 1.35, '#a0ed56', i === 0 || (settings.network > 0 && (t * 1.85 + i * .23) % 1.8 < .85), 1.3, true))
       if (settings.network > 0) for (let i = 0; i < 8; i++) {
         const p = (t * (.25 + settings.network / 120) + i * .19) % 1
         ctx.save(); ctx.globalAlpha = Math.sin(p * Math.PI) * .8; ctx.fillStyle = '#85e7ff'; ctx.beginPath(); ctx.ellipse(207 + i * 9 + Math.sin(p * Math.PI) * 11, 173 + p * 51, 1.4, 2.1, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()

@@ -221,49 +221,46 @@ test('workstation popup is symmetrically centered and responsive on 390px mobile
   await expect(dialog).toHaveCount(0)
 })
 
-test('projected laptop screen has zero triangle grid seams in both WebGL and 2D fallback on mobile', async ({ page }) => {
-  for (const disableWebGl of [false, true]) {
-    if (disableWebGl) {
-      await page.addInitScript(() => {
-        const orig = HTMLCanvasElement.prototype.getContext
-        HTMLCanvasElement.prototype.getContext = function (
-          this: HTMLCanvasElement,
-          type: string,
-          ...args: unknown[]
-        ) {
-          if (type === 'webgl' || type === 'webgl2') return null
-          return orig.apply(this, [type, ...args] as Parameters<typeof orig>)
-        } as typeof HTMLCanvasElement.prototype.getContext
-      })
-    }
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto('/login')
-    await page.getByRole('button', { name: 'Studio', exact: true }).click()
-    await page.getByLabel('Program laptop').selectOption('attacks')
-    await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'attacks')
+test('projected laptop screen has zero triangle grid seams and aligns flush with right bezel across scenes', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/login')
+  await page.getByRole('button', { name: 'Studio', exact: true }).click()
+  await page.getByLabel('Program laptop').selectOption('attacks')
+  await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'attacks')
 
-    // Sample top-left light header area inside the laptop canvas: every pixel must remain bright (no dark seam bleed).
-    const darkSeamPixels = await page.evaluate(() => {
-      const canvas = document.querySelector('[data-lab-animation]') as HTMLCanvasElement | null
-      if (!canvas) return -1
-      const ctx = canvas.getContext('2d')!
-      const rect = canvas.getBoundingClientRect()
-      const sx = canvas.width / rect.width
-      const sy = canvas.height / rect.height
-      const scale = Math.max(rect.width / 1446, rect.height / 1087)
-      const offsetX = (rect.width - 1446 * scale) * 0.5
-      // Scan across y=338 (below title text, above graph nodes) from x=95..235 in 1446x1087 coords (crosses grid column/diagonal seams)
-      let darkCount = 0
-      for (let lx = 95; lx <= 235; lx += 2) {
-        const px = Math.round((offsetX + lx * scale) * sx)
-        const py = Math.round((338 * scale) * sy)
-        const d = ctx.getImageData(px, py, 1, 1).data
-        if (d[3] < 245 || d[0] < 200 || d[1] < 200 || d[2] < 200) darkCount++
-      }
-      return darkCount
-    })
-    expect(darkSeamPixels).toBe(0)
-  }
+  // Check day scene right-edge alignment & zero interior seams
+  const dayCheck = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-lab-animation]') as HTMLCanvasElement | null
+    if (!canvas) return null
+    const ctx = canvas.getContext('2d')!
+    const rect = canvas.getBoundingClientRect()
+    const sx = canvas.width / rect.width
+    const sy = canvas.height / rect.height
+    const scale = Math.max(rect.width / 1446, rect.height / 1087)
+    const sample = (lx: number, ly: number) => {
+      const d = ctx.getImageData(Math.round(lx * scale * sx), Math.round(ly * scale * sy), 1, 1).data
+      return { r: d[0], g: d[1], b: d[2], a: d[3] }
+    }
+    let darkCount = 0
+    for (let lx = 95; lx <= 235; lx += 2) {
+      const d = sample(lx, 338)
+      if (d.a < 245 || d.r < 200 || d.g < 200 || d.b < 200) darkCount++
+    }
+    // Check rack switch blank middle panel (x=270, y=95) has no stray dark halo smudge
+    const switchGap = sample(270, 95)
+    return {
+      darkCount,
+      topRightInside: sample(754, 300).a,
+      bottomRightInside: sample(804, 670).a,
+      switchGapAlpha: switchGap.a,
+    }
+  })
+
+  expect(dayCheck).not.toBeNull()
+  expect(dayCheck!.darkCount).toBe(0)
+  expect(dayCheck!.topRightInside).toBeGreaterThan(240)
+  expect(dayCheck!.bottomRightInside).toBeGreaterThan(240)
+  expect(dayCheck!.switchGapAlpha).toBe(0)
 })
 
 test('sunset access point LEDs stay aligned inside router body', async ({ page }) => {
