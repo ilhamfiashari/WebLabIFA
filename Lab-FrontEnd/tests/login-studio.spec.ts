@@ -228,39 +228,49 @@ test('projected laptop screen has zero triangle grid seams and aligns flush with
   await page.getByLabel('Program laptop').selectOption('attacks')
   await expect(page.locator('[data-lab-animation]')).toHaveAttribute('data-program', 'attacks')
 
-  // Check day scene right-edge alignment & zero interior seams
-  const dayCheck = await page.evaluate(() => {
-    const canvas = document.querySelector('[data-lab-animation]') as HTMLCanvasElement | null
-    if (!canvas) return null
-    const ctx = canvas.getContext('2d')!
-    const rect = canvas.getBoundingClientRect()
-    const sx = canvas.width / rect.width
-    const sy = canvas.height / rect.height
-    const scale = Math.max(rect.width / 1446, rect.height / 1087)
-    const sample = (lx: number, ly: number) => {
-      const d = ctx.getImageData(Math.round(lx * scale * sx), Math.round(ly * scale * sy), 1, 1).data
-      return { r: d[0], g: d[1], b: d[2], a: d[3] }
-    }
-    let darkCount = 0
-    for (let lx = 95; lx <= 235; lx += 2) {
-      const d = sample(lx, 338)
-      if (d.a < 245 || d.r < 200 || d.g < 200 || d.b < 200) darkCount++
-    }
-    // Check rack switch blank middle panel (x=270, y=95) has no stray dark halo smudge
-    const switchGap = sample(270, 95)
-    return {
-      darkCount,
-      topRightInside: sample(754, 300).a,
-      bottomRightInside: sample(804, 670).a,
-      switchGapAlpha: switchGap.a,
-    }
-  })
+  const sampleScene = async (lighting: 'day' | 'sunset', topRightX: number, bottomRightX: number, bottomRightY: number) => {
+    await page.getByLabel('Pencahayaan ruang').selectOption(lighting)
+    await expect(page.locator('.hero-image')).toHaveAttribute('src', `/assets/login/lab-${lighting}.webp`)
+    return page.evaluate(({ trX, brX, brY }) => {
+      const canvas = document.querySelector('[data-lab-animation]') as HTMLCanvasElement | null
+      if (!canvas) return null
+      const ctx = canvas.getContext('2d')!
+      const rect = canvas.getBoundingClientRect()
+      const sx = canvas.width / rect.width
+      const sy = canvas.height / rect.height
+      const scale = Math.max(rect.width / 1446, rect.height / 1087)
+      const sample = (lx: number, ly: number) => {
+        const d = ctx.getImageData(Math.round(lx * scale * sx), Math.round(ly * scale * sy), 1, 1).data
+        return { r: d[0], g: d[1], b: d[2], a: d[3] }
+      }
+      let darkCount = 0
+      for (let lx = 95; lx <= 235; lx += 2) {
+        const d = sample(lx, 338)
+        if (d.a < 245 || d.r < 200 || d.g < 200 || d.b < 200) darkCount++
+      }
+      const switchGap = sample(270, 95)
+      return {
+        darkCount,
+        topRightInside: sample(trX, 300).a,
+        bottomRightInside: sample(brX, brY).a,
+        switchGapAlpha: switchGap.a,
+      }
+    }, { trX: topRightX, brX: bottomRightX, brY: bottomRightY })
+  }
 
+  const dayCheck = await sampleScene('day', 754, 804, 670)
   expect(dayCheck).not.toBeNull()
   expect(dayCheck!.darkCount).toBe(0)
   expect(dayCheck!.topRightInside).toBeGreaterThan(240)
   expect(dayCheck!.bottomRightInside).toBeGreaterThan(240)
   expect(dayCheck!.switchGapAlpha).toBe(0)
+
+  const sunsetCheck = await sampleScene('sunset', 737, 787, 655)
+  expect(sunsetCheck).not.toBeNull()
+  expect(sunsetCheck!.darkCount).toBe(0)
+  expect(sunsetCheck!.topRightInside).toBeGreaterThan(240)
+  expect(sunsetCheck!.bottomRightInside).toBeGreaterThan(240)
+  expect(sunsetCheck!.switchGapAlpha).toBe(0)
 })
 
 test('sunset access point LEDs stay aligned inside router body', async ({ page }) => {
