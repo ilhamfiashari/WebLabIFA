@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload dependency audit artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: scheduled-dependency-audit-${{ github.run_id }}
           path: |
@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload SAST & secret scan artifacts
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: scheduled-sast-secrets-${{ github.run_id }}
           path: |
