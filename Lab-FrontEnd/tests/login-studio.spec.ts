@@ -265,3 +265,34 @@ test('projected laptop screen has zero triangle grid seams in both WebGL and 2D 
     expect(darkSeamPixels).toBe(0)
   }
 })
+
+test('sunset access point LEDs stay aligned inside router body', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/login')
+  await page.getByRole('button', { name: 'Studio', exact: true }).click()
+  await page.getByLabel('Pencahayaan ruang').selectOption('sunset')
+  await expect(page.locator('.hero-image')).toHaveAttribute('src', '/assets/login/lab-sunset.webp')
+
+  const apCheck = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-lab-animation]') as HTMLCanvasElement | null
+    if (!canvas) return null
+    const ctx = canvas.getContext('2d')!
+    const rect = canvas.getBoundingClientRect()
+    const sx = canvas.width / rect.width
+    const sy = canvas.height / rect.height
+    const scale = Math.max(rect.width / 1446, rect.height / 1087)
+    const sample = (lx: number, ly: number) => {
+      const d = ctx.getImageData(Math.round(lx * scale * sx), Math.round(ly * scale * sy), 1, 1).data
+      return { r: d[0], g: d[1], b: d[2], a: d[3] }
+    }
+    return {
+      insideLed1: sample(668, 154),
+      outsideOldPos: sample(713, 161),
+    }
+  })
+
+  expect(apCheck).not.toBeNull()
+  expect(apCheck!.insideLed1.a).toBeGreaterThan(200)
+  expect(apCheck!.insideLed1.g).toBeGreaterThan(200)
+  expect(apCheck!.outsideOldPos.a).toBe(0)
+})
