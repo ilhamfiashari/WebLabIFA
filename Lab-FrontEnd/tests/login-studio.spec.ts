@@ -36,7 +36,7 @@ test('studio programs, weather, pause, sensors and persistence', async ({ page }
   await page.getByLabel('Jarak ultrasonik').fill('25')
   await page.getByLabel('Tema login').selectOption('dark')
   await expect(page.locator('.login-v2-net-up')).toHaveText('↑ 0.0 Mbps')
-  await expect(page.locator('.login-sensor-note')).toContainText('25.')
+  await expect(page.locator('.login-sensor-note')).toContainText(/2(?:4\.[6-9]|5\.[0-4]) cm/)
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Studio', exact: true })).toBeFocused()
   await page.getByRole('button', { name: 'Jeda animasi', exact: true }).click()

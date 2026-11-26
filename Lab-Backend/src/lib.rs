@@ -24,7 +24,7 @@ use openidconnect::{
     AuthorizationCode, CsrfToken, Nonce, PkceCodeChallenge, PkceCodeVerifier, Scope, TokenResponse,
     core::CoreAuthenticationFlow,
 };
-use rand::{RngCore, rngs::OsRng};
+use rand::{TryRng, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, PgPool};
@@ -302,7 +302,9 @@ pub fn router(state: AppState) -> Router {
 
 pub fn random_token() -> String {
     let mut bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut bytes);
+    SysRng
+        .try_fill_bytes(&mut bytes)
+        .expect("system RNG should provide random bytes");
     hex::encode(bytes)
 }
 pub fn hash(value: &str) -> String {

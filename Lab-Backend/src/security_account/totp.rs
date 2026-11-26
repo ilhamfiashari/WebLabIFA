@@ -1,8 +1,5 @@
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
-};
-use rand::RngCore;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
@@ -166,9 +163,8 @@ pub fn sha256_hex(input: &str) -> String {
 }
 
 pub fn argon2_hash_secret(secret: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
     Ok(Argon2::default()
-        .hash_password(secret.as_bytes(), &salt)?
+        .hash_password(secret.as_bytes())?
         .to_string())
 }
 
@@ -183,13 +179,13 @@ pub fn argon2_verify_secret(secret: &str, phc_hash: &str) -> bool {
 
 pub fn generate_totp_secret() -> String {
     let mut bytes = [0u8; 20];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     base32_encode(&bytes)
 }
 
 pub fn generate_backup_codes(count: usize) -> Vec<String> {
     const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // pragma: allowlist secret -- unambiguous backup code charset
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     (0..count)
         .map(|_| {
             let mut buf = [0u8; 8];

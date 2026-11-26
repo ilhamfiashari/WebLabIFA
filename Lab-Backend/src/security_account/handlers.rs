@@ -5,7 +5,7 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use chrono::{DateTime, Utc};
-use rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::FromRow;
@@ -461,7 +461,7 @@ pub async fn challenge_passkey(
 ) -> Result<Json<Value>, ApiError> {
     let actor = verify_mutation(&state, &jar, &headers).await?;
     let mut raw = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut raw);
+    rand::rng().fill_bytes(&mut raw);
     let challenge = hex::encode(raw);
     Ok(Json(json!({
         "challenge": challenge,

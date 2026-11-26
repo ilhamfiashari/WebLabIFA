@@ -840,9 +840,9 @@ export function CircuitCanvas({
   const popupPos = (() => {
     const viewW = SVG_W / zoom
     const viewH = SVG_H / zoom
-    let targetX = 0
-    let targetY = 0
-    let targetW = 100
+    let targetX: number
+    let targetY: number
+    let targetW: number
     if (inspectedComp) {
       targetX = inspectedComp.x
       targetY = inspectedComp.y

@@ -94,7 +94,6 @@ function parseStatements(lines: Array<{ text: string; num: number }>): ParsedSta
       while (i < lines.length && depth > 0) {
         const cur = lines[i].text
         if (/^\}\s*else\s+if\s*\(/.test(cur) && depth === 1) {
-          inElse = true
           elseLines.push({ text: cur.replace(/^\}\s*else\s+/, ''), num: lines[i].num })
           i++
           while (i < lines.length && depth > 0) {

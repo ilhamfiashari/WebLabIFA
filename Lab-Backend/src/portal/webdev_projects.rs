@@ -777,7 +777,7 @@ pub async fn submit_webdev_mission(
     };
 
     let score = 100;
-    let code_hash = format!("{:x}", Sha256::digest(combined_code.as_bytes()));
+    let code_hash = hex::encode(Sha256::digest(combined_code.as_bytes()));
     let mut tx = state.pool.begin().await?;
 
     sqlx::query(

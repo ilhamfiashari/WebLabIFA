@@ -13,6 +13,10 @@ updates:
     labels:
       - "dependencies"
       - "frontend"
+    ignore:
+      # typescript-eslint@8 requires TypeScript <6.1.0
+      - dependency-name: "typescript"
+        versions: [">= 6.1.0"]
 
   - package-ecosystem: "cargo"
     directory: "/"
@@ -41,6 +45,10 @@ updates:
     labels:
       - "dependencies"
       - "security"
+    ignore:
+      # semgrep pins opentelemetry-instrumentation-requests~=0.58b0
+      - dependency-name: "opentelemetry-instrumentation-requests"
+        versions: [">= 0.59a0"]
 
   - package-ecosystem: "docker"
     directories:

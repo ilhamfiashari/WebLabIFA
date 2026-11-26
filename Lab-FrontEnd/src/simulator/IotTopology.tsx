@@ -451,7 +451,7 @@ function TopologyCanvas({
         edges={flowEdges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
-        colorMode={theme}
+        forceColorMode={theme === 'system' ? undefined : theme}
         fitView
         fitViewOptions={{ padding: fullscreen ? 0.14 : 0.16, maxZoom: fullscreen ? 1.25 : 1.0 }}
         minZoom={0.35}

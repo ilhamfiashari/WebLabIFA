@@ -82,7 +82,7 @@ export function tokenizeArduinoCpp(code: string): CppToken[] {
       tokens.push({ type: 'plain', text: code.slice(lastIndex, m.index) })
     }
     const raw = m[0]
-    let type: CppTokenType = 'plain'
+    let type: CppTokenType
 
     if (raw.startsWith('//') || raw.startsWith('/*')) {
       type = 'comment'

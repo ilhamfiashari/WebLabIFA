@@ -326,7 +326,7 @@ async function parseXlsxBuffer(buffer: ArrayBuffer): Promise<string[][]> {
       const colIdx = ref ? colRefToIndex(ref) : rowValues.length
       while (rowValues.length < colIdx) rowValues.push('')
       const cellType = cNode.getAttribute('t') ?? ''
-      let val = ''
+      let val: string
       if (cellType === 's') {
         const vNode = cNode.getElementsByTagName('v')[0]
         const ssIdx = Number.parseInt(vNode?.textContent ?? '', 10)
