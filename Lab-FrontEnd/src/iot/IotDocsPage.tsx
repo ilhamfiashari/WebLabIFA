@@ -11,10 +11,12 @@ import {
   Zap,
 } from 'lucide-react'
 import { useI18n } from '../shared/i18n'
-import { DOC_CATEGORIES, WOKWI_DOCS_SECTIONS, type DocSection } from './wokwiDocsData'
+import '../portal/portal.css'
+import './iot.css'
+import { ARDUINO_IDE_DOCS_SECTIONS, DOC_CATEGORIES, type DocSection } from './arduinoDocsData'
 
 interface IotDocsPageProps {
-  role: 'mahasiswa' | 'dosen' | 'admin'
+  role: 'mahasiswa' | 'dosen' | 'admin' | 'public'
   onOpenStudio?: () => void
 }
 
@@ -22,22 +24,27 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
   const { lang } = useI18n()
   const en = lang === 'en'
   const [query, setQuery] = useState('')
-  const [activeId, setActiveId] = useState<string>(WOKWI_DOCS_SECTIONS[0].id)
+  const [activeId, setActiveId] = useState<string>(ARDUINO_IDE_DOCS_SECTIONS[0].id)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
   const filteredSections = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return WOKWI_DOCS_SECTIONS
-    return WOKWI_DOCS_SECTIONS.filter((sec) => {
+    if (!q) return ARDUINO_IDE_DOCS_SECTIONS
+    return ARDUINO_IDE_DOCS_SECTIONS.filter((sec) => {
       const hay = [
         sec.id,
-        sec.wokwiType ?? '',
+        sec.partCode ?? '',
+        sec.badge ?? '',
         sec.titleId,
         sec.titleEn,
         sec.summaryId,
         sec.summaryEn,
+        ...sec.howItWorksId,
+        ...sec.howItWorksEn,
+        sec.codeSnippet ?? '',
         ...(sec.pins ?? []).map((p) => `${p.pin} ${p.name} ${p.descId} ${p.descEn}`),
         ...(sec.attrs ?? []).map((a) => `${a.attr} ${a.descId} ${a.descEn}`),
+        ...(sec.table?.rows ?? []).flat(),
       ]
         .join(' ')
         .toLowerCase()
@@ -47,7 +54,7 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
 
   const activeSection: DocSection = useMemo(() => {
     const exact = filteredSections.find((s) => s.id === activeId)
-    return exact ?? filteredSections[0] ?? WOKWI_DOCS_SECTIONS[0]
+    return exact ?? filteredSections[0] ?? ARDUINO_IDE_DOCS_SECTIONS[0]
   }, [activeId, filteredSections])
 
   const activeIdx = filteredSections.findIndex((s) => s.id === activeSection.id)
@@ -94,7 +101,7 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
               }}
             >
               <BookOpen size={13} aria-hidden="true" />
-              {en ? 'Wokwi-Aligned IoT Reference' : 'Dokumentasi Simulator IoT (Standar Wokwi)'}
+              {en ? 'IoT Lab Reference · Arduino IDE' : 'Acuan IoT Lab · Arduino IDE'}
             </span>
             <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
               {role === 'admin'
@@ -103,18 +110,22 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
                   ? en
                     ? 'Lecturer'
                     : 'Dosen'
-                  : en
-                    ? 'Student'
-                    : 'Mahasiswa'}
+                  : role === 'public'
+                    ? en
+                      ? 'Public Guide'
+                      : 'Panduan Publik'
+                    : en
+                      ? 'Student'
+                      : 'Mahasiswa'}
             </span>
           </div>
           <h1 style={{ margin: 0, fontSize: 22 }}>
-            {en ? 'IoT Simulator Documentation' : 'Dokumentasi IoT Simulator'}
+            {en ? 'IoT Simulator Documentation · Arduino IDE' : 'Dokumentasi IoT Simulator · Arduino IDE'}
           </h1>
           <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
             {en
-              ? 'Complete reference for boards, diagram.json format, Ohm’s Law circuit physics, interactive parts pinouts, attributes, and Arduino C++ code examples modeled after docs.wokwi.com.'
-              : 'Referensi lengkap papan mikrokontroler, format diagram.json, fisika rangkaian Hukum Ohm, pinout & atribut komponen interaktif, serta contoh kode Arduino C++ mengacu pada pedoman docs.wokwi.com.'}
+              ? 'Complete reference for Arduino IDE sketch syntax (.ino), C++ functions, Serial Monitor & Plotter, libraries, boards, Ohm’s Law circuit physics, and component pinouts modeled after docs.arduino.cc/software/ide/.'
+              : 'Referensi lengkap sintaks sketch Arduino IDE (.ino), fungsi I/O & komunikasi Serial, pustaka, papan mikrokontroler, fisika rangkaian Hukum Ohm, serta pinout komponen mengacu pada docs.arduino.cc/software/ide/.'}
           </p>
         </div>
 
@@ -126,14 +137,24 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
             </button>
           ) : null}
           <a
-            href="https://docs.wokwi.com/"
+            href="https://docs.arduino.cc/software/ide/"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-outline"
             style={{ textDecoration: 'none' }}
           >
             <ExternalLink size={14} aria-hidden="true" />
-            <span>docs.wokwi.com</span>
+            <span>docs.arduino.cc/software/ide</span>
+          </a>
+          <a
+            href="https://docs.arduino.cc/language-reference/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-outline"
+            style={{ textDecoration: 'none' }}
+          >
+            <ExternalLink size={14} aria-hidden="true" />
+            <span>{en ? 'Language Reference' : 'Referensi Bahasa'}</span>
           </a>
         </div>
       </section>
@@ -179,7 +200,7 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
               className="input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={en ? 'Search parts, pins, guides...' : 'Cari komponen, pin, panduan...'}
+              placeholder={en ? 'Search syntax, functions, pins, parts...' : 'Cari sintaks, fungsi, pin, komponen...'}
               aria-label={en ? 'Search documentation' : 'Cari dokumentasi'}
               style={{ width: '100%', paddingLeft: 32, minHeight: 34, fontSize: 12.5 }}
             />
@@ -264,12 +285,12 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
                     {activeSection.badge}
                   </code>
                 ) : null}
-                {activeSection.wokwiType && activeSection.wokwiType !== activeSection.badge ? (
-                  <code style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{activeSection.wokwiType}</code>
+                {activeSection.partCode && activeSection.partCode !== activeSection.badge ? (
+                  <code style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{activeSection.partCode}</code>
                 ) : null}
               </div>
               <a
-                href={activeSection.wokwiUrl}
+                href={activeSection.refUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -282,7 +303,7 @@ export function IotDocsPage({ role, onOpenStudio }: IotDocsPageProps) {
                   textDecoration: 'none',
                 }}
               >
-                <span>{en ? 'Official Wokwi Ref' : 'Referensi Resmi Wokwi'}</span>
+                <span>{en ? 'Official Arduino Docs' : 'Referensi Resmi Arduino'}</span>
                 <ExternalLink size={13} aria-hidden="true" />
               </a>
             </div>

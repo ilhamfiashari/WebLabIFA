@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronRight, CircleHelp, Globe, LogOut, ShieldCheck 
 import { ApiError, getIdentity, getPublicConfig, type Identity } from './api'
 import { Button } from './components/ui/button'
 import { AdminApp } from './admin/AdminApp'
+import { IotDocsPage } from './iot/IotDocsPage'
 import { StudentApp } from './student/StudentApp'
 import { LecturerApp } from './lecturer/LecturerApp'
 import { LoginView } from './login/LoginView'
@@ -134,14 +135,47 @@ function Information({ help }: { help: boolean }) {
   </main>
 }
 
+function PublicIotDocs() {
+  const { tr } = useI18n()
+  return (
+    <main id="main" style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 20px 64px', display: 'grid', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <Brand />
+          <a className="back-link" href="/login" style={{ margin: 0 }}>
+            <ArrowLeft size={16} /> {tr.brand.backToLogin}
+          </a>
+        </div>
+        <LangToggleButton />
+      </div>
+      <IotDocsPage role="public" />
+    </main>
+  )
+}
+
 export default function App() {
   const path = window.location.pathname
-  const { tr } = useI18n()
-  useEffect(() => { if (path.startsWith('/lab') || (import.meta.env.DEV && path === '/__preview/errors')) return; document.title = `${path === '/privasi' ? tr.brand.privacy : path === '/bantuan' ? tr.brand.help : path === '/' || path === '/login' ? 'Masuk' : tr.errors[404].title} · IFA Lab` }, [path, tr.brand.help, tr.brand.privacy, tr.errors])
+  const { tr, lang } = useI18n()
+  useEffect(() => {
+    if (path.startsWith('/lab') || (import.meta.env.DEV && path === '/__preview/errors')) return
+    const pageTitle =
+      path === '/privasi'
+        ? tr.brand.privacy
+        : path === '/bantuan'
+          ? tr.brand.help
+          : path === '/acuan-iot'
+            ? lang === 'en'
+              ? 'IoT Reference · Arduino IDE'
+              : 'Acuan IoT · Arduino IDE'
+            : path === '/' || path === '/login'
+              ? 'Masuk'
+              : tr.errors[404].title
+    document.title = `${pageTitle} · IFA Lab`
+  }, [lang, path, tr.brand.help, tr.brand.privacy, tr.errors])
   // Local design examples only; production keeps normal 404 routing for this path.
   if (import.meta.env.DEV && path === '/__preview/errors') {
     const requested = Number(new URLSearchParams(window.location.search).get('status') ?? 404)
     return <ErrorPage status={ERROR_STATUSES.includes(requested as ErrorStatus) ? requested : 404} homeHref="/login" />
   }
-  return <><a className="skip-link" href="#main">Lewati ke konten utama</a>{path === '/' || path === '/login' ? <LoginView/> : path === '/lab' || path.startsWith('/lab/') ? <Lab/> : path === '/privasi' || path === '/bantuan' ? <Information help={path === '/bantuan'}/> : <ErrorPage status={404} homeHref="/" />}</>
+  return <><a className="skip-link" href="#main">Lewati ke konten utama</a>{path === '/' || path === '/login' ? <LoginView/> : path === '/acuan-iot' ? <PublicIotDocs/> : path === '/lab' || path.startsWith('/lab/') ? <Lab/> : path === '/privasi' || path === '/bantuan' ? <Information help={path === '/bantuan'}/> : <ErrorPage status={404} homeHref="/" />}</>
 }

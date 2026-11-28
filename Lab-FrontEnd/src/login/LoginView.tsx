@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import '@fontsource/inter/latin-700.css'
 import '@fontsource/inter/latin-800.css'
 import {
+  ArrowUpRight,
+  BookOpen,
   CloudRain,
   CloudSnow,
   Code2,
@@ -224,13 +226,28 @@ export function LoginView() {
                 <div className="login-v2-standard-body">
                   <div className="login-v2-standard-head">
                     <strong>Internet of Things</strong>
-                    <span className="login-v2-standard-pill">Wokwi · Arduino C++</span>
+                    <span className="login-v2-standard-pill">Arduino IDE · C++</span>
                   </div>
                   <p>
                     {lang === 'en'
-                      ? 'ESP32-C3, ESP32, Arduino & Pico W circuit simulation following Wokwi (diagram.json), Ohm’s Law, & MQTT TLS.'
-                      : 'Simulasi rangkaian & firmware ESP32-C3, ESP32, Arduino, dan Pico W mengacu pedoman Wokwi (diagram.json), Hukum Ohm, & MQTT TLS.'}
+                      ? 'ESP32-C3, ESP32, Arduino & Pico W circuit and firmware simulation following Arduino IDE (.ino) syntax, Ohm’s Law, & MQTT TLS.'
+                      : 'Simulasi rangkaian & firmware ESP32-C3, ESP32, Arduino, dan Pico W mengacu sintaks Arduino IDE (.ino), Hukum Ohm, & MQTT TLS.'}
                   </p>
+                  <div className="login-v2-standard-actions">
+                    <a className="login-v2-standard-link" href="/acuan-iot">
+                      <BookOpen size={12} aria-hidden="true" />
+                      <span>{lang === 'en' ? 'Arduino IDE Syntax Guide' : 'Acuan Sintaks Arduino IDE'}</span>
+                    </a>
+                    <a
+                      className="login-v2-standard-link is-ext"
+                      href="https://docs.arduino.cc/software/ide/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span>docs.arduino.cc/software/ide</span>
+                      <ArrowUpRight size={12} aria-hidden="true" />
+                    </a>
+                  </div>
                 </div>
               </li>
               <li className="login-v2-standard-item">

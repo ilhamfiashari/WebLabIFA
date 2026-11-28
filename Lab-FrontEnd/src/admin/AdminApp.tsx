@@ -32,7 +32,7 @@ const PAGES: Array<{ key: PageKey; path: string; label: string; icon: typeof Hou
   { key: 'kelas', path: `${BASE}/kelas`, label: 'Kelas', icon: GraduationCap, description: 'Kelas aktif, dosen pengampu, dan progres praktikum.' },
   { key: 'katalog', path: `${BASE}/katalog`, label: 'Katalog & Publikasi', icon: Layers, description: 'Modul lab, alur review, dan cakupan OWASP Top 10:2025.' },
   { key: 'audit', path: `${BASE}/audit`, label: 'Audit Log', icon: ClipboardList, description: 'Jejak perubahan akses, kelas, publikasi, dan sesi.' },
-  { key: 'dokumentasi', path: `${BASE}/dokumentasi`, label: 'Dokumentasi', icon: BookOpen, description: 'Dokumentasi referensi IoT Simulator, komponen Wokwi, dan fisika rangkaian.' },
+  { key: 'dokumentasi', path: `${BASE}/dokumentasi`, label: 'Dokumentasi', icon: BookOpen, description: 'Acuan sintaks Arduino IDE, komponen IoT Simulator, dan fisika rangkaian.' },
   { key: 'pengaturan', path: `${BASE}/pengaturan`, label: 'Pengaturan', icon: Settings, description: 'Kebijakan sesi, akses, dan preferensi tampilan.' },
 ]
 
@@ -557,7 +557,7 @@ function PageHead({ page, actions, live }: { page: PageKey; actions?: ReactNode;
     kelas: 'Active classes, instructors, and lab completion progress.',
     katalog: 'Lab modules, review pipeline, and OWASP Top 10 coverage.',
     audit: 'Access trails, active sessions, anomaly alerts, and user activity logs.',
-    dokumentasi: 'Complete Wokwi-aligned IoT Simulator docs, part pinouts, and Ohm’s Law guides.',
+    dokumentasi: 'Complete Arduino IDE syntax reference, IoT part pinouts, and Ohm’s Law guides.',
     pengaturan: 'MFA authenticator QR, passkeys, backup codes, sessions, and backup export.',
   }
   const label = lang === 'en' ? (page === 'beranda' ? 'Admin Home' : tr.nav.admin[page]) : (page === 'beranda' ? 'Beranda Admin' : p.label)

@@ -152,15 +152,28 @@ void loop() {
   expect(metrics.relayLed).toBeGreaterThan(0.6)
 })
 
-test('Documentation menu works across Mahasiswa, Dosen, and Admin portals with search', async ({ page }) => {
+test('Documentation menu works across Public (/acuan-iot), Mahasiswa, Dosen, and Admin portals with Arduino IDE search', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
 
+  // 0. Public route from login page (/acuan-iot)
+  await page.route('**/api/me', (route) => route.fulfill({ status: 401, json: {} }))
+  await page.goto('/login')
+  await page.getByRole('link', { name: 'Acuan Sintaks Arduino IDE', exact: true }).click()
+  await expect(page).toHaveURL(/\/acuan-iot$/)
+  await expect(page.getByRole('heading', { level: 1, name: /Dokumentasi IoT Simulator · Arduino IDE/i })).toBeVisible()
+  await expect(page.getByText(/wokwi/i)).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'docs.arduino.cc/software/ide', exact: true })).toHaveAttribute('href', 'https://docs.arduino.cc/software/ide/')
+  await page.getByRole('searchbox', { name: /Cari dokumentasi/i }).fill('digitalWrite')
+  await page.getByRole('button', { name: /Fungsi Digital I\/O, Analog\/PWM/i }).click()
+  await expect(page.getByText(/pinMode\(\)/)).toBeVisible()
+
   // 1. Mahasiswa
+  await page.unrouteAll()
   await mockCommonApi(page, student)
   await page.goto('/lab/dokumentasi')
   await expect(page.getByRole('heading', { level: 1, name: /Dokumentasi IoT Simulator/i })).toBeVisible()
   await page.getByRole('searchbox', { name: /Cari dokumentasi/i }).fill('resistor')
-  await page.getByRole('button', { name: /Hukum Ohm, Kecerahan LED/i }).click()
+  await page.getByRole('complementary', { name: /Navigasi dokumentasi/i }).getByRole('button', { name: /Hukum Ohm, Kecerahan LED/i }).click()
   await expect(page.getByText(/10 kΩ/)).toBeVisible()
 
   // 2. Dosen

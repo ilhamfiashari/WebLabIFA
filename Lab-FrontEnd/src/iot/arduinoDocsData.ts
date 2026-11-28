@@ -1,4 +1,12 @@
-export type DocCategoryId = 'getting-started' | 'guides' | 'boards' | 'parts-basic' | 'parts-inputs' | 'parts-sensors' | 'parts-displays' | 'parts-actuators'
+export type DocCategoryId =
+  | 'arduino-ide'
+  | 'guides'
+  | 'boards'
+  | 'parts-basic'
+  | 'parts-inputs'
+  | 'parts-sensors'
+  | 'parts-displays'
+  | 'parts-actuators'
 
 export interface DocPinRow {
   pin: string
@@ -23,8 +31,8 @@ export interface DocTableBlock {
 export interface DocSection {
   id: string
   category: DocCategoryId
-  wokwiType?: string
-  wokwiUrl: string
+  partCode?: string
+  refUrl: string
   titleId: string
   titleEn: string
   badge?: string
@@ -40,8 +48,8 @@ export interface DocSection {
 }
 
 export const DOC_CATEGORIES: Array<{ id: DocCategoryId; titleId: string; titleEn: string }> = [
-  { id: 'getting-started', titleId: 'Mulai Cepat', titleEn: 'Getting Started' },
-  { id: 'guides', titleId: 'Panduan & Fisika Rangkaian', titleEn: 'Guides & Circuit Physics' },
+  { id: 'arduino-ide', titleId: 'Acuan Arduino IDE & Sintaks', titleEn: 'Arduino IDE & Syntax Reference' },
+  { id: 'guides', titleId: 'Panduan & Fisika Rangkaian', titleEn: 'Circuit Physics & Guides' },
   { id: 'boards', titleId: 'Mikrokontroler (Boards)', titleEn: 'Microcontrollers (Boards)' },
   { id: 'parts-basic', titleId: 'Komponen Dasar & Pasif', titleEn: 'Basic & Passive Parts' },
   { id: 'parts-inputs', titleId: 'Perangkat Input', titleEn: 'Input Devices' },
@@ -50,87 +58,315 @@ export const DOC_CATEGORIES: Array<{ id: DocCategoryId; titleId: string; titleEn
   { id: 'parts-actuators', titleId: 'Aktuator, Relay & IC', titleEn: 'Actuators, Relays & ICs' },
 ]
 
-export const WOKWI_DOCS_SECTIONS: DocSection[] = [
-  // ===================== GETTING STARTED =====================
+export const ARDUINO_IDE_DOCS_SECTIONS: DocSection[] = [
+  // ===================== ARDUINO IDE & SYNTAX REFERENCE =====================
   {
-    id: 'welcome',
-    category: 'getting-started',
-    wokwiUrl: 'https://docs.wokwi.com/',
-    titleId: 'Pengenalan IoT Simulator',
-    titleEn: 'Introduction to IoT Simulator',
-    badge: 'Start Here',
+    id: 'arduino-ide-overview',
+    category: 'arduino-ide',
+    refUrl: 'https://docs.arduino.cc/software/ide/',
+    titleId: 'Pengenalan Arduino IDE & Alur Kerja Sketch',
+    titleEn: 'Arduino IDE Overview & Sketch Workflow',
+    badge: 'Arduino IDE 2',
     summaryId:
-      'IFA Lab IoT Simulator adalah lingkungan simulasi mikrokontroler dan rangkaian elektronik interaktif berbasis standar Wokwi (diagram.json + Arduino C++).',
+      'IoT Lab IFA mengacu pada lingkungan dan standar pemrograman Arduino IDE 2 (sketch .ino berbasis C/C++, Board Manager, Library Manager, Serial Monitor, dan Serial Plotter).',
     summaryEn:
-      'IFA Lab IoT Simulator is an interactive microcontroller and electronic circuit simulator following Wokwi standards (diagram.json + Arduino C++).',
+      'IFA IoT Lab follows the Arduino IDE 2 programming model (.ino C/C++ sketches, Board selection, Library Manager, integrated Serial Monitor, and Serial Plotter).',
     howItWorksId: [
-      'Pilih papan mikrokontroler (ESP32-C3, ESP32 DevKit, Arduino Uno/Nano/Mega, Raspberry Pi Pico/Pico W) atau mulai dari misi/preset praktikum.',
-      'Tambahkan komponen dari tab Components atau tombol (+) pada kanvas, lalu tarik kabel (wire) antar pin untuk membentuk rangkaian.',
-      'Klik komponen di kanvas untuk mengubah properti secara langsung: nilai resistor (Ω & 4 gelang warna), warna LED, sudut potensiometer, jarak ultrasonik, suhu DHT22, gerakan PIR, hingga tekan tombol.',
-      'Tekan Start Simulation (Play) untuk menjalankan kode Main.ino, pantau keluaran di Serial Monitor, Serial Plotter, Logic Analyzer, MQTT Broker, dan Web Browser bawaan.',
+      'Program yang ditulis untuk mikrokontroler disebut **sketch** dengan file utama `Main.ino` (format standar Arduino IDE).',
+      'Editor kode di IoT Lab dilengkapi **Autocomplete**, **Parameter Hints**, **Auto Formatter**, dan pemeriksa sintaks (`lintArduinoCpp`) layaknya Arduino IDE 2.',
+      'Pilih papan mikrokontroler (Arduino Uno/Nano/Mega, ESP32, ESP32-C3, atau Raspberry Pi Pico/Pico W), susun rangkaian di kanvas, lalu tekan **Start Simulation** untuk memverifikasi dan menjalankan sketch.',
+      'Gunakan panel **Serial Monitor** terintegrasi untuk log teks/input UART serta **Serial Plotter** untuk memantau grafik sinyal sensor secara real-time.',
     ],
     howItWorksEn: [
-      'Choose a microcontroller board (ESP32-C3, ESP32 DevKit, Arduino Uno/Nano/Mega, Raspberry Pi Pico/Pico W) or start from a practicum mission/preset.',
-      'Add parts from the Components tab or canvas (+) button, then drag wires between pins to build your circuit.',
-      'Click any placed component to adjust properties live: resistor value (Ω & 4 color bands), LED color, potentiometer knob, ultrasonic distance, DHT22 temperature, PIR motion, or button press.',
-      'Click Start Simulation (Play) to run Main.ino and inspect live outputs via Serial Monitor, Serial Plotter, Logic Analyzer, MQTT Broker, and the built-in Web Browser.',
+      'Programs written for microcontrollers are called **sketches**, anchored by `Main.ino` following the Arduino IDE convention.',
+      'The code editor provides **Autocomplete**, **Parameter Hints**, **Auto Formatter**, and live syntax diagnostics modeled after Arduino IDE 2.',
+      'Select your target board (Arduino Uno/Nano/Mega, ESP32, ESP32-C3, or Raspberry Pi Pico/Pico W), wire components on the canvas, and press **Start Simulation** to verify and run.',
+      'Inspect live UART logs/commands in the integrated **Serial Monitor** and plot real-time sensor streams in the **Serial Plotter**.',
     ],
     table: {
-      headersId: ['Pintasan Keyboard', 'Fungsi di Editor Kanvas'],
-      headersEn: ['Keyboard Shortcut', 'Canvas Editor Action'],
+      headersId: ['Fitur Arduino IDE 2', 'Padanan di IFA IoT Lab', 'Kegunaan'],
+      headersEn: ['Arduino IDE 2 Feature', 'IFA IoT Lab Equivalent', 'Purpose'],
       rows: [
-        ['R / Shift+R', 'Putar komponen terpilih 90° searah / berlawanan jarum jam'],
-        ['Delete / Backspace', 'Hapus komponen atau kabel yang dipilih'],
-        ['Ctrl+Z / Ctrl+Y', 'Undo / Redo perubahan rangkaian'],
-        ['Ctrl+D', 'Duplikasi komponen terpilih'],
-        ['Scroll / + / -', 'Zoom in / Zoom out kanvas rangkaian'],
-        ['Spasi + Drag', 'Geser (pan) area kanvas'],
+        ['Sketch (.ino) & Tabs', 'Editor Main.ino + tab .h / .cpp', 'Menulis firmware C/C++ modular dalam satu proyek'],
+        ['Verify / Upload', 'Linter Sintaks + Start Simulation', 'Memeriksa tanda ; / kurung / deklarasi lalu menjalankan VM'],
+        ['Board Selector', 'Pemilih Board (7 MCU)', 'Menentukan level tegangan (5V vs 3.3V), pinout, & resolusi ADC'],
+        ['Library Manager', 'Tab Libraries', 'Menyisipkan header pustaka standar (#include <...>)'],
+        ['Serial Monitor', 'Tab Terminal / Serial Monitor', 'Mencetak Serial.print/println dan mengirim input TX'],
+        ['Serial Plotter', 'Tab Serial Plotter', 'Memvisualisasikan nilai numerik sensor sebagai grafik real-time'],
       ],
     },
   },
   {
-    id: 'diagram-json',
-    category: 'getting-started',
-    wokwiUrl: 'https://docs.wokwi.com/diagram-format',
-    titleId: 'Format diagram.json & Diagram Editor',
-    titleEn: 'diagram.json Format & Diagram Editor',
-    badge: 'Schema v1',
+    id: 'arduino-structure-syntax',
+    category: 'arduino-ide',
+    refUrl: 'https://docs.arduino.cc/language-reference/',
+    titleId: 'Struktur Sketch, Sintaks & Kontrol Alur',
+    titleEn: 'Sketch Structure, Syntax & Control Flow',
+    badge: 'Structure',
     summaryId:
-      'Setiap rangkaian di IoT Simulator disimpan dan disinkronkan dua arah dengan file diagram.json mengikuti spesifikasi Wokwi version 1.',
+      'Setiap sketch Arduino IDE memiliki dua fungsi wajib yaitu `setup()` dan `loop()`, dilengkapi direktif praprosesor, aturan sintaks C++, percabangan, dan perulangan.',
     summaryEn:
-      'Every circuit in the IoT Simulator is stored and synchronized bidirectionally with diagram.json following the Wokwi version 1 specification.',
+      'Every Arduino IDE sketch requires `setup()` and `loop()`, combined with preprocessor directives, C++ syntax rules, conditionals, and loops.',
     howItWorksId: [
-      'Properti `parts` berisi daftar objek komponen: `type` (mis. `wokwi-led`, `wokwi-resistor`), `id` unik, posisi `top` & `left`, rotasi `rotate` (kelipatan 90°), dan `attrs`.',
-      'Properti `connections` adalah daftar tuple `[pinSumber, pinTujuan, warnaKabel, [waypoints]]`, misalnya `["esp:GPIO2", "r1:1", "green", ["v0"]]`.',
-      'Anda dapat mengedit file `diagram.json` secara langsung pada tab diagram.json, atau menyusun secara visual di kanvas — keduanya selalu sinkron otomatis.',
+      '`void setup()` dipanggil **satu kali** saat mikrokontroler menyala atau di-reset: dipakai untuk `pinMode()`, `Serial.begin()`, dan inisialisasi library.',
+      '`void loop()` dipanggil **berulang terus-menerus** setelah `setup()` selesai untuk membaca sensor, memproses logika, dan mengendalikan aktuator.',
+      'Setiap pernyataan diakhiri titik koma `;`, blok kode dibungkus kurung kurawal `{ ... }`, komentar satu baris memakai `//`, dan komentar multi-baris memakai `/* ... */`.',
+      'Direktif praprosesor `#include <Library.h>` menyertakan pustaka dan `#define NAMA nilai` mendefinisikan makro konstanta (tanpa titik koma di akhir baris).',
     ],
     howItWorksEn: [
-      'The `parts` array lists placed parts: `type` (e.g., `wokwi-led`, `wokwi-resistor`), unique `id`, `top` & `left` coordinates, `rotate` (90° steps), and `attrs`.',
-      'The `connections` array holds wire tuples `[fromPin, toPin, wireColor, [waypoints]]`, e.g., `["esp:GPIO2", "r1:1", "green", ["v0"]]`.',
-      'You can edit `diagram.json` directly in the diagram.json tab or wire visually on the canvas — both stay automatically synchronized.',
+      '`void setup()` runs **once** on boot or reset for `pinMode()`, `Serial.begin()`, and library initialization.',
+      '`void loop()` runs **repeatedly** after `setup()` to read sensors, evaluate logic, and drive actuators.',
+      'Statements end with `;`, blocks use `{ ... }`, single-line comments use `//`, and block comments use `/* ... */`.',
+      'Preprocessor `#include <Library.h>` loads libraries and `#define NAME value` creates macro constants (no trailing semicolon).',
     ],
-    diagramSnippet: `{
-  "version": 1,
-  "author": "IFA Lab Student",
-  "editor": "wokwi",
-  "parts": [
-    { "type": "board-esp32-c3-devkitm-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
-    { "type": "wokwi-resistor", "id": "r1", "top": 120, "left": 240, "attrs": { "value": "220" } },
-    { "type": "wokwi-led", "id": "led1", "top": 90, "left": 370, "attrs": { "color": "red" } }
-  ],
-  "connections": [
-    ["esp:GPIO2", "r1:1", "green", ["v0"]],
-    ["r1:2", "led1:A", "green", ["v0"]],
-    ["led1:C", "esp:GND.1", "black", ["v0"]]
-  ]
+    table: {
+      headersId: ['Elemen Sintaks', 'Bentuk Penulisan', 'Keterangan'],
+      headersEn: ['Syntax Element', 'Form', 'Description'],
+      rows: [
+        ['Sketch Lifecycle', 'void setup() { ... } / void loop() { ... }', 'Dua fungsi inti wajib pada setiap sketch Arduino IDE'],
+        ['Preprocessor', '#include <DHT.h> / #define LED_PIN 2', 'Menyertakan pustaka atau membuat konstanta makro pin'],
+        ['Percabangan if', 'if (cond) { ... } else if (c2) { ... } else { ... }', 'Menjalankan blok kode berdasarkan kondisi boolean'],
+        ['Percabangan switch', 'switch (mode) { case 1: ... break; default: ... }', 'Memilih satu dari beberapa cabang nilai diskrit'],
+        ['Perulangan for', 'for (int i = 0; i < 10; i++) { ... }', 'Mengulang blok kode sejumlah iterasi tertentu'],
+        ['Perulangan while', 'while (cond) { ... } / do { ... } while (cond);', 'Mengulang selama kondisi bernilai true'],
+        ['Kontrol Lompatan', 'break; / continue; / return val;', 'Menghentikan loop, loncat iterasi, atau kembali dari fungsi'],
+      ],
+    },
+    codeSnippet: `#define LED_PIN 2
+#define BTN_PIN 4
+
+int blinkCount = 0;
+
+void toggleLed(bool on) {
+  digitalWrite(LED_PIN, on ? HIGH : LOW);
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BTN_PIN, INPUT_PULLUP);
+}
+
+void loop() {
+  if (digitalRead(BTN_PIN) == LOW) {
+    for (int i = 0; i < 3; i++) {
+      toggleLed(true);
+      delay(150);
+      toggleLed(false);
+      delay(150);
+    }
+    blinkCount++;
+    Serial.println("Pressed: " + String(blinkCount));
+  }
+  delay(80);
 }`,
+  },
+  {
+    id: 'arduino-variables-types',
+    category: 'arduino-ide',
+    refUrl: 'https://docs.arduino.cc/language-reference/',
+    titleId: 'Tipe Data, Variabel, Konstanta & Operator',
+    titleEn: 'Data Types, Variables, Constants & Operators',
+    badge: 'Variables',
+    summaryId:
+      'Referensi tipe data standar Arduino C++, qualifier ruang lingkup, konstanta bawaan Arduino IDE, serta operator aritmetika, logika, dan bitwise.',
+    summaryEn:
+      'Reference for Arduino C++ data types, scope qualifiers, built-in Arduino IDE constants, and arithmetic, logical, and bitwise operators.',
+    howItWorksId: [
+      'Gunakan `const int` atau `#define` untuk nomor pin agar tidak berubah selama program berjalan.',
+      'Gunakan `unsigned long` saat menyimpan nilai dari `millis()` atau `micros()` agar tidak cepat overflow.',
+      'Konstanta logika pin: `HIGH` (3.3V/5V) dan `LOW` (0V/GND); mode pin: `INPUT`, `OUTPUT`, dan `INPUT_PULLUP` (resistor pull-up internal aktif, tombol ditekan terbaca `LOW`).',
+      'Operator pembanding (`==`, `!=`, `<`, `<=`, `>`, `>=`) berbeda dengan penugasan (`=`). Gabungkan syarat dengan `&&` (AND), `||` (OR), dan `!` (NOT).',
+    ],
+    howItWorksEn: [
+      'Use `const int` or `#define` for pin assignments so they remain read-only throughout execution.',
+      'Always store `millis()` and `micros()` timestamps in `unsigned long` to prevent early overflow.',
+      'Pin logic constants: `HIGH` (3.3V/5V) and `LOW` (0V/GND); pin modes: `INPUT`, `OUTPUT`, and `INPUT_PULLUP` (internal pull-up enabled; pressed reads `LOW`).',
+      'Distinguish equality (`==`, `!=`) from assignment (`=`), and combine boolean conditions with `&&`, `||`, and `!`.',
+    ],
+    table: {
+      headersId: ['Tipe / Kategori', 'Contoh', 'Rentang / Fungsi'],
+      headersEn: ['Type / Category', 'Example', 'Range / Usage'],
+      rows: [
+        ['bool / boolean', 'bool ready = true;', 'Nilai kebenaran true atau false (1 byte)'],
+        ['byte / uint8_t', 'uint8_t pwm = 255;', 'Bilangan bulat tak bertanda 0 s.d. 255 (8-bit)'],
+        ['int', 'int temp = -5;', 'Bilangan bulat bertanda (16-bit AVR / 32-bit ESP32)'],
+        ['unsigned long', 'unsigned long prevMs = 0;', 'Bilangan bulat positif 32-bit (wajib untuk millis())'],
+        ['float / double', 'float celcius = 27.4;', 'Bilangan desimal untuk pembacaan sensor suhu/jarak'],
+        ['char / String', 'String msg = "OK";', 'Karakter tunggal (\'A\') atau objek teks dinamis'],
+        ['Array', 'int pins[3] = {2, 4, 5};', 'Kumpulan elemen bertipe sama dengan indeks mulai 0'],
+        ['Qualifiers', 'const / static / volatile', 'Baca-saja, simpan antar panggilan, atau ubah lewat ISR'],
+        ['Operator', '+ - * / % | == != < > | && || ! | & | ^ << >>', 'Aritmetika, perbandingan, logika boolean, & manipulasi bit'],
+      ],
+    },
+    codeSnippet: `const uint8_t LED_PINS[3] = {2, 4, 5};
+unsigned long lastTick = 0;
+const unsigned long INTERVAL_MS = 500;
+bool ledState = false;
+
+void setup() {
+  for (int i = 0; i < 3; i++) {
+    pinMode(LED_PINS[i], OUTPUT);
+  }
+}
+
+void loop() {
+  if (millis() - lastTick >= INTERVAL_MS) {
+    lastTick = millis();
+    ledState = !ledState;
+    digitalWrite(LED_PINS[0], ledState ? HIGH : LOW);
+  }
+  delay(20);
+}`,
+  },
+  {
+    id: 'arduino-io-time-math',
+    category: 'arduino-ide',
+    refUrl: 'https://docs.arduino.cc/language-reference/',
+    titleId: 'Fungsi Digital I/O, Analog/PWM, Waktu & Matematika',
+    titleEn: 'Digital I/O, Analog/PWM, Time & Math Functions',
+    badge: 'Functions',
+    summaryId:
+      'Fungsi inti Arduino IDE yang didukung penuh di IoT Lab untuk kendali GPIO, pembacaan ADC, PWM, nada audio, pengukuran pulsa, timer, dan pemetaan skala.',
+    summaryEn:
+      'Core Arduino IDE functions supported in IFA IoT Lab for GPIO control, ADC reading, PWM output, audio tones, pulse measurement, timing, and math scaling.',
+    howItWorksId: [
+      'Digital I/O: panggil `pinMode(pin, mode)` di `setup()`, lalu gunakan `digitalWrite(pin, HIGH/LOW)` untuk menulis keluaran dan `digitalRead(pin)` untuk membaca masukan.',
+      'Analog & PWM: `analogRead(pin)` mengembalikan `0–1023` (10-bit di Arduino Uno/Nano/Mega) atau `0–4095` (12-bit di ESP32/ESP32-C3/Pico); `analogWrite(pin, 0..255)` mengatur duty cycle PWM.',
+      'Waktu: gunakan `delay(ms)` untuk jeda sederhana atau pola non-blocking dengan `millis()` agar tombol dan sensor tetap responsif.',
+      'Matematika & Utilitas: gunakan `map(val, fromLow, fromHigh, toLow, toHigh)` untuk konversi rentang (mis. ADC ke sudut servo 0–180° atau PWM 0–255) dan `constrain(x, a, b)` untuk membatasi nilai.',
+    ],
+    howItWorksEn: [
+      'Digital I/O: configure with `pinMode(pin, mode)` in `setup()`, then drive outputs with `digitalWrite(pin, HIGH/LOW)` and read inputs with `digitalRead(pin)`.',
+      'Analog & PWM: `analogRead(pin)` returns `0–1023` (10-bit AVR) or `0–4095` (12-bit ESP32/Pico); `analogWrite(pin, 0..255)` outputs a PWM duty cycle.',
+      'Timing: use `delay(ms)` for simple pauses or non-blocking `millis()` scheduling to keep buttons and sensors responsive.',
+      'Math & Utilities: rescale values with `map(val, fromLow, fromHigh, toLow, toHigh)` (e.g., ADC to 0–180° servo or 0–255 PWM) and clamp with `constrain(x, a, b)`.',
+    ],
+    table: {
+      headersId: ['Fungsi Arduino IDE', 'Parameter', 'Kegunaan'],
+      headersEn: ['Arduino IDE Function', 'Parameters', 'Description'],
+      rows: [
+        ['pinMode()', '(pin, INPUT | OUTPUT | INPUT_PULLUP)', 'Mengatur arah dan mode pull-up internal pin GPIO'],
+        ['digitalWrite()', '(pin, HIGH | LOW)', 'Mengirim sinyal logika HIGH (3.3V/5V) atau LOW (0V)'],
+        ['digitalRead()', '(pin) -> int', 'Membaca logika pin digital (HIGH = 1, LOW = 0)'],
+        ['analogRead()', '(pin) -> int', 'Membaca tegangan ADC (0–1023 AVR / 0–4095 ESP32 & Pico)'],
+        ['analogWrite()', '(pin, value 0..255)', 'Menghasilkan sinyal PWM (dimming LED / level bar)'],
+        ['tone() / noTone()', '(pin, freqHz[, ms]) / (pin)', 'Membunyikan dan menghentikan nada pada Piezo Buzzer'],
+        ['pulseIn()', '(pin, HIGH | LOW[, timeout])', 'Mengukur lebar pulsa dalam mikrodetik (µs)'],
+        ['shiftOut()', '(dataPin, clockPin, bitOrder, val)', 'Menggeser 8-bit data serial ke IC seperti 74HC595'],
+        ['delay() / delayMicroseconds()', '(ms) / (us)', 'Menjeda eksekusi program dalam milidetik / mikrodetik'],
+        ['millis() / micros()', '() -> unsigned long', 'Waktu berjalan sejak board aktif (untuk timer non-blocking)'],
+        ['map() / constrain()', '(v, fL, fH, tL, tH) / (x, a, b)', 'Memetakan rentang skala nilai dan membatasi rentang [a, b]'],
+      ],
+    },
+    codeSnippet: `const int POT_PIN = 4;
+const int LED_PIN = 2;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+}
+
+void loop() {
+  int raw = analogRead(POT_PIN);
+  int pwm = constrain(map(raw, 0, 4095, 0, 255), 0, 255);
+  analogWrite(LED_PIN, pwm);
+  Serial.println("ADC: " + String(raw) + " PWM: " + String(pwm));
+  delay(150);
+}`,
+  },
+  {
+    id: 'arduino-serial-comms',
+    category: 'arduino-ide',
+    refUrl: 'https://docs.arduino.cc/software/ide-v2/tutorials/ide-v2-serial-monitor/',
+    titleId: 'Serial Monitor, Serial Plotter & UART',
+    titleEn: 'Serial Monitor, Serial Plotter & UART',
+    badge: 'Serial API',
+    summaryId:
+      'Gunakan objek `Serial` standar Arduino IDE untuk mencetak log debug, menerima perintah interaktif melalui UART, dan memvisualisasikan grafik sensor real-time di Serial Plotter.',
+    summaryEn:
+      'Use the standard Arduino IDE `Serial` interface to print debug logs, receive interactive UART commands, and graph real-time telemetry in the Serial Plotter.',
+    howItWorksId: [
+      'Inisialisasi port serial di `setup()` dengan `Serial.begin(115200)` (ESP32/Pico) atau `Serial.begin(9600)` (Arduino Uno/Nano/Mega).',
+      '`Serial.print(val)` mencetak tanpa pindah baris, sedangkan `Serial.println(val)` otomatis menambahkan baris baru (newline).',
+      'Format pasangan label-nilai seperti `Serial.println("Temp: 28.4 Hum: 62")` otomatis dibaca oleh **Serial Plotter** menjadi kurva grafik multi-kanal.',
+      'Cek masukan dari kotak input Serial Monitor dengan `if (Serial.available() > 0)` lalu baca teksnya dengan `Serial.readString()` atau 1 byte dengan `Serial.read()`.',
+    ],
+    howItWorksEn: [
+      'Initialize UART in `setup()` via `Serial.begin(115200)` (ESP32/Pico) or `Serial.begin(9600)` (Arduino Uno/Nano/Mega).',
+      '`Serial.print(val)` writes inline while `Serial.println(val)` appends a newline.',
+      'Printing `Label: value` pairs (e.g., `Serial.println("Temp: 28.4 Hum: 62")`) feeds multi-series waveforms directly to the **Serial Plotter**.',
+      'Poll incoming user commands with `if (Serial.available() > 0)` and consume input via `Serial.readString()` or `Serial.read()`.',
+    ],
+    table: {
+      headersId: ['Method Serial', 'Kegunaan'],
+      headersEn: ['Serial Method', 'Purpose'],
+      rows: [
+        ['Serial.begin(baud)', 'Mengaktifkan UART pada baud rate 9600 atau 115200'],
+        ['Serial.print(data)', 'Mencetak teks/angka ke Serial Monitor tanpa newline'],
+        ['Serial.println(data)', 'Mencetak teks/angka diikuti newline (tampil per baris & di Plotter)'],
+        ['Serial.available()', 'Mengembalikan jumlah byte pesan yang menunggu di buffer RX'],
+        ['Serial.readString() / read()', 'Membaca seluruh teks atau 1 karakter dari input Serial Monitor'],
+      ],
+    },
+    codeSnippet: `void setup() {
+  Serial.begin(115200);
+  Serial.println("Arduino IDE Serial Ready");
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String cmd = Serial.readString();
+    Serial.println("Echo: " + cmd);
+  }
+  int adc = analogRead(34);
+  Serial.println("ADC: " + String(adc));
+  delay(500);
+}`,
+  },
+  {
+    id: 'arduino-libraries-files',
+    category: 'arduino-ide',
+    refUrl: 'https://docs.arduino.cc/software/ide-v2/tutorials/installing-libraries/',
+    titleId: 'Library Manager & Proyek Multi-File (.ino, .h, .cpp)',
+    titleEn: 'Library Manager & Multi-File Sketches (.ino, .h, .cpp)',
+    badge: 'Libraries',
+    summaryId:
+      'Cara menyertakan pustaka populer ekosistem Arduino IDE lewat `#include <...>` serta membagi kode ke beberapa tab file header `.h`, `.cpp`, dan aset web.',
+    summaryEn:
+      'Include popular Arduino IDE ecosystem libraries with `#include <...>` and organize larger sketches across `.h`, `.cpp`, and web asset tabs.',
+    howItWorksId: [
+      'Buka tab **Libraries** di panel editor untuk menelusuri dan menyisipkan `#include` pustaka standar Arduino IDE dan ESP32.',
+      'Gunakan menu file di samping tab editor untuk membuat header lokal seperti `config.h` atau modul `sensors.cpp`, lalu panggil dengan `#include "config.h"`.',
+      'Untuk proyek web IoT pada ESP32/Pico W, Anda juga dapat menambahkan tab `index.html`, `style.css`, atau `app.js` dengan placeholder dinamis seperti `{{TEMP}}`, `{{HUMIDITY}}`, dan `{{LED_STATE}}`.',
+    ],
+    howItWorksEn: [
+      'Open the **Libraries** tab in the editor pane to search and insert standard Arduino IDE and ESP32 `#include` headers.',
+      'Use the file menu to add local `.h` headers (e.g., `config.h`) or `.cpp` modules and include them with `#include "config.h"`.',
+      'For ESP32/Pico W web projects, add `index.html`, `style.css`, or `app.js` tabs with live placeholders like `{{TEMP}}`, `{{HUMIDITY}}`, and `{{LED_STATE}}`.',
+    ],
+    table: {
+      headersId: ['Header Library', 'Komponen / Fungsi'],
+      headersEn: ['Library Header', 'Component / Purpose'],
+      rows: [
+        ['#include <Wire.h>', 'Komunikasi bus I2C (SDA/SCL) untuk LCD, OLED, sensor'],
+        ['#include <Servo.h> / <ESP32Servo.h>', 'Kendali sudut Motor Servo SG90 (0°–180°) via PWM'],
+        ['#include <DHT.h>', 'Pembacaan suhu & kelembapan sensor DHT22/DHT11'],
+        ['#include <LiquidCrystal_I2C.h>', 'Tampilan karakter LCD 16×2 dan 20×4 melalui I2C'],
+        ['#include <Adafruit_SSD1306.h>', 'Layar grafis OLED 128×64 SSD1306 I2C'],
+        ['#include <Adafruit_NeoPixel.h>', 'Kontrol LED RGB addressable WS2812 / NeoPixel'],
+        ['#include <WiFi.h> & <WebServer.h>', 'Koneksi Wi-Fi & HTTP WebServer lokal di ESP32/Pico W'],
+        ['#include <PubSubClient.h>', 'Publikasi/langganan telemetri MQTT & MQTTS (TLS)'],
+        ['#include <Keypad.h> / <MPU6050.h>', 'Keypad matriks 4×4 & sensor IMU 6-sumbu MPU6050'],
+      ],
+    },
   },
 
   // ===================== GUIDES & CIRCUIT PHYSICS =====================
   {
     id: 'circuit-physics',
     category: 'guides',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-resistor',
+    refUrl: 'https://docs.arduino.cc/learn/electronics/ohms-law/',
     titleId: 'Hukum Ohm, Kecerahan LED & Interaksi Rangkaian',
     titleEn: "Ohm's Law, LED Brightness & Circuit Physics",
     badge: 'Physics Engine',
@@ -169,41 +405,49 @@ export const WOKWI_DOCS_SECTIONS: DocSection[] = [
     },
   },
   {
-    id: 'serial-monitor',
+    id: 'esp32-wifi',
     category: 'guides',
-    wokwiUrl: 'https://docs.wokwi.com/guides/serial-monitor',
-    titleId: 'Serial Monitor & Serial Plotter',
-    titleEn: 'Serial Monitor & Serial Plotter',
-    badge: 'Debugging',
+    refUrl: 'https://docs.arduino.cc/libraries/wifi/',
+    titleId: 'Simulasi Wi-Fi ESP32, Web Server & MQTT TLS',
+    titleEn: 'ESP32 Wi-Fi Simulation, Web Server & MQTT TLS',
+    badge: 'Networking',
     summaryId:
-      'Gunakan Serial Monitor untuk mencetak log debug, menerima perintah teks dari pengguna, dan memvisualisasikan grafik telemetri sensor secara real-time di Serial Plotter.',
+      'ESP32, ESP32-C3, dan Raspberry Pi Pico W mendukung simulasi Wi-Fi, Web Server HTTP lokal yang dapat diuji lewat komponen Web Browser, serta publikasi telemetri MQTT/MQTTS.',
     summaryEn:
-      'Use Serial Monitor to print debug logs, send interactive text commands, and plot real-time sensor waveforms in the Serial Plotter.',
+      'ESP32, ESP32-C3, and Raspberry Pi Pico W support virtual Wi-Fi, an HTTP Web Server testable via the canvas Web Browser part, and MQTT/MQTTS telemetry.',
     howItWorksId: [
-      'Panggil `Serial.begin(115200)` (atau `9600` pada Arduino Uno) di dalam `setup()`.',
-      'Keluaran `Serial.println("Temp: 28.4 Hum: 62")` secara otomatis dideteksi oleh tab Serial Plotter sebagai grafik deret waktu `Temp` dan `Hum`.',
-      'Ketik teks pada kotak input Serial Monitor dan tekan Enter untuk mengirim data yang bisa dibaca sketch dengan `Serial.available()` dan `Serial.readString()`.',
+      'Hubungkan ke jaringan Wi-Fi simulasi dengan `WiFi.begin("IFA-Lab-WiFi", "")` — board otomatis memperoleh alamat IP lokal virtual yang dapat dibaca lewat `WiFi.localIP()`.',
+      'Daftarkan route HTTP menggunakan `server.on("/", handleRoot)` dan `server.begin()`, lalu tambahkan komponen `Web Browser` di kanvas atau buka tab Browser di Terminal untuk menguji endpoint `/`, `/api/sensors`, dan tombol kendali.',
+      'Untuk keamanan IoT, gunakan protokol terenkripsi `mqtts://broker.weblab.local:8883` pada `mqtt.begin(...)` alih-alih `mqtt://` plaintext.',
     ],
     howItWorksEn: [
-      'Call `Serial.begin(115200)` (or `9600` on Arduino Uno) inside `setup()`.',
-      'Outputs formatted as `key: value` (e.g., `Serial.println("Temp: 28.4 Hum: 62")`) are automatically graphed in the Serial Plotter tab.',
-      'Type text in the Serial Monitor TX bar to feed `Serial.available()` and `Serial.readString()` live.',
+      'Connect to the simulated Wi-Fi AP via `WiFi.begin("IFA-Lab-WiFi", "")` — the board receives a virtual IP readable via `WiFi.localIP()`.',
+      'Register HTTP handlers with `server.on("/", handleRoot)` and `server.begin()`, then open the Web Browser component/tab to test routes and live sensor dashboards.',
+      'For secure IoT telemetry, prefer encrypted `mqtts://` over plaintext `mqtt://` in `mqtt.begin(...)`.',
     ],
-    codeSnippet: `void setup() {
+    codeSnippet: `#include <WiFi.h>
+#include <WebServer.h>
+
+void handleRoot() {
+  server.send(200, "text/html", "<h1>ESP32 Live</h1><p>Temp: {{TEMP}} C</p>");
+}
+
+void setup() {
   Serial.begin(115200);
-  Serial.println("System booted!");
+  WiFi.begin("IFA-Lab-WiFi", "");
+  server.on("/", handleRoot);
+  server.begin();
 }
 
 void loop() {
-  int val = analogRead(34);
-  Serial.println("ADC: " + String(val));
-  delay(500);
+  server.handleClient();
+  delay(250);
 }`,
   },
   {
     id: 'logic-analyzer',
     category: 'guides',
-    wokwiUrl: 'https://docs.wokwi.com/guides/logic-analyzer',
+    refUrl: 'https://docs.arduino.cc/software/ide/',
     titleId: 'Logic Analyzer & Ekspor VCD',
     titleEn: 'Logic Analyzer & VCD Export',
     badge: 'Timing',
@@ -223,73 +467,45 @@ void loop() {
     ],
   },
   {
-    id: 'esp32-wifi',
+    id: 'diagram-json',
     category: 'guides',
-    wokwiUrl: 'https://docs.wokwi.com/guides/esp32-wifi',
-    titleId: 'Simulasi Wi-Fi ESP32, Web Server & MQTT TLS',
-    titleEn: 'ESP32 Wi-Fi Simulation, Web Server & MQTT TLS',
-    badge: 'Networking',
+    refUrl: 'https://docs.arduino.cc/software/ide/',
+    titleId: 'Pintasan Kanvas & Format diagram.json',
+    titleEn: 'Canvas Shortcuts & diagram.json Schema',
+    badge: 'Circuit Editor',
     summaryId:
-      'ESP32, ESP32-C3, dan Raspberry Pi Pico W mendukung akses Wi-Fi virtual (`Wokwi-GUEST`), Web Server HTTP lokal yang dapat diuji lewat komponen Web Browser, serta publikasi telemetri MQTT/MQTTS.',
+      'Setiap rangkaian di IoT Simulator dapat disusun secara visual di kanvas maupun diedit langsung dalam format JSON (`diagram.json`) yang selalu sinkron dua arah.',
     summaryEn:
-      'ESP32, ESP32-C3, and Raspberry Pi Pico W support virtual Wi-Fi (`Wokwi-GUEST`), an HTTP Web Server testable via the canvas Web Browser part, and MQTT/MQTTS telemetry.',
+      'Every circuit in the IoT Simulator can be wired visually on the canvas or edited directly in bidirectional `diagram.json` schema format.',
     howItWorksId: [
-      'Hubungkan ke AP virtual dengan `WiFi.begin("Wokwi-GUEST", "")` — board otomatis memperoleh IP lokal virtual `10.13.37.2`.',
-      'Daftarkan route HTTP menggunakan `server.on("/", handleRoot)` dan `server.begin()`, lalu tambahkan komponen `Web Browser` di kanvas atau buka tab Browser di Terminal untuk menguji endpoint `/`, `/api/sensors`, dan tombol kendali.',
-      'Untuk keamanan IoT, gunakan protokol terenkripsi `mqtts://broker.weblab.local:8883` pada `mqtt.begin(...)` alih-alih `mqtt://` plaintext.',
+      'Properti `parts` menyimpan daftar komponen (`type`, `id` unik, posisi `top` & `left`, sudut `rotate`, dan `attrs`).',
+      'Properti `connections` menyimpan daftar kabel `[pinSumber, pinTujuan, warnaKabel, [waypoints]]`, misalnya `["esp:GPIO2", "r1:1", "green", ["v0"]]`.',
+      'Gunakan pintasan keyboard di kanvas untuk mempercepat perakitan dan inspeksi rangkaian.',
     ],
     howItWorksEn: [
-      'Connect to the virtual AP via `WiFi.begin("Wokwi-GUEST", "")` — the board receives virtual IP `10.13.37.2`.',
-      'Register HTTP handlers with `server.on("/", handleRoot)` and `server.begin()`, then open the Web Browser component/tab to test routes and live sensor dashboards.',
-      'For secure IoT telemetry, prefer encrypted `mqtts://` over plaintext `mqtt://` in `mqtt.begin(...)`.',
+      'The `parts` array stores placed components (`type`, unique `id`, `top` & `left` coordinates, `rotate` angle, and `attrs`).',
+      'The `connections` array holds wire tuples `[fromPin, toPin, wireColor, [waypoints]]`, e.g., `["esp:GPIO2", "r1:1", "green", ["v0"]]`.',
+      'Use canvas keyboard shortcuts to speed up wiring and circuit layout.',
     ],
-    codeSnippet: `#include <WiFi.h>
-#include <WebServer.h>
-
-void handleRoot() {
-  server.send(200, "text/html", "<h1>ESP32 Live</h1><p>Temp: {{TEMP}} C</p>");
-}
-
-void setup() {
-  Serial.begin(115200);
-  WiFi.begin("Wokwi-GUEST", "");
-  server.on("/", handleRoot);
-  server.begin();
-}
-
-void loop() {
-  server.handleClient();
-  delay(250);
-}`,
-  },
-  {
-    id: 'libraries',
-    category: 'guides',
-    wokwiUrl: 'https://docs.wokwi.com/guides/libraries',
-    titleId: 'Pustaka (Libraries) & Proyek Multi-File',
-    titleEn: 'Libraries & Multi-File Projects',
-    badge: 'Arduino C++',
-    summaryId:
-      'Simulator mendukung pustaka populer ekosistem Arduino/Wokwi serta pembuatan tab file tambahan (.h, .cpp, .html, .css, .js) yang tersinkronisasi dengan Main.ino.',
-    summaryEn:
-      'Supports popular Arduino/Wokwi libraries along with multi-file tabs (.h, .cpp, .html, .css, .js) synchronized with Main.ino.',
-    howItWorksId: [
-      'Buka tab `Libraries` untuk melihat dan menyisipkan header siap pakai (`DHT.h`, `LiquidCrystal_I2C.h`, `Servo.h`, `Adafruit_SSD1306.h`, `Adafruit_NeoPixel.h`, `PubSubClient.h`, `Keypad.h`, `MPU6050.h`).',
-      'Gunakan menu dropdown file di sebelah tab `Terminal` untuk menambah file header `.h` lokal (mis. `config.h`) dan panggil dengan `#include "config.h"`.',
-      'Anda juga dapat membuat file `index.html` untuk menyajikan halaman web kustom langsung dari WebServer ESP32 dengan template variabel seperti `{{TEMP}}`, `{{HUMIDITY}}`, `{{LED_STATE}}`.',
-    ],
-    howItWorksEn: [
-      'Open the `Libraries` tab to browse and insert ready-to-use headers (`DHT.h`, `LiquidCrystal_I2C.h`, `Servo.h`, `Adafruit_SSD1306.h`, `Adafruit_NeoPixel.h`, `PubSubClient.h`, `Keypad.h`, `MPU6050.h`).',
-      'Use the file menu next to the `Terminal` tab to add custom `.h` headers and include them via `#include "config.h"`.',
-      'Add an `index.html` file to serve custom dashboards from ESP32 WebServer using live template placeholders like `{{TEMP}}`, `{{HUMIDITY}}`, and `{{LED_STATE}}`.',
-    ],
+    table: {
+      headersId: ['Pintasan Keyboard', 'Fungsi di Editor Kanvas'],
+      headersEn: ['Keyboard Shortcut', 'Canvas Editor Action'],
+      rows: [
+        ['R / Shift+R', 'Putar komponen terpilih 90° searah / berlawanan jarum jam'],
+        ['Delete / Backspace', 'Hapus komponen atau kabel yang dipilih'],
+        ['Ctrl+Z / Ctrl+Y', 'Undo / Redo perubahan rangkaian'],
+        ['Ctrl+D', 'Duplikasi komponen terpilih'],
+        ['Scroll / + / -', 'Zoom in / Zoom out kanvas rangkaian'],
+        ['Spasi + Drag', 'Geser (pan) area kanvas'],
+      ],
+    },
   },
 
   // ===================== BOARDS =====================
   {
     id: 'boards-overview',
     category: 'boards',
-    wokwiUrl: 'https://docs.wokwi.com/guides/esp32',
+    refUrl: 'https://docs.arduino.cc/hardware/',
     titleId: 'Referensi Papan Mikrokontroler',
     titleEn: 'Microcontroller Boards Reference',
     badge: '7 Boards',
@@ -326,15 +542,15 @@ void loop() {
   {
     id: 'part-led',
     category: 'parts-basic',
-    wokwiType: 'wokwi-led',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-led',
+    partCode: 'LED-5MM',
+    refUrl: 'https://docs.arduino.cc/built-in-examples/basics/Blink/',
     titleId: 'LED (5mm Standard LED)',
     titleEn: 'LED (5mm Standard LED)',
-    badge: 'wokwi-led',
+    badge: 'Output Digital',
     summaryId:
       'Light-Emitting Diode 5mm standar. Kecerahan cahaya bergantung langsung pada sinyal digital/PWM serta nilai resistor pembatas arus seri (Hukum Ohm).',
     summaryEn:
-      'Standard 5mm Light-Emitting Diode. Luminance scales continuously with digital/PWM duty cycle and series current-limiting resistance (Ohm\'s Law).',
+      "Standard 5mm Light-Emitting Diode. Luminance scales continuously with digital/PWM duty cycle and series current-limiting resistance (Ohm's Law).",
     howItWorksId: [
       'Hubungkan pin Anoda (`A` / kaki panjang `+`) ke GPIO atau VCC melalui resistor seri (disarankan 220Ω–330Ω), dan pin Katoda (`K` / `C` / kaki pendek `−`) ke GND.',
       'Resistor juga boleh dipasang di sisi Katoda antara `K` dan `GND` — arus yang mengalir sama sesuai rangkaian seri.',
@@ -371,11 +587,11 @@ void loop() {
   {
     id: 'part-rgb-led',
     category: 'parts-basic',
-    wokwiType: 'wokwi-rgb-led',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-rgb-led',
+    partCode: 'RGB-LED',
+    refUrl: 'https://docs.arduino.cc/language-reference/en/functions/analog-io/analogWrite/',
     titleId: 'RGB LED (Common Cathode / Anode)',
     titleEn: 'RGB LED (Common Cathode / Anode)',
-    badge: 'wokwi-rgb-led',
+    badge: 'PWM RGB',
     summaryId:
       'LED multi-warna dengan kanal Merah (R), Hijau (G), dan Biru (B) yang dapat dicampur menggunakan sinyal PWM (`analogWrite`).',
     summaryEn:
@@ -410,11 +626,11 @@ void loop() {
   {
     id: 'part-resistor',
     category: 'parts-basic',
-    wokwiType: 'wokwi-resistor',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-resistor',
+    partCode: 'RES-4BAND',
+    refUrl: 'https://docs.arduino.cc/learn/electronics/ohms-law/',
     titleId: 'Resistor (4 Gelang Warna)',
     titleEn: 'Resistor (4-Band Axial)',
-    badge: 'wokwi-resistor',
+    badge: 'Passive',
     summaryId:
       'Komponen pasif pembatas arus dan pembagi tegangan dengan kode 4 gelang warna dinamis. Tidak memiliki polaritas.',
     summaryEn:
@@ -440,8 +656,8 @@ void loop() {
   {
     id: 'part-breadboard',
     category: 'parts-basic',
-    wokwiType: 'wokwi-breadboard',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-breadboard',
+    partCode: 'BREADBOARD',
+    refUrl: 'https://docs.arduino.cc/learn/electronics/breadboards/',
     titleId: 'Breadboard (Mini 170 / Half 400 / Full 830)',
     titleEn: 'Breadboard (Mini 170 / Half 400 / Full 830)',
     badge: 'Passive Bus',
@@ -463,11 +679,11 @@ void loop() {
   {
     id: 'part-pushbutton',
     category: 'parts-inputs',
-    wokwiType: 'wokwi-pushbutton',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-pushbutton',
+    partCode: 'BTN-TACTILE',
+    refUrl: 'https://docs.arduino.cc/built-in-examples/digital/InputPullupSerial/',
     titleId: 'Pushbutton (Tombol Taktil)',
     titleEn: 'Pushbutton (Tactile Switch)',
-    badge: 'wokwi-pushbutton',
+    badge: 'Digital Input',
     summaryId:
       'Sakelar tekan sesaat (momentary) dengan opsi kunci tahan (LOCK) dan pintasan keyboard. Menghubungkan kontak secara fisik saat ditekan.',
     summaryEn:
@@ -511,11 +727,11 @@ void loop() {
   {
     id: 'part-slide-switch',
     category: 'parts-inputs',
-    wokwiType: 'wokwi-slide-switch',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-slide-switch',
+    partCode: 'SWITCH-SPDT',
+    refUrl: 'https://docs.arduino.cc/language-reference/en/functions/digital-io/digitalread/',
     titleId: 'Slide Switch (SPDT)',
     titleEn: 'Slide Switch (SPDT)',
-    badge: 'wokwi-slide-switch',
+    badge: 'Switch',
     summaryId:
       'Sakelar geser 3-pin Single-Pole Double-Throw yang menghubungkan pin tengah `COM (2)` ke pin kiri `1` (posisi OFF) atau pin kanan `3` (posisi ON).',
     summaryEn:
@@ -537,8 +753,8 @@ void loop() {
   {
     id: 'part-potentiometer',
     category: 'parts-inputs',
-    wokwiType: 'wokwi-potentiometer',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-potentiometer',
+    partCode: 'POT-10K',
+    refUrl: 'https://docs.arduino.cc/built-in-examples/basics/AnalogReadSerial/',
     titleId: 'Potentiometer & Slide Potentiometer',
     titleEn: 'Potentiometer & Slide Potentiometer',
     badge: '10kΩ Analog',
@@ -576,8 +792,8 @@ void loop() {
   {
     id: 'part-inputs-extra',
     category: 'parts-inputs',
-    wokwiType: 'wokwi-analog-joystick',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-analog-joystick',
+    partCode: 'MULTI-INPUT',
+    refUrl: 'https://docs.arduino.cc/language-reference/',
     titleId: 'Joystick, Keypad 4×4, Rotary Encoder, DIP Switch & IR',
     titleEn: 'Joystick, 4×4 Keypad, Rotary Encoder, DIP Switch & IR',
     badge: 'Multi-Input',
@@ -605,11 +821,11 @@ void loop() {
   {
     id: 'part-dht22',
     category: 'parts-sensors',
-    wokwiType: 'wokwi-dht22',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-dht22',
+    partCode: 'DHT22',
+    refUrl: 'https://docs.arduino.cc/libraries/dht-sensor-library/',
     titleId: 'DHT22 (Sensor Suhu & Kelembapan)',
     titleEn: 'DHT22 (Temperature & Humidity Sensor)',
-    badge: 'wokwi-dht22',
+    badge: 'DHT.h',
     summaryId:
       'Sensor digital presisi untuk mengukur suhu lingkungan (0–55°C) dan kelembapan relatif (10–95% RH) melalui satu pin data.',
     summaryEn:
@@ -645,11 +861,11 @@ void loop() {
   {
     id: 'part-hcsr04',
     category: 'parts-sensors',
-    wokwiType: 'wokwi-hc-sr04',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-hc-sr04',
+    partCode: 'HC-SR04',
+    refUrl: 'https://docs.arduino.cc/language-reference/en/functions/advanced-io/pulseIn/',
     titleId: 'HC-SR04 (Sensor Jarak Ultrasonik)',
     titleEn: 'HC-SR04 (Ultrasonic Distance Sensor)',
-    badge: 'wokwi-hc-sr04',
+    badge: 'Ultrasonic',
     summaryId:
       'Sensor jarak ultrasonik 2–400 cm yang menggunakan pin `TRIG` dan `ECHO` untuk mengukur jarak objek.',
     summaryEn:
@@ -685,8 +901,8 @@ void loop() {
   {
     id: 'part-sensors-other',
     category: 'parts-sensors',
-    wokwiType: 'wokwi-photoresistor-sensor',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-photoresistor-sensor',
+    partCode: 'SENSORS',
+    refUrl: 'https://docs.arduino.cc/language-reference/en/functions/analog-io/analogRead/',
     titleId: 'LDR, PIR, MQ2 Gas, NTC, MPU6050, BMP180, HX711, RFID & RTC',
     titleEn: 'LDR, PIR, MQ2 Gas, NTC, MPU6050, BMP180, HX711, RFID & RTC',
     badge: '10 Sensors',
@@ -695,17 +911,17 @@ void loop() {
     summaryEn:
       'Quick reference for light, motion, gas, analog temperature, 6-axis IMU, barometer, load cell scale, RFID RC522, and DS1307 real-time clock.',
     howItWorksId: [
-      'Photoresistor LDR (`wokwi-photoresistor-sensor`): slider Lux (50–1000 lx) dihitung memakai kurva gamma Wokwi (`RL10`, `gamma`) pada `analogRead()`.',
-      'PIR Motion Sensor (`wokwi-pir-motion-sensor`): klik tombol `PICU PIR` di kanvas untuk mengubah `OUT` menjadi HIGH (`digitalRead() == 1`).',
-      'MQ2 Gas Sensor (`wokwi-gas-sensor`): slider PPM (50–2500 ppm) terbaca analog di pin `AO` dan digital ambang batas (≥ 600 ppm) di pin `DO`.',
-      'NTC Thermistor (`wokwi-ntc-temperature-sensor`): slider suhu (-10..85°C) menggunakan persamaan Beta (`BETA = 3950`) pada `analogRead()`.',
+      'Photoresistor LDR: slider Lux (50–1000 lx) dihitung memakai kurva resistansi gamma (`RL10`, `gamma`) pada `analogRead()`.',
+      'PIR Motion Sensor: klik tombol `PICU PIR` di kanvas untuk mengubah `OUT` menjadi HIGH (`digitalRead() == 1`).',
+      'MQ2 Gas Sensor: slider PPM (50–2500 ppm) terbaca analog di pin `AO` dan digital ambang batas (≥ 600 ppm) di pin `DO`.',
+      'NTC Thermistor: slider suhu (-10..85°C) menggunakan persamaan Steinhart-Hart / Beta (`BETA = 3950`) pada `analogRead()`.',
       'MPU6050 (`mpu.readTilt()`), BMP180 (`bmp.readPressure()`), HX711 (`hx711.readKg()`), DS1307 (`rtc.readTime()`), dan RFID RC522 (tombol Tap RFID) dapat dikendalikan langsung dari kanvas/inspector.',
     ],
     howItWorksEn: [
-      'LDR Photoresistor (`wokwi-photoresistor-sensor`): Lux slider (50–1000 lx) follows the Wokwi gamma curve (`RL10`, `gamma`) on `analogRead()`.',
-      'PIR Motion Sensor (`wokwi-pir-motion-sensor`): click the canvas trigger button to drive `OUT` HIGH (`digitalRead() == 1`).',
-      'MQ2 Gas Sensor (`wokwi-gas-sensor`): PPM slider (50–2500 ppm) outputs analog on `AO` and threshold digital (≥ 600 ppm) on `DO`.',
-      'NTC Thermistor (`wokwi-ntc-temperature-sensor`): temperature slider (-10..85°C) uses the Wokwi Beta equation (`BETA = 3950`).',
+      'LDR Photoresistor: Lux slider (50–1000 lx) follows the gamma resistance curve (`RL10`, `gamma`) on `analogRead()`.',
+      'PIR Motion Sensor: click the canvas trigger button to drive `OUT` HIGH (`digitalRead() == 1`).',
+      'MQ2 Gas Sensor: PPM slider (50–2500 ppm) outputs analog on `AO` and threshold digital (≥ 600 ppm) on `DO`.',
+      'NTC Thermistor: temperature slider (-10..85°C) uses the Beta equation (`BETA = 3950`) on `analogRead()`.',
       'MPU6050 (`mpu.readTilt()`), BMP180 (`bmp.readPressure()`), HX711 (`hx711.readKg()`), DS1307 (`rtc.readTime()`), and RFID RC522 (Tap RFID button) are all interactive on canvas.',
     ],
   },
@@ -714,8 +930,8 @@ void loop() {
   {
     id: 'part-lcd',
     category: 'parts-displays',
-    wokwiType: 'wokwi-lcd1602',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-lcd1602',
+    partCode: 'LCD-I2C',
+    refUrl: 'https://docs.arduino.cc/libraries/liquidcrystal-i2c/',
     titleId: 'LCD 16×2 & LCD 20×4 (I2C)',
     titleEn: 'LCD 16×2 & LCD 20×4 (I2C)',
     badge: 'I2C 0x27',
@@ -753,11 +969,11 @@ void loop() { delay(500); }`,
   {
     id: 'part-oled',
     category: 'parts-displays',
-    wokwiType: 'board-ssd1306',
-    wokwiUrl: 'https://docs.wokwi.com/parts/board-ssd1306',
+    partCode: 'OLED-SSD1306',
+    refUrl: 'https://docs.arduino.cc/libraries/adafruit-ssd1306/',
     titleId: 'OLED SSD1306 (128×64 I2C)',
     titleEn: 'OLED SSD1306 (128×64 I2C)',
-    badge: 'board-ssd1306',
+    badge: 'I2C 0x3C',
     summaryId:
       'Layar grafis OLED monokrom 128×64 piksel berbasis kontroler SSD1306 dengan antarmuka I2C (alamat default 0x3C).',
     summaryEn:
@@ -788,8 +1004,8 @@ void loop() {
   {
     id: 'part-displays-other',
     category: 'parts-displays',
-    wokwiType: 'wokwi-neopixel',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-neopixel',
+    partCode: 'VISUAL-OUT',
+    refUrl: 'https://docs.arduino.cc/libraries/adafruit-neopixel/',
     titleId: '7-Segment, LED Bar Graph, MAX7219 Matrix & NeoPixel WS2812',
     titleEn: '7-Segment, LED Bar Graph, MAX7219 Matrix & NeoPixel WS2812',
     badge: 'Visual Outputs',
@@ -799,13 +1015,13 @@ void loop() {
       'Numeric 7-segment indicators, PWM/resistor-responsive 10-segment bar graph, 8×8 SPI dot matrix, and addressable WS2812 NeoPixels.',
     howItWorksId: [
       '7-Segment & TM1637 4-Digit: tampilkan angka/teks lewat `sevenSeg.print("42")` atau `tm1637.showNumber(1234)`.',
-      'LED Bar Graph (`wokwi-led-bar-graph`): jumlah segmen menyala mengikuti duty PWM dan nilai resistor seri pada pin `IN` + `GND`.',
+      'LED Bar Graph: jumlah segmen menyala mengikuti duty PWM dan nilai resistor seri pada pin `IN` + `GND`.',
       'MAX7219 8×8 Matrix: ubah pola visual dengan `matrix.setPattern("smile", frame)` (`tunnel`, `alert`, `smile`, `heart`).',
       'NeoPixel Ring / Strip / Single: hubungkan `5V`, `GND`, dan `DIN` untuk animasi RGB WS2812.',
     ],
     howItWorksEn: [
       '7-Segment & 4-Digit TM1637: print numbers/text via `sevenSeg.print("42")` or `tm1637.showNumber(1234)`.',
-      'LED Bar Graph (`wokwi-led-bar-graph`): lit bar count tracks PWM duty and series resistance across `IN` and `GND`.',
+      'LED Bar Graph: lit bar count tracks PWM duty and series resistance across `IN` and `GND`.',
       'MAX7219 8×8 Matrix: render patterns with `matrix.setPattern("smile", frame)` (`tunnel`, `alert`, `smile`, `heart`).',
       'NeoPixel Ring / Strip / Single: wire `5V`, `GND`, and `DIN` for addressable WS2812 RGB output.',
     ],
@@ -815,11 +1031,11 @@ void loop() {
   {
     id: 'part-servo',
     category: 'parts-actuators',
-    wokwiType: 'wokwi-servo',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-servo',
+    partCode: 'SERVO-SG90',
+    refUrl: 'https://docs.arduino.cc/libraries/servo/',
     titleId: 'Servo Motor (SG90 0°–180°)',
     titleEn: 'Servo Motor (SG90 0°–180°)',
-    badge: 'wokwi-servo',
+    badge: 'Servo.h',
     summaryId:
       'Motor servo mikro berputar presisi antara 0° hingga 180° dikendalikan melalui sinyal PWM (`Servo.attach()` dan `Servo.write()`).',
     summaryEn:
@@ -827,7 +1043,7 @@ void loop() {
     howItWorksId: [
       'Hubungkan pin `PWM` ke GPIO, `VCC` ke 5V/3.3V, dan `GND` ke GND.',
       'Panggil `myServo.attach(pin)` di `setup()`, lalu gerakkan sudutnya dengan `myServo.write(0..180)` di `loop()`.',
-      'Klik servo di kanvas untuk mengganti bentuk horn (`single`, `double`, `cross`) dan warna horn sesuai spesifikasi Wokwi.',
+      'Klik servo di kanvas untuk mengganti bentuk horn (`single`, `double`, `cross`) dan warna horn.',
     ],
     howItWorksEn: [
       'Connect `PWM` to a GPIO pin, `VCC` to 5V/3.3V, and `GND` to ground.',
@@ -854,11 +1070,11 @@ void loop() {
   {
     id: 'part-buzzer',
     category: 'parts-actuators',
-    wokwiType: 'wokwi-buzzer',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-buzzer',
+    partCode: 'BUZZER-PIEZO',
+    refUrl: 'https://docs.arduino.cc/language-reference/en/functions/advanced-io/tone/',
     titleId: 'Piezo Buzzer (Audio tone)',
     titleEn: 'Piezo Buzzer (Audio tone)',
-    badge: 'wokwi-buzzer',
+    badge: 'tone()',
     summaryId:
       'Buzzer piezoelektrik dengan keluaran suara Web Audio nyata dan indikator frekuensi visual untuk alarm maupun melodi.',
     summaryEn:
@@ -888,11 +1104,11 @@ void loop() {
   {
     id: 'part-relay',
     category: 'parts-actuators',
-    wokwiType: 'wokwi-relay-module',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-relay-module',
+    partCode: 'RELAY-5V',
+    refUrl: 'https://docs.arduino.cc/language-reference/en/functions/digital-io/digitalwrite/',
     titleId: 'Relay Module (5V · COM / NO / NC)',
     titleEn: 'Relay Module (5V · COM / NO / NC)',
-    badge: 'wokwi-relay-module',
+    badge: 'Relay Switch',
     summaryId:
       'Sakelar elektromagnetik yang memungkinkan sinyal logika rendah dari MCU memutus-sambung jalur beban terpisah lewat terminal `COM`, `NO`, dan `NC`.',
     summaryEn:
@@ -922,8 +1138,8 @@ void loop() {
   {
     id: 'part-actuators-extra',
     category: 'parts-actuators',
-    wokwiType: 'wokwi-stepper-motor',
-    wokwiUrl: 'https://docs.wokwi.com/parts/wokwi-stepper-motor',
+    partCode: 'EXTENDED-ICS',
+    refUrl: 'https://docs.arduino.cc/libraries/stepper/',
     titleId: 'Stepper Motor, Driver A4988, Shift Register 74HC595/165 & microSD',
     titleEn: 'Stepper Motor, A4988 Driver, 74HC595/165 Shift Registers & microSD',
     badge: 'Extended ICs',
@@ -933,12 +1149,12 @@ void loop() {
       'Precision motion actuators, GPIO expansion shift registers, and microSD storage modules for advanced embedded labs.',
     howItWorksId: [
       'Stepper Motor + Driver A4988: hubungkan STEP & DIR dari MCU ke A4988 dan koil A+/A-/B+/B- ke motor stepper.',
-      '74HC595 (SIPO) & 74HC165 (PISO): memperluas 3 pin GPIO (DS/SHCP/STCP) menjadi 8 keluaran/masukan paralel.',
+      '74HC595 (SIPO) & 74HC165 (PISO): memperluas 3 pin GPIO (DS/SHCP/STCP) menjadi 8 keluaran/masukan paralel dengan `shiftOut()`.',
       'microSD Card Module: penyimpanan data logger SPI (`CS`, `SCK`, `MOSI`, `MISO`) untuk perekaman telemetri lokal.',
     ],
     howItWorksEn: [
       'Stepper Motor + A4988 Driver: wire STEP & DIR from MCU to A4988 and coils to the bipolar stepper.',
-      '74HC595 (SIPO) & 74HC165 (PISO): expand 3 GPIO pins into 8 parallel outputs or inputs.',
+      '74HC595 (SIPO) & 74HC165 (PISO): expand 3 GPIO pins into 8 parallel outputs or inputs with `shiftOut()`.',
       'microSD Card Module: SPI storage (`CS`, `SCK`, `MOSI`, `MISO`) for local telemetry logging.',
     ],
   },
